@@ -31,3 +31,22 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 	});
 	return handle<T>(res, path);
 }
+
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+	const res = await fetch(`${API_BASE}${path}`, {
+		method: 'PUT',
+		headers: { ...authz(), 'content-type': 'application/json' },
+		body: JSON.stringify(body),
+		cache: 'no-store',
+	});
+	return handle<T>(res, path);
+}
+
+export async function apiDelete<T>(path: string): Promise<T> {
+	const res = await fetch(`${API_BASE}${path}`, {
+		method: 'DELETE',
+		headers: { ...authz() },
+		cache: 'no-store',
+	});
+	return handle<T>(res, path);
+}
