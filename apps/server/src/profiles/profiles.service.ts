@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProviderSite, ProfileStatus } from '@prisma/client';
 import { TalkyTimesProvider } from '../providers/talkytimes/talkytimes.provider';
+import { TALKY_TIMES_PROVIDER } from '../providers/providers.module';
 import * as crypto from 'crypto';
 
 function getKey(): Buffer {
@@ -26,7 +27,7 @@ function encrypt(plaintext: string | undefined): string | undefined {
 export class ProfilesService {
 	constructor(
 		private readonly prisma: PrismaService,
-		private readonly talkyTimesProvider: TalkyTimesProvider
+		@Inject(TALKY_TIMES_PROVIDER) private readonly talkyTimesProvider: TalkyTimesProvider
 	) {}
 
 	async create(params: { groupId: string; provider: ProviderSite; displayName?: string; credentialLogin?: string; credentialPassword?: string }, agencyCode: string) {
