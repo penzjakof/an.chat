@@ -25,13 +25,13 @@ async function main() {
 
 	await prisma.profile.upsert({
 		where: { provider_externalId: { provider: ProviderSite.TALKYTIMES, externalId: 'aoshlatyyy@gmail.com' } },
-		create: { provider: ProviderSite.TALKYTIMES, externalId: 'aoshlatyyy@gmail.com', displayName: 'TT A', credentialLogin: 'aoshlatyyy@gmail.com', credentialPassword: 'aoshlatyyy', groupId: group.id },
-		update: { groupId: group.id, credentialLogin: 'aoshlatyyy@gmail.com', credentialPassword: 'aoshlatyyy' },
+		create: { provider: ProviderSite.TALKYTIMES, externalId: 'aoshlatyyy@gmail.com', displayName: 'TT A', credentialLogin: 'aoshlatyyy@gmail.com', credentialPassword: 'aoshlatyyy', profileId: '7162437', groupId: group.id },
+		update: { groupId: group.id, credentialLogin: 'aoshlatyyy@gmail.com', credentialPassword: 'aoshlatyyy', profileId: '7162437' },
 	});
 	await prisma.profile.upsert({
 		where: { provider_externalId: { provider: ProviderSite.TALKYTIMES, externalId: 'aaallonnno44ka03@gmail.com' } },
-		create: { provider: ProviderSite.TALKYTIMES, externalId: 'aaallonnno44ka03@gmail.com', displayName: 'TT B', credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: 'aaallonnno44ka03', groupId: group.id },
-		update: { groupId: group.id, credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: 'aaallonnno44ka03' },
+		create: { provider: ProviderSite.TALKYTIMES, externalId: 'aaallonnno44ka03@gmail.com', displayName: 'TT B', credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: 'aaallonnno44ka03', profileId: '7162438', groupId: group.id },
+		update: { groupId: group.id, credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: 'aaallonnno44ka03', profileId: '7162438' },
 	});
 
 	console.log('Seed completed with usernames: owner/operator');

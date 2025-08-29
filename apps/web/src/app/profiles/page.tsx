@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../lib/api';
-import { getRole, getAgencyCode } from '../../lib/session';
+import { getRole } from '../../lib/session';
 import { useRouter } from 'next/navigation';
 
 interface Group {
@@ -15,6 +15,7 @@ interface Profile {
   provider: string;
   displayName: string | null;
   credentialLogin: string | null;
+  profileId?: string | null;
   status: string;
   createdAt: string;
   group: Group;
@@ -103,10 +104,11 @@ export default function ProfilesPage() {
       setShowCreateForm(false);
       setFormData({ displayName: '', credentialLogin: '', credentialPassword: '', provider: 'TALKYTIMES', groupId: '' });
       loadData();
-    } catch (err: any) {
+            } catch (err: unknown) {
       // Перевіряємо, чи це помилка валідації облікових даних
-      if (err.message && err.message.includes('Не вдалось залогінитись')) {
-        setValidationError(err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Невідома помилка';
+      if (errorMessage.includes('Не вдалось залогінитись')) {
+        setValidationError(errorMessage);
         // НЕ очищуємо форму, щоб користувач міг виправити дані
       } else {
         setError('Помилка створення профілю');
@@ -211,7 +213,7 @@ export default function ProfilesPage() {
             <input
               type="text"
               name="displayName"
-              placeholder="Ім'я профілю"
+              placeholder="Ім&apos;я профілю"
               value={formData.displayName}
               onChange={handleChange}
               className="border p-2 rounded"
@@ -306,7 +308,7 @@ export default function ProfilesPage() {
         <table className="min-w-full bg-white border border-gray-200">
           <thead>
             <tr>
-              <th className="py-2 px-4 border-b">Ім'я</th>
+              <th className="py-2 px-4 border-b">Ім&apos;я</th>
               <th className="py-2 px-4 border-b">Логін</th>
               <th className="py-2 px-4 border-b">Статус</th>
               <th className="py-2 px-4 border-b">Група</th>

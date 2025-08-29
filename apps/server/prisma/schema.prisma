@@ -85,6 +85,7 @@ model Profile {
   displayName  String?
   credentialLogin   String?
   credentialPassword String?
+  profileId    String?        // Platform-specific profile ID from login response
   status       ProfileStatus @default(ACTIVE)
   lastActiveAt DateTime?
   groupId      String
@@ -93,4 +94,7 @@ model Profile {
   updatedAt    DateTime       @updatedAt
 
   @@unique([provider, externalId])
+  @@index([groupId])
+  @@index([status])
+  @@index([provider, profileId])
 }

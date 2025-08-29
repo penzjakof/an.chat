@@ -19,7 +19,7 @@ async function handle<T>(res: Response, path: string): Promise<T> {
 			const errorData = await res.json();
 			const errorMessage = errorData.message || `${res.status} ${path}`;
 			throw new Error(errorMessage);
-		} catch (parseError) {
+		} catch {
 			// Якщо не вдалося розпарсити JSON, використовуємо стандартну помилку
 			throw new Error(`${res.status} ${path}`);
 		}
@@ -27,36 +27,37 @@ async function handle<T>(res: Response, path: string): Promise<T> {
 	return res.json() as Promise<T>;
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-	const res = await fetch(`${API_BASE}${path}`, { headers: { ...authz() }, cache: 'no-store' });
+async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+	const res = await fetch(`${API_BASE}${path}`, {
+		...options,
+		headers: { 
+			...authz(), 
+			...(options.body ? { 'content-type': 'application/json' } : {}),
+			...options.headers 
+		},
+		cache: 'no-store',
+	});
 	return handle<T>(res, path);
+}
+
+export async function apiGet<T>(path: string): Promise<T> {
+	return apiRequest<T>(path, { method: 'GET' });
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-	const res = await fetch(`${API_BASE}${path}`, {
-		method: 'POST',
-		headers: { ...authz(), 'content-type': 'application/json' },
-		body: JSON.stringify(body),
-		cache: 'no-store',
+	return apiRequest<T>(path, { 
+		method: 'POST', 
+		body: JSON.stringify(body) 
 	});
-	return handle<T>(res, path);
 }
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-	const res = await fetch(`${API_BASE}${path}`, {
-		method: 'PUT',
-		headers: { ...authz(), 'content-type': 'application/json' },
-		body: JSON.stringify(body),
-		cache: 'no-store',
+	return apiRequest<T>(path, { 
+		method: 'PUT', 
+		body: JSON.stringify(body) 
 	});
-	return handle<T>(res, path);
 }
 
 export async function apiDelete<T>(path: string): Promise<T> {
-	const res = await fetch(`${API_BASE}${path}`, {
-		method: 'DELETE',
-		headers: { ...authz() },
-		cache: 'no-store',
-	});
-	return handle<T>(res, path);
+	return apiRequest<T>(path, { method: 'DELETE' });
 }

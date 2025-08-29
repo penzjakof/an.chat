@@ -166,7 +166,7 @@ export default function OperatorsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Ім'я</label>
+              <label className="block text-sm font-medium mb-1">Ім&apos;я</label>
               <input
                 type="text"
                 value={formData.name}
@@ -237,7 +237,7 @@ export default function OperatorsPage() {
           <thead>
             <tr className="bg-gray-100">
               <th className="border border-gray-300 px-4 py-2 text-left">Юзернейм</th>
-              <th className="border border-gray-300 px-4 py-2 text-left">Ім'я</th>
+              <th className="border border-gray-300 px-4 py-2 text-left">Ім&apos;я</th>
               <th className="border border-gray-300 px-4 py-2 text-left">Реф код</th>
               <th className="border border-gray-300 px-4 py-2 text-left">Група</th>
               <th className="border border-gray-300 px-4 py-2 text-left">Статус</th>

@@ -68,10 +68,10 @@ export class TalkyTimesProvider implements SiteProvider {
 		return res.json();
 	}
 
-	async validateCredentials(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+	async validateCredentials(email: string, password: string): Promise<{ success: boolean; error?: string; profileId?: string }> {
 		if (this.isMock()) {
-			// В mock режимі завжди повертаємо успіх для тестування
-			return { success: true };
+			// В mock режимі завжди повертаємо успіх для тестування з фейковим ID
+			return { success: true, profileId: `mock_${Date.now()}` };
 		}
 
 		try {
@@ -111,7 +111,7 @@ export class TalkyTimesProvider implements SiteProvider {
 			
 			// Перевіряємо структуру відповіді TalkyTimes
 			if (data?.data?.result === true && data?.data?.idUser) {
-				return { success: true };
+				return { success: true, profileId: data.data.idUser.toString() };
 			} else {
 				return { success: false, error: 'Невірні облікові дані' };
 			}

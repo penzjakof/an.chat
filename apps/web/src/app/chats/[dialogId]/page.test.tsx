@@ -8,7 +8,7 @@ vi.mock('@/lib/session', () => ({ getSession: () => ({ accessToken: 't', agencyC
 vi.mock('socket.io-client', () => ({ io: () => ({ emit: vi.fn(), on: vi.fn(), disconnect: vi.fn() }) }));
 
 beforeEach(() => {
-	vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: true, json: async () => (url.includes('/messages') ? [{ id: 'm1', text: 'Привіт!' }] : []) })) as any);
+	vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: true, json: async () => (url.includes('/messages') ? [{ id: 'm1', text: 'Привіт!' }] : []) })) as unknown as typeof fetch);
 });
 
 afterEach(() => { vi.unstubAllGlobals(); });

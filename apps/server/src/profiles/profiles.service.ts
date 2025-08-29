@@ -3,31 +3,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProviderSite, ProfileStatus } from '@prisma/client';
 import { TalkyTimesProvider } from '../providers/talkytimes/talkytimes.provider';
 import { TALKY_TIMES_PROVIDER } from '../providers/providers.module';
-import * as crypto from 'crypto';
+import { EncryptionService } from '../common/encryption/encryption.service';
 
-function getKey(): Buffer {
-	const key = process.env.ENCRYPTION_KEY;
-	if (!key || key.length < 32) {
-		// 32 bytes (256-bit) key expected; for dev fallback to fixed-length pad
-		return Buffer.from((key ?? 'dev-encryption-key').padEnd(32, '0').slice(0, 32));
-	}
-	return Buffer.from(key.slice(0, 32));
-}
 
-function encrypt(plaintext: string | undefined): string | undefined {
-	if (!plaintext) return undefined;
-	const iv = crypto.randomBytes(12);
-	const cipher = crypto.createCipheriv('aes-256-gcm', getKey(), iv);
-	const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-	const tag = cipher.getAuthTag();
-	return Buffer.concat([iv, tag, enc]).toString('base64');
-}
 
 @Injectable()
 export class ProfilesService {
 	constructor(
 		private readonly prisma: PrismaService,
-		@Inject(TALKY_TIMES_PROVIDER) private readonly talkyTimesProvider: TalkyTimesProvider
+		@Inject(TALKY_TIMES_PROVIDER) private readonly talkyTimesProvider: TalkyTimesProvider,
+		private readonly encryption: EncryptionService
 	) {}
 
 	async create(params: { groupId: string; provider: ProviderSite; displayName?: string; credentialLogin?: string; credentialPassword?: string }, agencyCode: string) {
@@ -43,11 +28,13 @@ export class ProfilesService {
 		}
 
 		// Валідація облікових даних для TalkyTimes
+		let platformProfileId: string | undefined;
 		if (provider === ProviderSite.TALKYTIMES && credentialLogin && credentialPassword) {
 			const validation = await this.talkyTimesProvider.validateCredentials(credentialLogin, credentialPassword);
 			if (!validation.success) {
 				throw new BadRequestException(`Не вдалось залогінитись на TalkyTimes: ${validation.error || 'Невірні облікові дані'}`);
 			}
+			platformProfileId = validation.profileId;
 		}
 
 		// Генеруємо унікальний externalId для профілю
@@ -60,7 +47,8 @@ export class ProfilesService {
 				externalId,
 				displayName,
 				credentialLogin,
-				credentialPassword: encrypt(credentialPassword),
+				credentialPassword: this.encryption.encrypt(credentialPassword),
+				profileId: platformProfileId,
 				status: ProfileStatus.ACTIVE,
 			},
 			include: {
@@ -111,7 +99,7 @@ export class ProfilesService {
 			updateData.credentialLogin = updates.credentialLogin;
 		}
 		if (updates.credentialPassword !== undefined) {
-			updateData.credentialPassword = encrypt(updates.credentialPassword);
+			updateData.credentialPassword = this.encryption.encrypt(updates.credentialPassword);
 		}
 		if (updates.groupId) {
 			// Перевіряємо, що нова група також належить до агенції

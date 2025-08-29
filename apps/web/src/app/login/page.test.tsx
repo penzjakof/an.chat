@@ -9,11 +9,11 @@ const TOKEN =
 	'.signature';
 
 function setupFetchOk() {
-	vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ accessToken: TOKEN }) })) as any);
+	vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ accessToken: TOKEN }) })) as unknown as typeof fetch);
 }
 
 function setupFetchFail() {
-	vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, json: async () => ({}) })) as any);
+	vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, json: async () => ({}) })) as unknown as typeof fetch);
 }
 
 const push = vi.fn();
@@ -27,7 +27,7 @@ beforeEach(() => {
 		getItem: (k: string) => store[k] ?? null,
 		setItem: (k: string, v: string) => { store[k] = v; },
 		removeItem: (k: string) => { delete store[k]; },
-	} as any);
+	} as Storage);
 });
 
 afterEach(() => {
