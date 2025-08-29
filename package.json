@@ -1,0 +1,28 @@
+{
+  "name": "anchat",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "npm --workspaces run test",
+    "predev": "bash -lc 'pids=$(lsof -nP -iTCP:3000 -sTCP:LISTEN -t 2>/dev/null || true); [ -n \"$pids\" ] && kill -TERM $pids || true; pids2=$(lsof -nP -iTCP:4000 -sTCP:LISTEN -t 2>/dev/null || true); [ -n \"$pids2\" ] && kill -TERM $pids2 || true'",
+    "dev": "concurrently -n web,server -c green,cyan \"npm:dev:web\" \"npm:dev:server\"",
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:server": "npm --workspace apps/server run start:dev",
+    "build": "npm --workspaces run build",
+    "start": "npm --workspace apps/server run start:prod",
+    "lint": "npm --workspaces run lint"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "private": "true",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
