@@ -21,7 +21,7 @@ export default function OwnerPage() {
 			<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 				<Link className="border rounded p-3 hover:bg-gray-50" href="/chats">Чати</Link>
 				<Link className="border rounded p-3 hover:bg-gray-50" href="/operators">Оператори</Link>
-				<Link className="border rounded p-3 hover:bg-gray-50" href="#">Групи/Профілі (скоро)</Link>
+				<Link className="border rounded p-3 hover:bg-gray-50" href="/profiles">Профілі</Link>
 			</div>
 		</div>
 	);
