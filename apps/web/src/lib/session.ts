@@ -42,3 +42,11 @@ export function getAuthContextFromSession(): AuthContext | null {
 export function getAccessToken(): string | null {
 	return getSession()?.accessToken ?? null;
 }
+
+export function getRole(): UserRole | null {
+	return getSession()?.role ?? null;
+}
+
+export function getAgencyCode(): string | null {
+	return getSession()?.agencyCode ?? null;
+}
