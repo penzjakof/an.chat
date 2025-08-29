@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProviderSite, ProfileStatus } from '@prisma/client';
+import { TalkyTimesProvider } from '../providers/talkytimes/talkytimes.provider';
 import * as crypto from 'crypto';
 
 function getKey(): Buffer {
@@ -23,7 +24,10 @@ function encrypt(plaintext: string | undefined): string | undefined {
 
 @Injectable()
 export class ProfilesService {
-	constructor(private readonly prisma: PrismaService) {}
+	constructor(
+		private readonly prisma: PrismaService,
+		private readonly talkyTimesProvider: TalkyTimesProvider
+	) {}
 
 	async create(params: { groupId: string; provider: ProviderSite; displayName?: string; credentialLogin?: string; credentialPassword?: string }, agencyCode: string) {
 		const { groupId, provider, displayName, credentialLogin, credentialPassword } = params;
@@ -35,6 +39,14 @@ export class ProfilesService {
 		
 		if (!group) {
 			throw new NotFoundException('Group not found');
+		}
+
+		// Валідація облікових даних для TalkyTimes
+		if (provider === ProviderSite.TALKYTIMES && credentialLogin && credentialPassword) {
+			const validation = await this.talkyTimesProvider.validateCredentials(credentialLogin, credentialPassword);
+			if (!validation.success) {
+				throw new BadRequestException(`Не вдалось залогінитись на TalkyTimes: ${validation.error || 'Невірні облікові дані'}`);
+			}
 		}
 
 		// Генеруємо унікальний externalId для профілю

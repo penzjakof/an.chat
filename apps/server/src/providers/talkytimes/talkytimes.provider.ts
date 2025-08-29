@@ -67,4 +67,57 @@ export class TalkyTimesProvider implements SiteProvider {
 		});
 		return res.json();
 	}
+
+	async validateCredentials(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+		if (this.isMock()) {
+			// В mock режимі завжди повертаємо успіх для тестування
+			return { success: true };
+		}
+
+		try {
+			const loginUrl = 'https://talkytimes.com/platform/auth/login';
+			const res = await fetchWithTimeout(loginUrl, {
+				method: 'POST',
+				headers: {
+					'accept': 'application/json',
+					'accept-language': 'en-US,en;q=0.9',
+					'cache-control': 'no-cache',
+					'content-type': 'application/json',
+					'origin': 'https://talkytimes.com',
+					'pragma': 'no-cache',
+					'referer': 'https://talkytimes.com/auth/login',
+					'sec-ch-ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+					'sec-ch-ua-mobile': '?0',
+					'sec-ch-ua-platform': '"macOS"',
+					'sec-fetch-dest': 'empty',
+					'sec-fetch-mode': 'cors',
+					'sec-fetch-site': 'same-origin',
+					'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+					'x-requested-with': '0'
+				},
+				body: JSON.stringify({
+					email,
+					password,
+					captcha: ''
+				}),
+				timeoutMs: 15000 // Збільшуємо таймаут для логіну
+			});
+
+			if (!res.ok) {
+				return { success: false, error: `HTTP ${res.status}` };
+			}
+
+			const data = await res.json();
+			
+			// Перевіряємо структуру відповіді TalkyTimes
+			if (data?.data?.result === true && data?.data?.idUser) {
+				return { success: true };
+			} else {
+				return { success: false, error: 'Невірні облікові дані' };
+			}
+		} catch (error) {
+			console.error('TalkyTimes login validation error:', error);
+			return { success: false, error: 'Помилка з\'єднання з TalkyTimes' };
+		}
+	}
 }

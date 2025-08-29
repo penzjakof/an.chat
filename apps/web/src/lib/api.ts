@@ -13,7 +13,17 @@ async function handle<T>(res: Response, path: string): Promise<T> {
 		if (typeof window !== 'undefined') window.location.href = '/login';
 		throw new Error('Unauthorized');
 	}
-	if (!res.ok) throw new Error(`${res.status} ${path}`);
+	if (!res.ok) {
+		// Спробуємо отримати детальну інформацію про помилку з відповіді
+		try {
+			const errorData = await res.json();
+			const errorMessage = errorData.message || `${res.status} ${path}`;
+			throw new Error(errorMessage);
+		} catch (parseError) {
+			// Якщо не вдалося розпарсити JSON, використовуємо стандартну помилку
+			throw new Error(`${res.status} ${path}`);
+		}
+	}
 	return res.json() as Promise<T>;
 }
 

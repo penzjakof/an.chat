@@ -37,9 +37,11 @@ export default function ProfilesPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     displayName: '',
     credentialLogin: '',
@@ -93,15 +95,25 @@ export default function ProfilesPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError(null);
+    setIsValidating(true);
     
     try {
       await apiPost('/profiles', formData);
       setShowCreateForm(false);
       setFormData({ displayName: '', credentialLogin: '', credentialPassword: '', provider: 'TALKYTIMES', groupId: '' });
       loadData();
-    } catch (err) {
-      setError('Помилка створення профілю');
-      console.error(err);
+    } catch (err: any) {
+      // Перевіряємо, чи це помилка валідації облікових даних
+      if (err.message && err.message.includes('Не вдалось залогінитись')) {
+        setValidationError(err.message);
+        // НЕ очищуємо форму, щоб користувач міг виправити дані
+      } else {
+        setError('Помилка створення профілю');
+        console.error(err);
+      }
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -150,6 +162,10 @@ export default function ProfilesPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    // Очищуємо помилку валідації при зміні даних
+    if (validationError) {
+      setValidationError(null);
+    }
   };
 
   if (loading) return <div className="p-6">Завантаження...</div>;
@@ -170,6 +186,13 @@ export default function ProfilesPage() {
       {showCreateForm && (
         <form onSubmit={handleCreate} className="bg-gray-100 p-4 rounded mb-6">
           <h2 className="text-xl font-semibold mb-3">Новий Профіль</h2>
+          
+          {validationError && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+              <strong>Помилка валідації:</strong> {validationError}
+            </div>
+          )}
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <select
               name="provider"
@@ -236,8 +259,16 @@ export default function ProfilesPage() {
               </button>
             </div>
           </div>
-          <button type="submit" className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-            Створити
+          <button 
+            type="submit" 
+            disabled={isValidating}
+            className={`px-4 py-2 rounded text-white ${
+              isValidating 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-green-500 hover:bg-green-600'
+            }`}
+          >
+            {isValidating ? 'Перевіряємо дані...' : 'Створити'}
           </button>
           <button type="button" onClick={() => setShowCreateForm(false)} className="ml-2 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
             Скасувати
