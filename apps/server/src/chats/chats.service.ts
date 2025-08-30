@@ -80,26 +80,54 @@ export class ChatsService {
 
 		// Збираємо діалоги з усіх доступних профілів
 		const allDialogs: any[] = [];
+		const profileCursors: Record<string, string> = {};
+		let hasMoreAny = false;
+		
+		// Парсимо cursors з параметрів (може бути JSON об'єкт з cursor для кожного профілю)
+		let inputCursors: Record<string, string> = {};
+		if (filters?.cursor) {
+			try {
+				inputCursors = JSON.parse(filters.cursor);
+			} catch {
+				// Якщо не JSON, то це старий формат - використовуємо для всіх профілів
+				console.log(`📄 Using legacy cursor format: ${filters.cursor}`);
+			}
+		}
 		
 		// Обробляємо фільтри
 		const criteria = this.processCriteria(filters);
-		console.log(`ChatsService.fetchDialogs: filters=`, filters, 'criteria=', criteria);
+		console.log(`ChatsService.fetchDialogs: filters=`, filters, 'criteria=', criteria, 'inputCursors=', inputCursors);
 		
 		for (const profile of accessibleProfiles) {
 			if (profile.profileId) {
 				try {
+					// Використовуємо cursor для конкретного профілю
+					const profileCursor = inputCursors[profile.profileId] || '';
+					console.log(`🔄 Fetching dialogs for profile ${profile.profileId} with cursor: "${profileCursor}"`);
+					
 					const profileDialogs = await this.provider.fetchDialogsByProfile(
 						profile.profileId, 
 						criteria, 
-						'', // cursor
+						profileCursor, // cursor для конкретного профілю
 						15  // limit
 					);
 					
 					// Додаємо діалоги до загального списку
 					if (profileDialogs && typeof profileDialogs === 'object' && 'dialogs' in profileDialogs) {
-						const dialogsData = profileDialogs as { dialogs: any[] };
+						const dialogsData = profileDialogs as { dialogs: any[]; cursor?: string; hasMore?: boolean };
 						if (Array.isArray(dialogsData.dialogs)) {
+							console.log(`📄 Profile ${profile.profileId}: loaded ${dialogsData.dialogs.length} dialogs, cursor: "${dialogsData.cursor}", hasMore: ${dialogsData.hasMore}`);
 							allDialogs.push(...dialogsData.dialogs);
+							
+							// Зберігаємо cursor для конкретного профілю
+							if (dialogsData.cursor) {
+								profileCursors[profile.profileId] = dialogsData.cursor;
+							}
+							
+							// Якщо хоча б один профіль має ще діалоги
+							if (dialogsData.hasMore !== false) {
+								hasMoreAny = true;
+							}
 						}
 					}
 				} catch (error) {
@@ -146,9 +174,18 @@ export class ChatsService {
 			}
 		}
 
+		const finalCursor = Object.keys(profileCursors).length > 0 ? JSON.stringify(profileCursors) : '';
+		console.log(`📤 ChatsService.fetchDialogs returning:`, {
+			dialogsCount: allDialogs.length,
+			cursor: finalCursor,
+			hasMore: hasMoreAny,
+			profileCursors: profileCursors
+		});
+
 		return {
 			dialogs: allDialogs,
-			cursor: allDialogs.length > 0 ? new Date().toISOString() : '',
+			cursor: finalCursor,
+			hasMore: hasMoreAny,
 			profiles: profilesMap,
 			sourceProfiles: accessibleProfiles.map(p => ({
 				id: p.id,
@@ -237,5 +274,77 @@ export class ChatsService {
 			return this.provider.fetchProfiles(profileId, userIds);
 		}
 		return { profiles: [] };
+	}
+
+	async searchDialogByPair(auth: RequestAuthContext, profileId: string, clientId: string) {
+		try {
+			console.log(`🔍 ChatsService.searchDialogByPair: profileId=${profileId}, clientId=${clientId}`);
+			
+			// Перевіряємо доступ до профілю
+			const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
+			const targetProfile = accessibleProfiles.find(p => p.profileId === profileId);
+			
+			if (!targetProfile) {
+				throw new ForbiddenException(`Profile ${profileId} is not accessible`);
+			}
+
+			// Викликаємо метод пошуку діалогу в провайдері
+			if (!this.provider.searchDialogByPair) {
+				throw new Error('Search dialog by pair is not supported by this provider');
+			}
+			
+			const result = await this.provider.searchDialogByPair(profileId, parseInt(clientId));
+			
+			if (result && result.dialog) {
+				// Додаємо профіль до результату для отримання інформації про клієнта
+				const clientIds = [result.dialog.idInterlocutor];
+				const profilesResult = await this.fetchUserProfiles(profileId, clientIds);
+				
+				return {
+					dialog: result.dialog,
+					profiles: profilesResult.profiles || {}
+				};
+			}
+			
+			return { dialog: null, profiles: {} };
+		} catch (error) {
+			console.error(`💥 ПОМИЛКА в ChatsService.searchDialogByPair:`, error);
+			throw error;
+		}
+	}
+
+	async fetchRestrictions(auth: RequestAuthContext, dialogId: string) {
+		try {
+			console.log(`🔍 ChatsService.fetchRestrictions: dialogId=${dialogId}`);
+			
+			// Парсимо dialogId для отримання profileId та clientId
+			const [profileId, clientId] = dialogId.split('-');
+			
+			// Перевіряємо доступ до профілю
+			const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
+			const targetProfile = accessibleProfiles.find(p => p.profileId === profileId);
+			
+			if (!targetProfile) {
+				throw new ForbiddenException(`Profile ${profileId} is not accessible`);
+			}
+
+			// Викликаємо метод отримання обмежень в провайдері
+			if (!this.provider.fetchRestrictions) {
+				throw new Error('Fetch restrictions is not supported by this provider');
+			}
+			
+			const result = await this.provider.fetchRestrictions(profileId, parseInt(clientId));
+			
+			if (result.success) {
+				return {
+					lettersLeft: result.lettersLeft || 0
+				};
+			} else {
+				throw new Error(result.error || 'Failed to fetch restrictions');
+			}
+		} catch (error) {
+			console.error(`💥 ПОМИЛКА в ChatsService.fetchRestrictions:`, error);
+			throw error;
+		}
 	}
 }

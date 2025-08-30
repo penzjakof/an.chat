@@ -66,6 +66,7 @@ export class TalkyTimesProvider implements SiteProvider {
 
 	async fetchDialogsByProfile(profileId: string, criteria: string[] = ['active'], cursor = '', limit = 15): Promise<unknown> {
 		const isMockMode = this.isMock();
+		console.log(`🔍 TalkyTimes.fetchDialogsByProfile: profileId=${profileId}, isMock=${isMockMode}, cursor="${cursor}"`);
 		
 		if (isMockMode) {
 			console.log(`🎭 Mock fetchDialogsByProfile for profile ${profileId}`);
@@ -199,9 +200,15 @@ export class TalkyTimesProvider implements SiteProvider {
 				}
 			}
 
+			// Генеруємо cursor для mock режиму (симулюємо що є ще діалоги)
+			const mockCursor = cursor ? 
+				new Date(new Date(cursor).getTime() - 24 * 60 * 60 * 1000).toISOString() : // На день раніше
+				new Date(Date.now() - 60 * 60 * 1000).toISOString(); // На годину раніше
+
 			return {
 				dialogs: filteredDialogs,
-				cursor: new Date().toISOString()
+				cursor: mockCursor,
+				hasMore: filteredDialogs.length > 0 // Є ще діалоги якщо знайшли хоча б один
 			};
 		}
 
@@ -243,7 +250,14 @@ export class TalkyTimesProvider implements SiteProvider {
 				throw new Error(`HTTP ${res.status}`);
 			}
 
-			return res.json();
+			const result = await res.json();
+			console.log(`📥 TalkyTimes API response for profile ${profileId}:`, {
+				dialogsCount: result.dialogs?.length,
+				cursor: result.cursor,
+				hasMore: result.hasMore,
+				hasMoreField: 'hasMore' in result
+			});
+			return result;
 		} catch (error) {
 			console.error('TalkyTimes fetchDialogsByProfile error:', error);
 			throw error;
@@ -346,9 +360,8 @@ export class TalkyTimesProvider implements SiteProvider {
 			// ВИПРАВЛЕННЯ: idRegularUser = співрозмовник (idInterlocutor), як у робочому прикладі
 			const idRegularUser = idInterlocutor;
 			
-			// ВИПРАВЛЕННЯ: використовуємо реальний URL з змінної середовища
-			const realBaseUrl = process.env.TT_BASE_URL || 'https://talkytimes.com/platform';
-			const url = `${realBaseUrl}/chat/messages`;
+			// ВИПРАВЛЕННЯ: використовуємо правильний URL для messages API
+			const url = 'https://talkytimes.com/platform/chat/messages';
 			const headers = this.sessionService.getRequestHeaders(session);
 			
 			// Оновлюємо referer для конкретного діалогу
@@ -604,6 +617,192 @@ export class TalkyTimesProvider implements SiteProvider {
 		} catch (error) {
 			console.error('TalkyTimes login validation error:', error);
 			return { success: false, error: 'Помилка з\'єднання з TalkyTimes' };
+		}
+	}
+
+	async searchDialogByPair(profileId: string, clientId: number): Promise<{ success: boolean; dialog?: any; error?: string }> {
+		console.log(`🔍 TalkyTimes.searchDialogByPair: profileId=${profileId}, clientId=${clientId}, isMock=${this.isMock()}`);
+		
+		if (this.isMock()) {
+			console.log(`🎭 Mock mode: generating dialog for profile ${profileId} and client ${clientId}`);
+			
+			// Генеруємо мок діалог
+			const mockDialog = {
+				idUser: parseInt(profileId),
+				idInterlocutor: clientId,
+				idLastReadMsg: 43266034646,
+				idInterlocutorLastReadMsg: 43257663229,
+				dateUpdated: new Date().toISOString(),
+				draft: "",
+				hasNewMessage: false,
+				highlightExpireDate: null,
+				highlightType: "none",
+				isActive: true,
+				isBlocked: false,
+				isBookmarked: false,
+				isHidden: false,
+				isPinned: false,
+				lastMessage: {
+					id: 43266256908,
+					dateCreated: new Date().toISOString(),
+					idUserFrom: parseInt(profileId),
+					idUserTo: clientId,
+					type: "text",
+					content: {
+						message: "Тестове повідомлення для пошуку діалогу"
+					}
+				},
+				messagesLeft: 2,
+				type: "active",
+				unreadMessagesCount: 0
+			};
+			
+			return {
+				success: true,
+				dialog: mockDialog
+			};
+		}
+
+		let session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+		}
+
+		try {
+			const url = 'https://talkytimes.com/platform/chat/dialogs/by-pairs';
+			const headers = this.sessionService.getRequestHeaders(session);
+			
+			console.log(`🚀 TalkyTimes search dialog request for profile ${profileId}:`, {
+				profileId,
+				clientId,
+				url
+			});
+			
+			const requestBody = {
+				idsRegularUser: [clientId],
+				withoutTranslation: false
+			};
+			
+			console.log(`📤 Request body:`, requestBody);
+			console.log(`📋 Full headers:`, headers);
+
+			const res = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers: headers,
+				body: JSON.stringify(requestBody),
+				timeoutMs: 15000
+			});
+
+			if (!res.ok) {
+				const errorText = await res.text();
+				console.error(`❌ TalkyTimes search dialog API error ${res.status}:`, errorText);
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+					return { success: false, error: `Session expired for profile ${profileId}. Please re-authenticate.` };
+				}
+				return { success: false, error: `HTTP ${res.status}: ${errorText}` };
+			}
+
+			const result = await res.json();
+			console.log(`📥 TalkyTimes search dialog response for profile ${profileId}:`, {
+				dialogsCount: result?.length,
+				hasDialog: result?.length > 0
+			});
+			
+			if (result && Array.isArray(result) && result.length > 0) {
+				return {
+					success: true,
+					dialog: result[0] // Беремо перший діалог з результату
+				};
+			} else {
+				return {
+					success: false,
+					error: 'Dialog not found'
+				};
+			}
+		} catch (error) {
+			console.error('TalkyTimes searchDialogByPair error:', error);
+			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
+
+	async fetchRestrictions(profileId: string, clientId: number): Promise<{ success: boolean; lettersLeft?: number; error?: string }> {
+		console.log(`🔍 TalkyTimes.fetchRestrictions: profileId=${profileId}, clientId=${clientId}, isMock=${this.isMock()}`);
+		
+		if (this.isMock()) {
+			console.log(`🎭 Mock mode: generating restrictions for profile ${profileId} and client ${clientId}`);
+			
+			// Генеруємо мок обмеження
+			const mockRestrictions = {
+				lettersLeft: Math.floor(Math.random() * 10) // Випадкове число від 0 до 9
+			};
+			
+			return {
+				success: true,
+				lettersLeft: mockRestrictions.lettersLeft
+			};
+		}
+
+		let session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+		}
+
+		try {
+			const url = 'https://talkytimes.com/platform/correspondence/restriction';
+			const headers = this.sessionService.getRequestHeaders(session);
+			
+			// Оновлюємо referer для конкретного діалогу
+			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${clientId}`;
+			
+			console.log(`🚀 TalkyTimes restrictions request for profile ${profileId}:`, {
+				profileId,
+				clientId,
+				url,
+				referer: headers['referer']
+			});
+			
+			const requestBody = {
+				idRegularUser: clientId
+			};
+			
+			console.log(`📤 Request body:`, requestBody);
+			console.log(`📋 Full headers:`, headers);
+
+			const res = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers: headers,
+				body: JSON.stringify(requestBody),
+				timeoutMs: 15000
+			});
+
+			if (!res.ok) {
+				const errorText = await res.text();
+				console.error(`❌ TalkyTimes restrictions API error ${res.status}:`, errorText);
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+					return { success: false, error: `Session expired for profile ${profileId}. Please re-authenticate.` };
+				}
+				return { success: false, error: `HTTP ${res.status}: ${errorText}` };
+			}
+
+			const result = await res.json();
+			console.log(`📥 TalkyTimes restrictions response for profile ${profileId}:`, result);
+			
+			if (result && result.data && typeof result.data.messagesLeft === 'number') {
+				return {
+					success: true,
+					lettersLeft: result.data.messagesLeft // API повертає messagesLeft, але це насправді листи
+				};
+			} else {
+				return {
+					success: false,
+					error: 'Invalid response format'
+				};
+			}
+		} catch (error) {
+			console.error('TalkyTimes fetchRestrictions error:', error);
+			return { success: false, error: error.message || 'Unknown error' };
 		}
 	}
 }

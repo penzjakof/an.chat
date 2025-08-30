@@ -7,6 +7,7 @@ export interface DialogsFilters {
 	status?: string;
 	search?: string;
 	onlineOnly?: boolean;
+	cursor?: string;
 	// Тут можна додавати нові фільтри:
 	// dateFrom?: string;
 	// dateTo?: string;
@@ -22,4 +23,6 @@ export interface SiteProvider {
 	fetchMessages(ctx: ProviderRequestContext, dialogId: string, cursor?: string): Promise<unknown>;
 	fetchMessagesByProfile?(profileId: string, dialogId: string, cursor?: string): Promise<{ success: boolean; messages?: any[]; error?: string }>;
 	sendTextMessage(ctx: ProviderRequestContext, dialogId: string, text: string): Promise<unknown>;
+	searchDialogByPair?(profileId: string, clientId: number): Promise<{ success: boolean; dialog?: any; error?: string }>;
+	fetchRestrictions?(profileId: string, clientId: number): Promise<{ success: boolean; lettersLeft?: number; error?: string }>;
 }

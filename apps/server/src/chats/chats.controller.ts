@@ -12,7 +12,7 @@ export class ChatsController {
 
 	@Roles(Role.OWNER, Role.OPERATOR)
 	@Get('dialogs')
-	dialogs(@Req() req: Request, @Query() filters: { status?: string; search?: string; onlineOnly?: string }) {
+	dialogs(@Req() req: Request, @Query() filters: { status?: string; search?: string; onlineOnly?: string; cursor?: string }) {
 		// Перетворюємо onlineOnly з string в boolean
 		const processedFilters = {
 			...filters,
@@ -20,6 +20,20 @@ export class ChatsController {
 		};
 		console.log('🔍 ChatsController.dialogs called with filters:', processedFilters);
 		return this.chats.fetchDialogs(req.auth!, processedFilters);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Get('search-dialog')
+	searchDialog(@Req() req: Request, @Query() query: { profileId: string; clientId: string }) {
+		console.log('🔍 ChatsController.searchDialog called with:', query);
+		return this.chats.searchDialogByPair(req.auth!, query.profileId, query.clientId);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Get('dialogs/:id/restrictions')
+	restrictions(@Req() req: Request, @Param('id') id: string) {
+		console.log('🔍 ChatsController.restrictions called for dialog:', id);
+		return this.chats.fetchRestrictions(req.auth!, id);
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)
