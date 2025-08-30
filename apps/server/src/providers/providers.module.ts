@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TalkyTimesProvider } from './talkytimes/talkytimes.provider';
 import { TalkyTimesSessionService } from './talkytimes/session.service';
+import { TalkyTimesRTMService } from './talkytimes/rtm.service';
 import { PrismaModule } from '../prisma/prisma.module';
 
 export const TALKY_TIMES_BASE_URL = 'TALKY_TIMES_BASE_URL';
@@ -10,6 +11,7 @@ export const TALKY_TIMES_PROVIDER = 'TALKY_TIMES_PROVIDER';
 	imports: [PrismaModule],
 	providers: [
 		TalkyTimesSessionService,
+		TalkyTimesRTMService,
 		{ provide: TALKY_TIMES_BASE_URL, useValue: process.env.TT_BASE_URL ?? 'mock:dev' },
 		{ 
 			provide: TALKY_TIMES_PROVIDER, 
@@ -18,6 +20,6 @@ export const TALKY_TIMES_PROVIDER = 'TALKY_TIMES_PROVIDER';
 			inject: [TALKY_TIMES_BASE_URL, TalkyTimesSessionService] 
 		},
 	],
-	exports: [TALKY_TIMES_PROVIDER, TALKY_TIMES_BASE_URL, TalkyTimesSessionService],
+	exports: [TALKY_TIMES_PROVIDER, TALKY_TIMES_BASE_URL, TalkyTimesSessionService, TalkyTimesRTMService],
 })
 export class ProvidersModule {}

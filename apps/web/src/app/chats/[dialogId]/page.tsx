@@ -362,20 +362,53 @@ export default function DialogPage() {
 	useEffect(() => {
 		const token = getAccessToken();
 		const socket = io('http://localhost:4000/ws', { transports: ['websocket'], auth: token ? { token } : undefined });
+		
+		// Підключаємося до кімнати діалогу
 		socket.emit('join', { dialogId });
+		
+		// Обробляємо нові повідомлення з RTM
 		socket.on('message', (payload: ChatMessage) => {
+			console.log('📨 RTM: Received new message', payload);
+			
 			setMessages((prev) => {
 				// Перевіряємо чи повідомлення вже існує
 				const exists = prev.some(msg => msg.id === payload.id);
 				if (exists) {
 					return prev;
 				}
-				return [...prev, payload];
+				
+				const newMessages = [...prev, payload].sort((a, b) => 
+					new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime()
+				);
+				
+				// Оновлюємо лічильник повідомлень якщо це наше повідомлення
+				if (payload.idUserFrom === idProfile) {
+					updateCountersAfterSend();
+				}
+				
+				return newMessages;
 			});
-			bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+			
+			// Автоматично прокручуємо до низу при новому повідомленні
+			setTimeout(() => {
+				bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+			}, 100);
 		});
+		
+		// Обробляємо зміни онлайн статусу
+		socket.on('user_online_status', (data: { userId: number; isOnline: boolean }) => {
+			console.log('👤 RTM: User online status changed', data);
+			
+			// Оновлюємо статус користувача якщо це наш співрозмовник
+			if (data.userId === idRegularUser) {
+				setUserProfile(prev => prev ? { ...prev, is_online: data.isOnline } : null);
+			}
+		});
+		
 		return () => { 
+			socket.emit('leave', { dialogId });
 			socket.disconnect(); 
+			
 			// Очищуємо timeouts при unmount
 			if (loadingTimeoutRef.current) {
 				clearTimeout(loadingTimeoutRef.current);
@@ -384,7 +417,7 @@ export default function DialogPage() {
 				clearTimeout(unlockTimeoutRef.current);
 			}
 		};
-	}, [dialogId]);
+	}, [dialogId, idProfile, idRegularUser]);
 
 
 

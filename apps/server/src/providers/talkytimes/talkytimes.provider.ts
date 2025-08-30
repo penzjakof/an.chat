@@ -448,8 +448,8 @@ export class TalkyTimesProvider implements SiteProvider {
 				id: parseInt(profileId) || 126232553,
 				name: `Mock Profile ${profileId}`,
 				personal: {
-					avatar_large: `https://via.placeholder.com/100x100/680098/ffffff?text=P${profileId.slice(-2)}`,
-					avatar_xl: `https://via.placeholder.com/592x538/680098/ffffff?text=P${profileId.slice(-2)}`,
+					avatar_large: `https://picsum.photos/100/100?random=${profileId}`,
+					avatar_xl: `https://picsum.photos/592/538?random=${profileId}`,
 					age: 25 + (parseInt(profileId) % 30)
 				},
 				is_online: Math.random() > 0.5
@@ -503,9 +503,9 @@ export class TalkyTimesProvider implements SiteProvider {
 				id_user: id,
 				name: `Mock User ${id}`,
 				personal: {
-					avatar_small: `https://via.placeholder.com/50x50/680098/ffffff?text=${id.toString().slice(-2)}`,
-					avatar_large: `https://via.placeholder.com/100x100/680098/ffffff?text=${id.toString().slice(-2)}`,
-					avatar_xl: `https://via.placeholder.com/592x538/680098/ffffff?text=${id.toString().slice(-2)}`,
+					avatar_small: `https://picsum.photos/50/50?random=${id}`,
+					avatar_large: `https://picsum.photos/100/100?random=${id}`,
+					avatar_xl: `https://picsum.photos/592/538?random=${id}`,
 					age: 25 + (id % 30)
 				},
 				is_online: Math.random() > 0.5,

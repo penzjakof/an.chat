@@ -1,5 +1,6 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -15,7 +16,17 @@ import { RolesGuard } from './common/auth/roles.guard';
 import { EncryptionValidatorService } from './profiles/encryption-validator.service';
 
 @Module({
-	imports: [PrismaModule, UsersModule, GroupsModule, ProfilesModule, TTModule, ChatsModule, BackupModule, AuthModule],
+	imports: [
+		EventEmitterModule.forRoot(),
+		PrismaModule, 
+		UsersModule, 
+		GroupsModule, 
+		ProfilesModule, 
+		TTModule, 
+		ChatsModule, 
+		BackupModule, 
+		AuthModule
+	],
 	controllers: [AppController],
 	providers: [
 		AppService,

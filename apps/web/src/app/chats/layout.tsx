@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { io } from 'socket.io-client';
 import { apiGet } from '@/lib/api';
-import { getSession } from '@/lib/session';
+import { getSession, getAccessToken } from '@/lib/session';
 import { ProfileAuthenticator } from '@/components/ProfileAuthenticator';
 import { DialogSkeleton } from '@/components/SkeletonLoader';
 
@@ -306,6 +307,58 @@ export default function ChatsLayout({
 			loadProfileAvatars();
 		}
 	}, [sourceProfiles]);
+
+	// WebSocket для RTM оновлень
+	useEffect(() => {
+		const token = getAccessToken();
+		if (!token) return;
+
+		const socket = io('http://localhost:4000/ws', { 
+			transports: ['websocket'], 
+			auth: { token } 
+		});
+
+		// Обробляємо зміни онлайн статусу
+		socket.on('user_online_status', (data: { userId: number; isOnline: boolean }) => {
+			console.log('👤 RTM: User online status changed in dialogs list', data);
+			
+			// Оновлюємо статус у profiles
+			setProfiles(prev => ({
+				...prev,
+				[data.userId]: prev[data.userId] ? {
+					...prev[data.userId],
+					is_online: data.isOnline
+				} : prev[data.userId]
+			}));
+		});
+
+		// Обробляємо нові повідомлення для оновлення списку діалогів
+		socket.on('message', (payload: any) => {
+			console.log('📨 RTM: New message in dialogs list', payload);
+			
+			// Оновлюємо останнє повідомлення в діалозі
+			setDialogs(prev => prev.map(dialog => {
+				const dialogMatches = 
+					(dialog.idUser === payload.idUserFrom && dialog.idInterlocutor === payload.idUserTo) ||
+					(dialog.idUser === payload.idUserTo && dialog.idInterlocutor === payload.idUserFrom);
+				
+				if (dialogMatches) {
+					return {
+						...dialog,
+						lastMessage: {
+							content: payload.content
+						},
+						dateUpdated: payload.dateCreated
+					};
+				}
+				return dialog;
+			}));
+		});
+
+		return () => {
+			socket.disconnect();
+		};
+	}, []);
 
 	// Функція для знаходження профілю за idUser (profileId)
 	const getSourceProfileByIdUser = (idUser: number) => {

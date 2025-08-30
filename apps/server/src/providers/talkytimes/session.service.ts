@@ -128,6 +128,30 @@ export class TalkyTimesSessionService {
 		};
 	}
 
+	// Метод для отримання всіх активних сесій
+	async getAllActiveSessions(): Promise<TTSessionData[]> {
+		try {
+			const sessions = await this.prisma.talkyTimesSession.findMany({
+				where: {
+					expiresAt: {
+						gt: new Date()
+					}
+				}
+			});
+
+			return sessions.map(session => ({
+				profileId: session.profileId,
+				cookies: session.cookies,
+				token: session.token || undefined,
+				refreshToken: session.refreshToken || undefined,
+				expiresAt: session.expiresAt
+			}));
+		} catch (error) {
+			console.error('Error getting active sessions:', error);
+			return [];
+		}
+	}
+
 	// Метод для очищення застарілих сесій
 	async cleanupExpiredSessions(): Promise<void> {
 		try {
