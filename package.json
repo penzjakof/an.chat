@@ -8,7 +8,7 @@
     "predev": "bash -lc 'pids=$(lsof -nP -iTCP:3000 -sTCP:LISTEN -t 2>/dev/null || true); [ -n \"$pids\" ] && kill -TERM $pids || true; pids2=$(lsof -nP -iTCP:4000 -sTCP:LISTEN -t 2>/dev/null || true); [ -n \"$pids2\" ] && kill -TERM $pids2 || true'",
     "dev": "concurrently -n web,server -c green,cyan \"npm:dev:web\" \"npm:dev:server\"",
     "dev:web": "npm --workspace apps/web run dev",
-    "dev:server": "npm --workspace apps/server run start:dev",
+    "dev:server": "TT_BASE_URL=https://talkytimes.com npm --workspace apps/server run start:dev",
     "build": "npm --workspaces run build",
     "start": "npm --workspace apps/server run start:prod",
     "lint": "npm --workspaces run lint"

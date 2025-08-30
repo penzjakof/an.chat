@@ -23,6 +23,12 @@ const KNOWN_PASSWORDS: Record<string, string> = {
 	'aaallonnno44ka03@gmail.com': 'aaallonnno44ka03'
 };
 
+// Глобальний кеш для уникнення повторних завантажень
+let profilesCache: Profile[] | null = null;
+let authStatusesCache: Record<string, AuthStatus> | null = null;
+let lastCheckTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 хвилин
+
 export function ProfileAuthenticator() {
 	const [profiles, setProfiles] = useState<Profile[]>([]);
 	const [authStatuses, setAuthStatuses] = useState<Record<string, AuthStatus>>({});
@@ -30,6 +36,21 @@ export function ProfileAuthenticator() {
 	const [isAuthenticating, setIsAuthenticating] = useState(false);
 
 	useEffect(() => {
+		// Перевіряємо кеш перед завантаженням
+		const now = Date.now();
+		if (profilesCache && authStatusesCache && (now - lastCheckTime) < CACHE_DURATION) {
+			console.log('📋 Using cached profiles');
+			setProfiles(profilesCache);
+			setAuthStatuses(authStatusesCache);
+			
+			// Показуємо тільки якщо є неавтентифіковані профілі
+			const needsAuth = Object.values(authStatusesCache).some(status => 
+				status.status === 'failed'
+			);
+			setIsVisible(needsAuth);
+			return;
+		}
+		
 		loadProfilesAndAuthenticate();
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
@@ -91,6 +112,11 @@ export function ProfileAuthenticator() {
 
 			setAuthStatuses(statuses);
 			
+			// Зберігаємо в кеш
+			profilesCache = userProfiles;
+			authStatusesCache = statuses;
+			lastCheckTime = Date.now();
+			
 			// Показуємо компонент тільки якщо потрібна автентифікація
 			if (needsAuth) {
 				setIsVisible(true);
@@ -130,10 +156,14 @@ export function ProfileAuthenticator() {
 
 		try {
 			await apiPost(`/profiles/${profileId}/authenticate`, { password });
-			setAuthStatuses(prev => ({
-				...prev,
-				[profileId]: { ...prev[profileId], status: 'authenticated', message: 'Успішно автентифіковано' }
-			}));
+			const newStatuses = {
+				...authStatuses,
+				[profileId]: { ...authStatuses[profileId], status: 'authenticated' as const, message: 'Успішно автентифіковано' }
+			};
+			setAuthStatuses(newStatuses);
+			
+			// Оновлюємо кеш
+			authStatusesCache = newStatuses;
 			
 			// Перевіряємо чи всі профілі автентифіковані
 			setTimeout(() => {
@@ -144,8 +174,8 @@ export function ProfileAuthenticator() {
 				
 				if (allAuthenticated) {
 					setIsVisible(false);
-					// Перезавантажуємо сторінку для оновлення діалогів
-					setTimeout(() => window.location.reload(), 500);
+					// НЕ перезавантажуємо сторінку - це викликає повторні завантаження
+					console.log('✅ Всі профілі автентифіковані');
 				}
 			}, 1000);
 		} catch {

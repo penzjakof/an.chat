@@ -66,6 +66,57 @@ export class ChatsGateway implements OnModuleInit {
 		});
 	}
 
+	@OnEvent('rtm.message.new')
+	handleRTMNewMessage(data: any) {
+		this.logger.log(`🍞 RTM New Message Toast: ${data.idUserFrom} -> ${data.idUserTo}`);
+		
+		// Знаходимо всі сокети отримувача повідомлення
+		const toUserSockets = Array.from(this.userSockets.entries())
+			.filter(([userId, sockets]) => {
+				// Шукаємо користувача який має профіль data.idUserTo
+				// Поки що відправляємо всім - потім можна буде уточнити логіку
+				return sockets.size > 0;
+			})
+			.flatMap(([userId, sockets]) => Array.from(sockets));
+
+		// Відправляємо toast всім активним сокетам (поки що всім)
+		this.server.emit('message_toast', {
+			messageId: data.messageId,
+			idUserFrom: data.idUserFrom,
+			idUserTo: data.idUserTo,
+			dateCreated: data.dateCreated,
+			type: 'new_message'
+		});
+		
+		this.logger.log(`🍞 Toast sent to all connected clients for message ${data.messageId}`);
+	}
+
+	@OnEvent('rtm.message.read')
+	handleRTMMessageRead(data: any) {
+		this.logger.log(`👁️ RTM Message Read: ${data.messageId} by ${data.idInterlocutor}`);
+		
+		// Відправляємо статус прочитання всім підключеним клієнтам
+		this.server.emit('message_read', {
+			messageId: data.messageId,
+			idInterlocutor: data.idInterlocutor
+		});
+	}
+
+	@OnEvent('rtm.dialog.limit.changed')
+	handleRTMDialogLimitChanged(data: any) {
+		this.logger.log(`📊 RTM Dialog Limit: User ${data.idUser}, limit ${data.limitLeft}`);
+		
+		// Створюємо dialogId для оновлення лімітів
+		const dialogId = `${data.idUser}-${data.idInterlocutor}`;
+		
+		// Відправляємо оновлення лімітів в кімнату діалогу
+		this.server.to(`dlg:${dialogId}`).emit('dialog_limit_changed', {
+			idUser: data.idUser,
+			idInterlocutor: data.idInterlocutor,
+			limitLeft: data.limitLeft
+		});
+	}
+
 	emitNewMessage(event: { dialogId: string; payload: any }) {
 		this.server.to(`dlg:${event.dialogId}`).emit('message', event.payload);
 	}
@@ -88,8 +139,12 @@ export class ChatsGateway implements OnModuleInit {
 			}
 			this.userSockets.get(userId)!.add(client.id);
 
-			// Підписуємося на RTM події для цього користувача
-			this.rtmService.subscribeToUser(userId);
+			// Отримуємо ID профілю з dialogId (формат: profileId-interlocutorId)
+			const profileId = parseInt(data.dialogId.split('-')[0]);
+			if (!isNaN(profileId)) {
+				// Підписуємося на RTM події для цього профілю
+				this.rtmService.subscribeToUser(profileId);
+			}
 
 			const room = `dlg:${data.dialogId}`;
 			client.join(room);

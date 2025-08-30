@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { io } from 'socket.io-client';
 import { apiGet, apiPost } from '@/lib/api';
 import { getAccessToken, getSession } from '@/lib/session';
 import { ChatHeaderSkeleton, MessageSkeleton } from '@/components/SkeletonLoader';
+import { useDialogWebSocket } from '@/hooks/useDialogWebSocket';
+
 
 type ChatMessage = {
 	id: number;
@@ -41,6 +42,7 @@ export default function DialogPage() {
 	const router = useRouter();
 	const params = useParams();
 	const dialogId = params.dialogId as string;
+
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [text, setText] = useState('');
 	const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -361,14 +363,110 @@ export default function DialogPage() {
 
 	useEffect(() => {
 		const token = getAccessToken();
-		const socket = io('http://localhost:4000/ws', { transports: ['websocket'], auth: token ? { token } : undefined });
+		const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+		let socket: any = null;
+		let isCleanedUp = false;
 		
-		// Підключаємося до кімнати діалогу
-		socket.emit('join', { dialogId });
+		// СТАРИЙ КОД - ЗАКОМЕНТОВАНО, ВИКОРИСТОВУЄМО WEBSOCKET POOL
+		/*
+		const connectTimeout = setTimeout(() => {
+			if (isCleanedUp) return;
+			
+			socket = io(`${apiUrl}/ws`, { 
+				transports: ['websocket'], 
+				auth: token ? { token } : undefined,
+				forceNew: true, // Завжди створюємо нове підключення
+				timeout: 5000 // Таймаут підключення 5 секунд
+			});
+			
+			// Обробляємо помилки підключення
+			socket.on('connect_error', (error: Error) => {
+				console.warn('🔌 WebSocket connection error:', error.message);
+			});
+			
+			socket.on('disconnect', (reason: string) => {
+				console.log('🔌 WebSocket disconnected:', reason);
+			});
+			
+			socket.on('connect', () => {
+				if (isCleanedUp) return;
+				console.log('🔌 WebSocket connected for dialog:', dialogId);
+				// Підключаємося до кімнати діалогу тільки після успішного підключення
+				socket.emit('join', { dialogId });
+			});
+			
+			// Обробляємо нові повідомлення з RTM
+			socket.on('message', (payload: ChatMessage) => {
+				if (isCleanedUp) return;
+				console.log('📨 RTM: Received new message', payload);
+				
+				setMessages((prev) => {
+					// Перевіряємо чи повідомлення вже існує
+					const exists = prev.some(msg => msg.id === payload.id);
+					if (exists) {
+						return prev;
+					}
+					
+					const newMessages = [...prev, payload].sort((a, b) => 
+						new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime()
+					);
+					
+					// Оновлюємо лічильник повідомлень якщо це наше повідомлення
+					if (payload.idUserFrom === idProfile) {
+						updateCountersAfterSend();
+					}
+					
+					return newMessages;
+				});
+				
+				// Автоматично прокручуємо до низу при новому повідомленні
+				setTimeout(() => {
+					bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+				}, 100);
+			});
+			
+			// Обробляємо зміни онлайн статусу
+			socket.on('user_online_status', (data: { userId: number; isOnline: boolean }) => {
+				if (isCleanedUp) return;
+				console.log('👤 RTM: User online status changed', data);
+				
+				// Оновлюємо статус користувача якщо це наш співрозмовник
+				if (data.userId === idRegularUser) {
+					setUserProfile(prev => prev ? { ...prev, is_online: data.isOnline } : null);
+				}
+			});
+		}, 100); // Затримка 100мс для уникнення конфліктів
+		*/
 		
-		// Обробляємо нові повідомлення з RTM
-		socket.on('message', (payload: ChatMessage) => {
-			console.log('📨 RTM: Received new message', payload);
+		return () => {
+			// СТАРИЙ CLEANUP КОД - ЗАКОМЕНТОВАНО
+			/*
+			isCleanedUp = true;
+			clearTimeout(connectTimeout);
+			
+			// Якщо socket створений, закриваємо його
+			if (socket && socket.connected) {
+				socket.emit('leave', { dialogId });
+				socket.disconnect();
+			}
+			*/
+			
+			// Очищуємо timeouts при unmount
+			if (loadingTimeoutRef.current) {
+				clearTimeout(loadingTimeoutRef.current);
+			}
+			if (unlockTimeoutRef.current) {
+				clearTimeout(unlockTimeoutRef.current);
+			}
+		};
+	}, [dialogId, idProfile, idRegularUser]);
+
+	// Використовуємо WebSocket pool для цього профілю та діалогу
+	useDialogWebSocket({
+		profileId: idProfile.toString(),
+		dialogId,
+		onMessage: (payload: ChatMessage) => {
+			console.log('📨 RTM Pool: Received new message', payload);
 			
 			setMessages((prev) => {
 				// Перевіряємо чи повідомлення вже існує
@@ -381,7 +479,7 @@ export default function DialogPage() {
 					new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime()
 				);
 				
-				// Оновлюємо лічильник повідомлень якщо це наше повідомлення
+				// Оновлюємо лічільник повідомлень якщо це наше повідомлення
 				if (payload.idUserFrom === idProfile) {
 					updateCountersAfterSend();
 				}
@@ -393,33 +491,16 @@ export default function DialogPage() {
 			setTimeout(() => {
 				bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
 			}, 100);
-		});
-		
-		// Обробляємо зміни онлайн статусу
-		socket.on('user_online_status', (data: { userId: number; isOnline: boolean }) => {
-			console.log('👤 RTM: User online status changed', data);
+		},
+		onUserOnlineStatus: (data: { userId: number; isOnline: boolean }) => {
+			console.log('👤 RTM Pool: User online status changed', data);
 			
 			// Оновлюємо статус користувача якщо це наш співрозмовник
 			if (data.userId === idRegularUser) {
 				setUserProfile(prev => prev ? { ...prev, is_online: data.isOnline } : null);
 			}
-		});
-		
-		return () => { 
-			socket.emit('leave', { dialogId });
-			socket.disconnect(); 
-			
-			// Очищуємо timeouts при unmount
-			if (loadingTimeoutRef.current) {
-				clearTimeout(loadingTimeoutRef.current);
-			}
-			if (unlockTimeoutRef.current) {
-				clearTimeout(unlockTimeoutRef.current);
-			}
-		};
-	}, [dialogId, idProfile, idRegularUser]);
-
-
+		}
+	});
 
 	async function send() {
 		if (!text.trim()) return;
@@ -685,6 +766,7 @@ export default function DialogPage() {
 					>
 						Надіслати
 					</button>
+
 				</div>
 			</div>
 		</div>

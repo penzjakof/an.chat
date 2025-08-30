@@ -600,15 +600,28 @@ export class TalkyTimesProvider implements SiteProvider {
 			if (data?.data?.result === true && data?.data?.idUser) {
 				const profileId = data.data.idUser.toString();
 				
-				// Зберігаємо сесію з cookies та токенами
-				const cookies = res.headers.get('set-cookie') || '';
-				const refreshToken = data.data.refreshToken;
-				
-				await this.sessionService.saveSession(profileId, {
-					cookies,
-					refreshToken,
-					expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 години
-				});
+							// Зберігаємо сесію з cookies та токенами
+			// ВИПРАВЛЕННЯ: правильно парсимо cookies з set-cookie headers
+			const setCookieHeaders = res.headers.getSetCookie?.() || [];
+			
+			// Витягуємо тільки name=value частини з кожного set-cookie header
+			const cookieValues = setCookieHeaders.map(header => {
+				// Беремо тільки першу частину до першого ';' (name=value)
+				return header.split(';')[0].trim();
+			}).filter(Boolean);
+			
+			const cookies = cookieValues.join('; ');
+			const refreshToken = data.data.refreshToken;
+			
+			console.log(`🍪 Saving ${setCookieHeaders.length} set-cookie headers as ${cookieValues.length} cookies for profile ${profileId}`);
+			console.log(`🍪 Raw headers: ${setCookieHeaders.join(' | ')}`);
+			console.log(`🍪 Clean cookies: ${cookies}`);
+			
+			await this.sessionService.saveSession(profileId, {
+				cookies,
+				refreshToken,
+				expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 години
+			});
 				
 				return { success: true, profileId };
 			} else {
