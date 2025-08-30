@@ -1,13 +1,25 @@
 import { TalkyTimesProvider } from './talkytimes.provider';
+import { TalkyTimesSessionService } from './session.service';
 
 declare const global: any;
 
 describe('TalkyTimesProvider', () => {
 	const baseUrl = 'https://api.example.com';
 	let provider: TalkyTimesProvider;
+	let mockSessionService: jest.Mocked<TalkyTimesSessionService>;
 
 	beforeEach(() => {
-		provider = new TalkyTimesProvider(baseUrl);
+		mockSessionService = {
+			getSession: jest.fn(),
+			saveSession: jest.fn(),
+			removeSession: jest.fn(),
+			validateSession: jest.fn(),
+			authenticateProfile: jest.fn(),
+			getRequestHeaders: jest.fn().mockReturnValue({}),
+			cleanupExpiredSessions: jest.fn()
+		} as any;
+		
+		provider = new TalkyTimesProvider(baseUrl, mockSessionService);
 		global.fetch = jest.fn(async (url: string, _opts?: any) => {
 			return {
 				ok: true,

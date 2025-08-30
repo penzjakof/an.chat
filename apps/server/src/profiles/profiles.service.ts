@@ -4,6 +4,7 @@ import { ProviderSite, ProfileStatus } from '@prisma/client';
 import { TalkyTimesProvider } from '../providers/talkytimes/talkytimes.provider';
 import { TALKY_TIMES_PROVIDER } from '../providers/providers.module';
 import { EncryptionService } from '../common/encryption/encryption.service';
+import { TalkyTimesSessionService } from '../providers/talkytimes/session.service';
 
 
 
@@ -12,7 +13,8 @@ export class ProfilesService {
 	constructor(
 		private readonly prisma: PrismaService,
 		@Inject(TALKY_TIMES_PROVIDER) private readonly talkyTimesProvider: TalkyTimesProvider,
-		private readonly encryption: EncryptionService
+		private readonly encryption: EncryptionService,
+		private readonly sessionService: TalkyTimesSessionService
 	) {}
 
 	async create(params: { groupId: string; provider: ProviderSite; displayName?: string; credentialLogin?: string; credentialPassword?: string }, agencyCode: string) {
@@ -73,8 +75,46 @@ export class ProfilesService {
 			},
 			include: {
 				group: true
+			},
+			orderBy: { createdAt: 'desc' }
+		});
+	}
+
+	async listByOperatorAccess(operatorId: string, agencyCode: string) {
+		// Отримуємо профілі з груп, до яких має доступ оператор
+		return this.prisma.profile.findMany({
+			where: {
+				group: {
+					agency: { code: agencyCode },
+					operators: {
+						some: {
+							operatorId: operatorId
+						}
+					}
+				}
+			},
+			include: {
+				group: true
+			},
+			orderBy: { createdAt: 'desc' }
+		});
+	}
+
+	async hasAccessToProfile(profileId: string, operatorId: string, agencyCode: string): Promise<boolean> {
+		const profile = await this.prisma.profile.findFirst({
+			where: {
+				id: profileId,
+				group: {
+					agency: { code: agencyCode },
+					operators: {
+						some: {
+							operatorId: operatorId
+						}
+					}
+				}
 			}
 		});
+		return !!profile;
 	}
 
 	async update(profileId: string, updates: { displayName?: string; credentialLogin?: string; credentialPassword?: string; groupId?: string }, agencyCode: string) {
@@ -135,5 +175,116 @@ export class ProfilesService {
 		return this.prisma.profile.delete({
 			where: { id: profileId }
 		});
+	}
+
+	async authenticateProfile(profileId: string, password: string, agencyCode: string) {
+		console.log(`🔐 Authenticating profile ${profileId} with agencyCode ${agencyCode}`);
+		
+		// Знаходимо профіль
+		const profile = await this.prisma.profile.findFirst({
+			where: {
+				id: profileId,
+				group: {
+					agency: { code: agencyCode }
+				}
+			}
+		});
+
+		if (!profile) {
+			console.log(`❌ Profile ${profileId} not found for agency ${agencyCode}`);
+			throw new NotFoundException('Profile not found');
+		}
+		
+		console.log(`✅ Profile found: ${profile.displayName}, credentialLogin: ${profile.credentialLogin}`);
+
+		// Перевіряємо, що є облікові дані
+		if (!profile.credentialPassword || !profile.credentialLogin) {
+			throw new BadRequestException('Profile credentials not found');
+		}
+
+		// Розшифровуємо пароль
+		const decryptedPassword = this.encryption.decrypt(profile.credentialPassword);
+		console.log(`🔓 Decrypted password matches provided: ${decryptedPassword === password}`);
+		
+		// Перевіряємо пароль
+		if (decryptedPassword !== password) {
+			console.log(`❌ Password mismatch for profile ${profileId}`);
+			throw new BadRequestException('Invalid password');
+		}
+
+		// Автентифікуємо профіль через провайдер
+		console.log(`🚀 Calling TalkyTimes validateCredentials for ${profile.credentialLogin}`);
+		const result = await this.talkyTimesProvider.validateCredentials(profile.credentialLogin, password);
+		
+		console.log(`📥 TalkyTimes auth result:`, { success: result.success, error: result.error, profileId: result.profileId });
+		
+		if (!result.success) {
+			console.log(`❌ TalkyTimes authentication failed: ${result.error}`);
+			throw new BadRequestException(result.error || 'Authentication failed');
+		}
+
+		// Оновлюємо профіль з новим profileId якщо потрібно
+		if (result.profileId && result.profileId !== profile.profileId) {
+			console.log(`🔄 Updating profileId from ${profile.profileId} to ${result.profileId}`);
+			await this.prisma.profile.update({
+				where: { id: profileId },
+				data: { profileId: result.profileId }
+			});
+		}
+
+		console.log(`✅ Profile authenticated successfully: ${result.profileId || profile.profileId}`);
+		return {
+			success: true,
+			profileId: result.profileId || profile.profileId,
+			message: 'Profile authenticated successfully'
+		};
+	}
+
+	async getProfileSessionStatus(profileId: string, agencyCode: string) {
+		// Знаходимо профіль
+		const profile = await this.prisma.profile.findFirst({
+			where: {
+				id: profileId,
+				group: {
+					agency: { code: agencyCode }
+				}
+			}
+		});
+
+		if (!profile) {
+			throw new NotFoundException('Profile not found');
+		}
+
+		if (!profile.profileId) {
+			return {
+				authenticated: false,
+				message: 'Profile not authenticated'
+			};
+		}
+
+		// Перевіряємо статус сесії
+		const isValid = await this.sessionService.validateSession(profile.profileId);
+		
+		return {
+			authenticated: isValid,
+			profileId: profile.profileId,
+			message: isValid ? 'Session is active' : 'Session expired'
+		};
+	}
+
+	async getProfileData(profileId: string, agencyCode: string) {
+		const profile = await this.prisma.profile.findFirst({
+			where: { id: profileId, group: { agency: { code: agencyCode } } }
+		});
+
+		if (!profile || !profile.profileId) {
+			return { success: false, error: 'Profile not found or not authenticated' };
+		}
+
+		if (!this.talkyTimesProvider.fetchProfileData) {
+			return { success: false, error: 'Profile data fetching not supported' };
+		}
+
+		return this.talkyTimesProvider.fetchProfileData(profile.profileId);
 	}
 }

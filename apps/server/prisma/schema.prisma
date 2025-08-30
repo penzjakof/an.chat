@@ -98,3 +98,17 @@ model Profile {
   @@index([status])
   @@index([provider, profileId])
 }
+
+model TalkyTimesSession {
+  id           String   @id @default(cuid())
+  profileId    String   @unique // TalkyTimes profile ID
+  cookies      String   // Serialized cookies
+  token        String?  // JWT token if available
+  refreshToken String?  // Refresh token
+  expiresAt    DateTime // Session expiration
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([profileId])
+  @@index([expiresAt])
+}

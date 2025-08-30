@@ -1,7 +1,28 @@
 import { PrismaClient, ProviderSite, Role, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 
 const prisma = new PrismaClient();
+
+// Функція шифрування (точна копія з EncryptionService)
+function encrypt(plaintext: string): string {
+	const keyString = process.env.ENCRYPTION_KEY;
+	let key: Buffer;
+	if (!keyString || keyString.length < 32) {
+		// 32 bytes (256-bit) key expected; for dev fallback to fixed-length pad
+		key = Buffer.from((keyString ?? 'dev-encryption-key').padEnd(32, '0').slice(0, 32));
+	} else {
+		key = Buffer.from(keyString.slice(0, 32));
+	}
+	
+	const iv = crypto.randomBytes(16);
+	const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+	cipher.setAAD(Buffer.from('anchat-profile-creds'));
+	let enc = cipher.update(plaintext, 'utf8');
+	enc = Buffer.concat([enc, cipher.final()]);
+	const tag = cipher.getAuthTag();
+	return Buffer.concat([iv, tag, enc]).toString('base64');
+}
 
 async function main() {
 	const agency = await prisma.agency.upsert({ where: { code: 'AG' }, create: { code: 'AG', name: 'Demo Agency' }, update: {} });
@@ -25,13 +46,13 @@ async function main() {
 
 	await prisma.profile.upsert({
 		where: { provider_externalId: { provider: ProviderSite.TALKYTIMES, externalId: 'aoshlatyyy@gmail.com' } },
-		create: { provider: ProviderSite.TALKYTIMES, externalId: 'aoshlatyyy@gmail.com', displayName: 'TT A', credentialLogin: 'aoshlatyyy@gmail.com', credentialPassword: 'aoshlatyyy', profileId: '7162437', groupId: group.id },
-		update: { groupId: group.id, credentialLogin: 'aoshlatyyy@gmail.com', credentialPassword: 'aoshlatyyy', profileId: '7162437' },
+		create: { provider: ProviderSite.TALKYTIMES, externalId: 'aoshlatyyy@gmail.com', displayName: 'TT A', credentialLogin: 'aoshlatyyy@gmail.com', credentialPassword: encrypt('aoshlatyyy'), profileId: '7162437', groupId: group.id },
+		update: { groupId: group.id, credentialLogin: 'aoshlatyyy@gmail.com', credentialPassword: encrypt('aoshlatyyy'), profileId: '7162437' },
 	});
 	await prisma.profile.upsert({
 		where: { provider_externalId: { provider: ProviderSite.TALKYTIMES, externalId: 'aaallonnno44ka03@gmail.com' } },
-		create: { provider: ProviderSite.TALKYTIMES, externalId: 'aaallonnno44ka03@gmail.com', displayName: 'TT B', credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: 'aaallonnno44ka03', profileId: '7162438', groupId: group.id },
-		update: { groupId: group.id, credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: 'aaallonnno44ka03', profileId: '7162438' },
+		create: { provider: ProviderSite.TALKYTIMES, externalId: 'aaallonnno44ka03@gmail.com', displayName: 'TT B', credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: encrypt('aaallonnno44ka03'), profileId: '7162438', groupId: group.id },
+		update: { groupId: group.id, credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: encrypt('aaallonnno44ka03'), profileId: '7162438' },
 	});
 
 	console.log('Seed completed with usernames: owner/operator');

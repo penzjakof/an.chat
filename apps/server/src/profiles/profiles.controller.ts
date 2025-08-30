@@ -16,6 +16,17 @@ export class ProfilesController {
 		return this.profiles.listByAgencyCode(req.auth!.agencyCode);
 	}
 
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Get('my')
+	listMy(@Req() req: Request) {
+		// Owner отримує всі профілі агенції, Operator - тільки свої
+		if (req.auth!.role === 'OWNER') {
+			return this.profiles.listByAgencyCode(req.auth!.agencyCode);
+		} else {
+			return this.profiles.listByOperatorAccess(req.auth!.userId, req.auth!.agencyCode);
+		}
+	}
+
 	@Roles(Role.OWNER)
 	@Get('group/:groupId')
 	list(@Param('groupId') groupId: string) {
@@ -38,5 +49,23 @@ export class ProfilesController {
 	@Delete(':id')
 	delete(@Param('id') id: string, @Req() req: Request) {
 		return this.profiles.delete(id, req.auth!.agencyCode);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post(':id/authenticate')
+	authenticateProfile(@Param('id') id: string, @Body() body: { password: string }, @Req() req: Request) {
+		return this.profiles.authenticateProfile(id, body.password, req.auth!.agencyCode);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post(':id/session/status')
+	getSessionStatus(@Param('id') id: string, @Req() req: Request) {
+		return this.profiles.getProfileSessionStatus(id, req.auth!.agencyCode);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Get(':id/profile-data')
+	getProfileData(@Param('id') id: string, @Req() req: Request) {
+		return this.profiles.getProfileData(id, req.auth!.agencyCode);
 	}
 }
