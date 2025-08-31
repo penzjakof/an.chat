@@ -9,8 +9,13 @@ function authz(): HeadersInit {
 
 async function handle<T>(res: Response, path: string): Promise<T> {
 	if (res.status === 401) {
+		console.error('🚨 API 401 Unauthorized:', path);
+		console.error('🔑 Current token:', getAccessToken() ? 'Present' : 'Missing');
 		clearSession();
-		if (typeof window !== 'undefined') window.location.href = '/login';
+		if (typeof window !== 'undefined') {
+			console.error('🔄 Redirecting to login...');
+			window.location.href = '/login';
+		}
 		throw new Error('Unauthorized');
 	}
 	if (!res.ok) {
@@ -40,8 +45,9 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T
 	return handle<T>(res, path);
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-	return apiRequest<T>(path, { method: 'GET' });
+export async function apiGet<T>(path: string, params?: Record<string, string>): Promise<T> {
+	const url = params ? `${path}?${new URLSearchParams(params).toString()}` : path;
+	return apiRequest<T>(url, { method: 'GET' });
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {

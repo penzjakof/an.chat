@@ -29,6 +29,139 @@ export class TalkyTimesProvider implements SiteProvider {
 		console.log('TalkyTimesProvider baseUrl:', this.baseUrl);
 	}
 
+	/**
+	 * Універсальний метод для виконання HTTP запитів до TalkyTimes API
+	 */
+	async makeRequest(options: {
+		method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+		url: string;
+		data?: any;
+		profileId: number;
+		headers?: Record<string, string>;
+	}): Promise<{ success: boolean; data?: any; error?: string }> {
+		console.log(`🌐 TalkyTimesProvider.makeRequest: ${options.method} ${options.url} for profile ${options.profileId}`);
+
+		if (this.isMock()) {
+			return { 
+				success: true, 
+				data: { 
+					cursor: '',
+					photos: []
+				} 
+			};
+		}
+
+		try {
+			// Отримуємо активну сесію для профілю
+			const session = await this.sessionService.getActiveSession(options.profileId);
+			if (!session) {
+				return { success: false, error: `No active session found for profile ${options.profileId}` };
+			}
+
+			// Формуємо повний URL
+			const fullUrl = options.url.startsWith('http') ? options.url : `${this.baseUrl}${options.url}`;
+			
+			// Підготовуємо headers
+			const headers = {
+				'Accept': 'application/json',
+				'Content-Type': 'application/json',
+				'Cookie': session.cookies,
+				'Referer': `${this.baseUrl}/chat/${options.profileId}_123456`,
+				'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+				...options.headers
+			};
+
+			console.log(`🌐 Making ${options.method} request to ${fullUrl}`);
+
+			const response = await fetchWithTimeout(fullUrl, {
+				method: options.method,
+				headers,
+				body: options.data ? JSON.stringify(options.data) : undefined,
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				console.error(`❌ Request failed with status ${response.status}:`, errorText);
+				return { success: false, error: `HTTP ${response.status}: ${errorText}` };
+			}
+
+			const result = await response.json();
+			console.log(`✅ Request successful:`, result);
+
+			return { success: true, data: result };
+
+		} catch (error) {
+			console.error(`💥 Error making request:`, error);
+			return { success: false, error: error.message };
+		}
+	}
+
+	/**
+	 * Відправляє фото в чат
+	 */
+	async sendPhoto(ctx: ProviderRequestContext, params: { idProfile: number; idRegularUser: number; idPhoto: number }): Promise<{ success: boolean; data?: any; error?: string }> {
+		console.log(`📸 TalkyTimesProvider.sendPhoto: profile ${params.idProfile} → user ${params.idRegularUser}, photo ${params.idPhoto}`);
+
+		if (this.isMock()) {
+			return { 
+				success: true, 
+				data: { 
+					messageId: `mock-msg-${Date.now()}`,
+					photoId: params.idPhoto
+				} 
+			};
+		}
+
+		try {
+			// Отримуємо активну сесію для профілю
+			const session = await this.sessionService.getActiveSession(params.idProfile);
+			if (!session) {
+				return { success: false, error: `No active session found for profile ${params.idProfile}` };
+			}
+
+			// Формуємо URL для відправки фото
+			const url = `${this.baseUrl}/api/send-photo`;
+			
+			// Підготовуємо headers
+			const headers = {
+				'Accept': 'application/json',
+				'Content-Type': 'application/json',
+				'Cookie': session.cookies,
+				'Referer': `${this.baseUrl}/chat/${params.idProfile}_${params.idRegularUser}`,
+				'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+			};
+
+			const payload = {
+				idProfile: params.idProfile,
+				idRegularUser: params.idRegularUser,
+				idPhoto: params.idPhoto
+			};
+
+			console.log(`🌐 Sending photo request to ${url}`, payload);
+
+			const response = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(payload),
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				console.error(`❌ Photo send failed with status ${response.status}:`, errorText);
+				return { success: false, error: `HTTP ${response.status}: ${errorText}` };
+			}
+
+			const result = await response.json();
+			console.log(`✅ Photo sent successfully:`, result);
+
+			return { success: true, data: result };
+
+		} catch (error) {
+			console.error(`💥 Error sending photo:`, error);
+			return { success: false, error: error.message };
+		}
+	}
+
 	private isMock(): boolean {
 		// ВИПРАВЛЕННЯ: перевіряємо тільки змінну середовища, ігноруємо this.baseUrl
 		const ttBaseUrl = process.env.TT_BASE_URL || '';
@@ -440,6 +573,8 @@ export class TalkyTimesProvider implements SiteProvider {
 		});
 		return res.json();
 	}
+
+
 
 	async fetchProfileData(profileId: string): Promise<{ success: boolean; profileData?: any; error?: string }> {
 		if (this.isMock()) {

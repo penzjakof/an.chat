@@ -10,6 +10,7 @@ import { ProfilesModule } from './profiles/profiles.module';
 import { TTModule } from './talkytimes/tt.module';
 import { ChatsModule } from './chats/chats.module';
 import { BackupModule } from './backup/backup.module';
+import { GalleryModule } from './gallery/gallery.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt.guard';
 import { RolesGuard } from './common/auth/roles.guard';
@@ -25,6 +26,7 @@ import { EncryptionValidatorService } from './profiles/encryption-validator.serv
 		TTModule, 
 		ChatsModule, 
 		BackupModule, 
+		GalleryModule,
 		AuthModule
 	],
 	controllers: [AppController],

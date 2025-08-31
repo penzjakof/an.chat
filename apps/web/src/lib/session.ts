@@ -40,7 +40,14 @@ export function getAuthContextFromSession(): AuthContext | null {
 }
 
 export function getAccessToken(): string | null {
-	return getSession()?.accessToken ?? null;
+	const session = getSession();
+	const token = session?.accessToken ?? null;
+	console.log('🔑 getAccessToken called:', {
+		hasSession: !!session,
+		hasToken: !!token,
+		tokenLength: token?.length || 0
+	});
+	return token;
 }
 
 export function getRole(): UserRole | null {

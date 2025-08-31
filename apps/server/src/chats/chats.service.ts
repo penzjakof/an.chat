@@ -4,6 +4,7 @@ import { TALKY_TIMES_PROVIDER } from '../providers/providers.module';
 import type { RequestAuthContext } from '../common/auth/auth.types';
 import { ChatsGateway } from './chats.gateway';
 import { ChatAccessService } from './chat-access.service';
+import { SendPhotoDto } from './dto/send-photo.dto';
 
 @Injectable()
 export class ChatsService {
@@ -344,6 +345,62 @@ export class ChatsService {
 			}
 		} catch (error) {
 			console.error(`💥 ПОМИЛКА в ChatsService.fetchRestrictions:`, error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Відправляє фото через TalkyTimes API
+	 */
+	async sendPhoto(auth: RequestAuthContext, sendPhotoDto: SendPhotoDto) {
+		console.log(`📸 ChatsService.sendPhoto: Sending ${sendPhotoDto.photoIds.length} photos from profile ${sendPhotoDto.idProfile} to user ${sendPhotoDto.idRegularUser}`);
+
+		try {
+			// Перевіряємо доступ до профілю
+			const accessibleProfiles = await this.getAccessibleProfiles(auth);
+			const targetProfile = accessibleProfiles.find(p => p.profileId === sendPhotoDto.idProfile);
+			
+			if (!targetProfile) {
+				throw new ForbiddenException(`Access denied to profile ${sendPhotoDto.idProfile}`);
+			}
+
+			// Перевіряємо чи підтримує провайдер відправку фото
+			if (!this.provider.sendPhoto) {
+				throw new Error('Provider does not support photo sending');
+			}
+
+			// Відправляємо кожне фото окремо (як робить TalkyTimes)
+			const results: Array<{ photoId: number; success: boolean; messageId?: any; error?: string }> = [];
+			for (const photoId of sendPhotoDto.photoIds) {
+				console.log(`📸 Sending photo ${photoId} from profile ${sendPhotoDto.idProfile} to user ${sendPhotoDto.idRegularUser}`);
+				
+				const result = await this.provider.sendPhoto(this.toCtx(auth), {
+					idProfile: sendPhotoDto.idProfile,
+					idRegularUser: sendPhotoDto.idRegularUser,
+					idPhoto: photoId
+				});
+
+				if (result.success) {
+					console.log(`✅ Photo ${photoId} sent successfully`);
+					results.push({ photoId, success: true, messageId: result.data?.messageId });
+				} else {
+					console.error(`❌ Failed to send photo ${photoId}:`, result.error);
+					results.push({ photoId, success: false, error: result.error });
+				}
+			}
+
+			const successCount = results.filter(r => r.success).length;
+			console.log(`📸 Sent ${successCount}/${sendPhotoDto.photoIds.length} photos successfully`);
+
+			return {
+				success: successCount > 0,
+				results,
+				successCount,
+				totalCount: sendPhotoDto.photoIds.length
+			};
+
+		} catch (error) {
+			console.error(`💥 ПОМИЛКА в ChatsService.sendPhoto:`, error);
 			throw error;
 		}
 	}

@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import type { Request } from 'express';
 import { ChatsService } from './chats.service';
 import { JwtAuthGuard } from '../auth/jwt.guard';
+import { SendPhotoDto } from './dto/send-photo.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('api/chats')
@@ -70,5 +71,12 @@ export class ChatsController {
 		}
 
 		return this.chats.fetchUserProfiles(targetProfile.profileId, userIds);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post('send-photo')
+	async sendPhoto(@Req() req: Request, @Body() sendPhotoDto: SendPhotoDto) {
+		console.log('📸 ChatsController.sendPhoto called with:', sendPhotoDto);
+		return this.chats.sendPhoto(req.auth!, sendPhotoDto);
 	}
 }

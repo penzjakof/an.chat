@@ -6,6 +6,7 @@ import { apiGet, apiPost } from '@/lib/api';
 import { getAccessToken, getSession } from '@/lib/session';
 import { ChatHeaderSkeleton, MessageSkeleton } from '@/components/SkeletonLoader';
 import { useDialogWebSocket } from '@/hooks/useDialogWebSocket';
+import { MediaGallery, Photo } from '@/components/MediaGallery';
 
 
 type ChatMessage = {
@@ -62,6 +63,7 @@ export default function DialogPage() {
 	const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const canLoadMore = useRef<boolean>(true);
+	const [isMediaGalleryOpen, setIsMediaGalleryOpen] = useState(false);
 
 	// ВИПРАВЛЕННЯ: dialogId має формат "idProfile-idRegularUser" (наш профіль - співрозмовник)
 	const [idProfile, idRegularUser] = dialogId.split('-').map(Number);
@@ -508,6 +510,32 @@ export default function DialogPage() {
 		setText('');
 	}
 
+	// Обробка вибору фото з галереї
+	const handlePhotoSelect = async (selectedPhotos: Photo[]) => {
+		console.log('Selected photos:', selectedPhotos);
+		
+		try {
+			const photoIds = selectedPhotos.map(photo => photo.idPhoto);
+			
+			const response = await apiPost('/api/chats/send-photo', {
+				idProfile,
+				idRegularUser,
+				photoIds
+			});
+			
+			if (response.success) {
+				console.log(`✅ Successfully sent ${response.data.successCount}/${response.data.totalCount} photos`);
+				// Фото будуть додані в чат через WebSocket/RTM
+			} else {
+				console.error('Failed to send photos:', response.error);
+			}
+		} catch (error) {
+			console.error('Error sending photos:', error);
+		}
+		
+		setIsMediaGalleryOpen(false);
+	};
+
 	const formatDateTime = (dateString: string) => {
 		const date = new Date(dateString);
 		
@@ -752,7 +780,18 @@ export default function DialogPage() {
 
 			{/* Поле вводу */}
 			<div className="bg-white border-t border-gray-200 p-4">
-				<div className="flex gap-2">
+				<div className="flex gap-2 items-center">
+					{/* Кнопка атачменту */}
+					<button
+						onClick={() => setIsMediaGalleryOpen(true)}
+						className="flex-shrink-0 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+						title="Прикріпити медіа"
+					>
+						<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+						</svg>
+					</button>
+
 					<input 
 						className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
 						placeholder="Напишіть повідомлення..." 
@@ -766,9 +805,19 @@ export default function DialogPage() {
 					>
 						Надіслати
 					</button>
-
 				</div>
 			</div>
+
+			{/* Медіа галерея */}
+			<MediaGallery
+				profileId={idProfile.toString()}
+				isOpen={isMediaGalleryOpen}
+				onClose={() => setIsMediaGalleryOpen(false)}
+				onPhotoSelect={handlePhotoSelect}
+				maxSelection={6}
+				context="chat"
+				idRegularUser={idRegularUser}
+			/>
 		</div>
 	);
 }

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface TTSessionData {
-	profileId: string;
+	profileId: number;
 	cookies: string;
 	token?: string;
 	refreshToken?: string;
@@ -73,7 +73,7 @@ export class TalkyTimesSessionService {
 
 			console.log(`✅ Session found for profile ${profileId}, expires at ${session.expiresAt}`);
 			return {
-				profileId: session.profileId,
+				profileId: parseInt(session.profileId),
 				cookies: session.cookies,
 				token: session.token || undefined,
 				refreshToken: session.refreshToken || undefined,
@@ -100,7 +100,7 @@ export class TalkyTimesSessionService {
 	async authenticateProfile(profileId: string, cookies: string, token?: string, refreshToken?: string): Promise<TTSessionData> {
 		const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 години
 		const session: TTSessionData = {
-			profileId,
+			profileId: parseInt(profileId),
 			cookies,
 			token,
 			refreshToken,
@@ -128,6 +128,35 @@ export class TalkyTimesSessionService {
 		};
 	}
 
+	// Метод для отримання активної сесії конкретного профілю
+	async getActiveSession(profileId: number): Promise<TTSessionData | null> {
+		try {
+			const session = await this.prisma.talkyTimesSession.findFirst({
+				where: {
+					profileId: profileId.toString(),
+					expiresAt: {
+						gt: new Date()
+					}
+				}
+			});
+
+			if (!session) {
+				return null;
+			}
+
+			return {
+				profileId: parseInt(session.profileId),
+				cookies: session.cookies,
+				token: session.token || undefined,
+				refreshToken: session.refreshToken || undefined,
+				expiresAt: session.expiresAt
+			};
+		} catch (error) {
+			console.error(`Error getting active session for profile ${profileId}:`, error);
+			return null;
+		}
+	}
+
 	// Метод для отримання всіх активних сесій
 	async getAllActiveSessions(): Promise<TTSessionData[]> {
 		try {
@@ -139,13 +168,13 @@ export class TalkyTimesSessionService {
 				}
 			});
 
-			return sessions.map(session => ({
-				profileId: session.profileId,
-				cookies: session.cookies,
-				token: session.token || undefined,
-				refreshToken: session.refreshToken || undefined,
-				expiresAt: session.expiresAt
-			}));
+					return sessions.map(session => ({
+			profileId: parseInt(session.profileId),
+			cookies: session.cookies,
+			token: session.token || undefined,
+			refreshToken: session.refreshToken || undefined,
+			expiresAt: session.expiresAt
+		}));
 		} catch (error) {
 			console.error('Error getting active sessions:', error);
 			return [];
