@@ -21,6 +21,7 @@ export class GalleryController {
     @Query('limit') limit?: string,
     @Query('tags') tags?: string,
     @Query('statuses') statuses?: string,
+    @Query('isTemporary') isTemporary?: string,
   ): Promise<{ success: boolean; data: GalleryResponse; error?: string }> {
 
 
@@ -38,6 +39,11 @@ export class GalleryController {
       // Парсимо статуси якщо передані
       if (statuses) {
         request.statuses = statuses.split(',').map(status => status.trim());
+      }
+
+      // Парсимо isTemporary якщо переданий
+      if (isTemporary !== undefined) {
+        request.isTemporary = isTemporary === 'true';
       }
 
       const data = await this.galleryService.getPhotos(parseInt(profileId), request);
@@ -175,6 +181,26 @@ export class GalleryController {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
       };
+    }
+  }
+
+  /**
+   * POST /api/gallery/photo-statuses
+   * Отримує статуси фото (accessed/sent/null)
+   */
+  @Post('photo-statuses')
+  async getPhotoStatuses(
+    @Body() body: { idUser: number; idsPhotos: number[]; profileId: number }
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!body.idUser || !body.idsPhotos || !Array.isArray(body.idsPhotos) || body.idsPhotos.length === 0 || !body.profileId) {
+      return { success: false, error: 'idUser, idsPhotos and profileId are required' };
+    }
+    try {
+      const data = await this.galleryService.getPhotoStatuses(body.idUser, body.idsPhotos, body.profileId);
+      return { success: true, data };
+    } catch (error) {
+      this.logger.error(`❌ Get photo statuses error:`, error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 }

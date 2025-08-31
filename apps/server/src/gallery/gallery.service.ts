@@ -42,6 +42,7 @@ export interface GalleryRequest {
   limit?: number;
   idAlbum?: number | null;
   idAlbumExcluded?: number | null;
+  isTemporary?: boolean; // Новий параметр для temporary фото
 }
 
 @Injectable()
@@ -67,13 +68,14 @@ export class GalleryService {
       }
 
       // Підготовуємо параметри запиту
-      const requestBody: GalleryRequest = {
+      const requestBody = {
         cursor: request.cursor || '',
         statuses: request.statuses || ['approved', 'approved_by_ai'],
         tags: request.tags || [],
         limit: request.limit || 50,
         idAlbum: request.idAlbum || null,
         idAlbumExcluded: request.idAlbumExcluded || null,
+        isTemporary: request.isTemporary || false, // Додаємо новий параметр
       };
 
       this.logger.log(`📋 Gallery request for profile ${profileId}:`, requestBody);
@@ -208,6 +210,38 @@ export class GalleryService {
     if (!response.success) {
       this.logger.error(`❌ TalkyTimes send photos failed:`, response.error);
       throw new Error(`Failed to send photos: ${response.error}`);
+    }
+
+    return response.data;
+  }
+
+  /**
+   * Отримує статуси фото (accessed/sent/null)
+   */
+  async getPhotoStatuses(idUser: number, idsPhotos: number[], profileId: number): Promise<any> {
+    this.logger.log(`📊 Getting photo statuses for user ${idUser}, photos: ${idsPhotos.length}, profile: ${profileId}`);
+
+    if (!this.talkyTimesProvider.makeRequest) {
+      throw new Error('makeRequest method is not available on TalkyTimes provider');
+    }
+
+    const response = await this.talkyTimesProvider.makeRequest({
+      method: 'POST',
+      url: '/platform/gallery/photo/connection/list',
+      data: {
+        idUser,
+        idsPhotos
+      },
+      profileId, // Використовуємо правильний profileId
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.success) {
+      this.logger.error(`❌ TalkyTimes get photo statuses failed:`, response.error);
+      throw new Error(`Failed to get photo statuses: ${response.error}`);
     }
 
     return response.data;
