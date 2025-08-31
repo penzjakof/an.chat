@@ -147,6 +147,12 @@ export function MediaGallery({
     return photo.tags?.some(tag => tag.code === 'special' || tag.code === 'special_plus') ?? false;
   }, []);
 
+  // Мемоізована функція для перевірки temporary фото
+  const isTemporaryPhoto = useCallback((photo: Photo) => {
+    // Temporary фото - це ті що прийшли з запиту isTemporary=true
+    return temporaryPhotoIds.has(photo.idPhoto);
+  }, [temporaryPhotoIds]);
+
   const addPhotosToUnifiedCache = useCallback((photos: Photo[], isTemporary: boolean = false) => {
     try {
       const cacheMap = loadUnifiedPhotoCache();
@@ -226,6 +232,54 @@ export function MediaGallery({
       return loadUnifiedPhotoCache();
     }
   }, [loadUnifiedPhotoCache, saveUnifiedPhotoCache]);
+
+  // Централізована логіка фільтрації фото
+  const filterPhotosByTypeAndStatus = useCallback((
+    photos: Photo[], 
+    photoType: 'regular' | 'special' | 'temporary', 
+    statusFilter: 'all' | 'available' | 'accessed' | 'sent',
+    context: string
+  ): Photo[] => {
+    let filtered = photos;
+
+    // Фільтрація за типом (тільки в чаті)
+    if (context === 'chat') {
+      switch (photoType) {
+        case 'regular':
+          filtered = photos.filter(photo => !isSpecialPhoto(photo) && !isTemporaryPhoto(photo));
+          break;
+        case 'special':
+          // Special фото включають як звичайні special, так і special з temporary
+          filtered = photos.filter(photo => isSpecialPhoto(photo));
+          break;
+        case 'temporary':
+          // Тимчасові фото - тільки ті що temporary але НЕ special
+          filtered = photos.filter(photo => isTemporaryPhoto(photo) && !isSpecialPhoto(photo));
+          break;
+        default:
+          filtered = photos;
+      }
+    }
+
+    // Фільтрація за статусом
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(photo => {
+        const status = photoStatuses.get(photo.idPhoto);
+        switch (statusFilter) {
+          case 'available':
+            return status === null; // Тільки фото без статусу (не переглянуті)
+          case 'accessed':
+            return status === 'accessed'; // Тільки переглянуті
+          case 'sent':
+            return status === 'sent'; // Тільки надіслані
+          default:
+            return true;
+        }
+      });
+    }
+
+    return filtered;
+  }, [isSpecialPhoto, isTemporaryPhoto, photoStatuses]);
 
   const convertCacheToPhotos = useCallback((cacheMap: Map<number, CachedPhotoData>): Photo[] => {
     return Array.from(cacheMap.values()).map(cached => ({
@@ -315,12 +369,6 @@ export function MediaGallery({
     regularCursorRef.current = regularCursor;
     temporaryCursorRef.current = temporaryCursor;
   }, [hasMore, regularCursor, temporaryCursor]);
-
-  // Мемоізована функція для перевірки temporary фото
-  const isTemporaryPhoto = useCallback((photo: Photo) => {
-    // Temporary фото - це ті що прийшли з запиту isTemporary=true
-    return temporaryPhotoIds.has(photo.idPhoto);
-  }, [temporaryPhotoIds]);
 
   // Завантаження статусів фото з відстеженням (батчами по 100)
   const loadPhotoStatuses = useCallback(async (photos: Photo[], idUser: number) => {
@@ -795,42 +843,8 @@ export function MediaGallery({
     if (!isOpen || loading || !hasMore) return;
 
     const timeoutId = setTimeout(() => {
-      // Використовуємо ту ж логіку що й у filteredPhotos для підрахунку
-      let currentFilteredPhotos = photos;
-
-      // Фільтрація за типом (тільки в чаті)
-      if (context === 'chat') {
-        switch (photoType) {
-          case 'regular':
-            currentFilteredPhotos = photos.filter(photo => !isSpecialPhoto(photo) && !isTemporaryPhoto(photo));
-            break;
-          case 'special':
-            currentFilteredPhotos = photos.filter(photo => isSpecialPhoto(photo));
-            break;
-          case 'temporary':
-            currentFilteredPhotos = photos.filter(photo => isTemporaryPhoto(photo) && !isSpecialPhoto(photo));
-            break;
-          default:
-            currentFilteredPhotos = photos;
-        }
-      }
-
-      // Фільтрація за статусом
-      if (statusFilter !== 'all') {
-        currentFilteredPhotos = currentFilteredPhotos.filter(photo => {
-          const status = photoStatuses.get(photo.idPhoto);
-          switch (statusFilter) {
-            case 'available':
-              return status === null;
-            case 'accessed':
-              return status === 'accessed';
-            case 'sent':
-              return status === 'sent';
-            default:
-              return true;
-          }
-        });
-      }
+      // Використовуємо централізовану логіку фільтрації
+      const currentFilteredPhotos = filterPhotosByTypeAndStatus(photos, photoType, statusFilter, context);
 
       const minPhotosThreshold = 15;
       console.log('🔍 Auto-load check:', {
@@ -849,50 +863,12 @@ export function MediaGallery({
     }, 1000); // Затримка щоб дати час статусам завантажитися
 
     return () => clearTimeout(timeoutId);
-  }, [isOpen, photos.length, photoType, statusFilter, context, hasMore, loading, photoStatuses, isSpecialPhoto, isTemporaryPhoto, loadMorePhotos]);
+  }, [isOpen, photos.length, photoType, statusFilter, context, hasMore, loading, filterPhotosByTypeAndStatus, loadMorePhotos]);
 
   // Фільтрація фото за типом та статусом
   const filteredPhotos = useMemo(() => {
-    let filtered = photos;
-
-    // Фільтрація за типом (тільки в чаті)
-    if (context === 'chat') {
-      switch (photoType) {
-        case 'regular':
-          filtered = photos.filter(photo => !isSpecialPhoto(photo) && !isTemporaryPhoto(photo));
-          break;
-        case 'special':
-          // Special фото включають як звичайні special, так і special з temporary
-          filtered = photos.filter(photo => isSpecialPhoto(photo));
-          break;
-        case 'temporary':
-          // Тимчасові фото - тільки ті що temporary але НЕ special
-          filtered = photos.filter(photo => isTemporaryPhoto(photo) && !isSpecialPhoto(photo));
-          break;
-        default:
-          filtered = photos;
-      }
-    }
-
-    // Фільтрація за статусом
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(photo => {
-        const status = photoStatuses.get(photo.idPhoto);
-        switch (statusFilter) {
-          case 'available':
-            return status === null; // Тільки фото без статусу (не переглянуті)
-          case 'accessed':
-            return status === 'accessed'; // Тільки переглянуті
-          case 'sent':
-            return status === 'sent'; // Тільки надіслані
-          default:
-            return true;
-        }
-      });
-    }
-
-    return filtered;
-  }, [photos, photoType, statusFilter, context, isSpecialPhoto, isTemporaryPhoto, photoStatuses]);
+    return filterPhotosByTypeAndStatus(photos, photoType, statusFilter, context);
+  }, [photos, photoType, statusFilter, context, filterPhotosByTypeAndStatus]);
 
   // Видаляємо checkAndLoadMorePhotos щоб уникнути циклічних залежностей
 
