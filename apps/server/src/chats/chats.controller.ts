@@ -79,4 +79,27 @@ export class ChatsController {
 		console.log('📸 ChatsController.sendPhoto called with:', sendPhotoDto);
 		return this.chats.sendPhoto(req.auth!, sendPhotoDto);
 	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post('stickers')
+	async getStickers(@Req() req: Request, @Body() body: { idInterlocutor: number }) {
+		console.log('😀 ChatsController.getStickers called with interlocutor:', body.idInterlocutor);
+		return this.chats.getStickers(req.auth!, body.idInterlocutor);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post('send-sticker')
+	async sendSticker(@Req() req: Request, @Body() body: { idProfile?: number; idRegularUser: number; stickerId: number; stickerUrl?: string }) {
+		console.log('😀 ChatsController.sendSticker called with:', body);
+
+		// Якщо немає idProfile, то використовуємо поточний профіль з діалогу
+		if (!body.idProfile) {
+			// Парсимо dialogId для отримання idUser (який є idProfile)
+			const dialogId = req.headers.referer?.toString().split('/').pop() || '';
+			const [idProfile] = dialogId.split('_').map(Number);
+			body.idProfile = idProfile;
+		}
+
+		return this.chats.sendSticker(req.auth!, body as { idProfile: number; idRegularUser: number; stickerId: number; stickerUrl: string });
+	}
 }

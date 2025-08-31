@@ -22,6 +22,10 @@ async function fetchWithTimeout(url: string, options: RequestInit & { timeoutMs?
 }
 
 export class TalkyTimesProvider implements SiteProvider {
+	// Кеш для стікерів
+	private stickersCache = new Map<string, { data: any; timestamp: number }>();
+	private readonly STICKERS_CACHE_TTL = 30 * 60 * 1000; // 30 хвилин
+
 	constructor(
 		private readonly baseUrl: string,
 		private readonly sessionService: TalkyTimesSessionService
@@ -876,15 +880,15 @@ export class TalkyTimesProvider implements SiteProvider {
 
 	async fetchRestrictions(profileId: string, clientId: number): Promise<{ success: boolean; lettersLeft?: number; error?: string }> {
 		console.log(`🔍 TalkyTimes.fetchRestrictions: profileId=${profileId}, clientId=${clientId}, isMock=${this.isMock()}`);
-		
+
 		if (this.isMock()) {
 			console.log(`🎭 Mock mode: generating restrictions for profile ${profileId} and client ${clientId}`);
-			
+
 			// Генеруємо мок обмеження
 			const mockRestrictions = {
 				lettersLeft: Math.floor(Math.random() * 10) // Випадкове число від 0 до 9
 			};
-			
+
 			return {
 				success: true,
 				lettersLeft: mockRestrictions.lettersLeft
@@ -899,21 +903,21 @@ export class TalkyTimesProvider implements SiteProvider {
 		try {
 			const url = 'https://talkytimes.com/platform/correspondence/restriction';
 			const headers = this.sessionService.getRequestHeaders(session);
-			
+
 			// Оновлюємо referer для конкретного діалогу
 			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${clientId}`;
-			
+
 			console.log(`🚀 TalkyTimes restrictions request for profile ${profileId}:`, {
 				profileId,
 				clientId,
 				url,
 				referer: headers['referer']
 			});
-			
+
 			const requestBody = {
 				idRegularUser: clientId
 			};
-			
+
 			console.log(`📤 Request body:`, requestBody);
 			console.log(`📋 Full headers:`, headers);
 
@@ -936,7 +940,7 @@ export class TalkyTimesProvider implements SiteProvider {
 
 			const result = await res.json();
 			console.log(`📥 TalkyTimes restrictions response for profile ${profileId}:`, result);
-			
+
 			if (result && result.data && typeof result.data.messagesLeft === 'number') {
 				return {
 					success: true,
@@ -951,6 +955,263 @@ export class TalkyTimesProvider implements SiteProvider {
 		} catch (error) {
 			console.error('TalkyTimes fetchRestrictions error:', error);
 			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
+
+		async getStickers(profileId: string, interlocutorId: number): Promise<{ success: boolean; categories?: any[]; error?: string }> {
+		console.log(`😀 TalkyTimes.getStickers: profileId=${profileId}, interlocutorId=${interlocutorId}, isMock=${this.isMock()}`);
+
+		// Перевіряємо кеш спочатку
+		const cacheKey = `stickers-${profileId}`;
+		const now = Date.now();
+		const cached = this.stickersCache.get(cacheKey);
+
+		if (cached && (now - cached.timestamp) < this.STICKERS_CACHE_TTL) {
+			console.log(`📋 Using cached stickers for profile ${profileId} (age: ${Math.round((now - cached.timestamp) / 1000)}s)`);
+			return cached.data;
+		}
+
+		if (this.isMock()) {
+			console.log(`🎭 Mock mode: generating stickers for profile ${profileId}`);
+
+			// Генеруємо мок стікери
+			const mockCategories = [
+				{
+					name: 'Funny Faces',
+					stickers: [
+						{ id: 1001, url: 'https://via.placeholder.com/64x64?text=😀' },
+						{ id: 1002, url: 'https://via.placeholder.com/64x64?text=😂' },
+						{ id: 1003, url: 'https://via.placeholder.com/64x64?text=😍' },
+						{ id: 1004, url: 'https://via.placeholder.com/64x64?text=🤔' },
+					]
+				},
+				{
+					name: 'Hearts',
+					stickers: [
+						{ id: 2001, url: 'https://via.placeholder.com/64x64?text=❤️' },
+						{ id: 2002, url: 'https://via.placeholder.com/64x64?text=💛' },
+						{ id: 2003, url: 'https://via.placeholder.com/64x64?text=💚' },
+						{ id: 2004, url: 'https://via.placeholder.com/64x64?text=💙' },
+					]
+				},
+				{
+					name: 'Animals',
+					stickers: [
+						{ id: 3001, url: 'https://via.placeholder.com/64x64?text=🐱' },
+						{ id: 3002, url: 'https://via.placeholder.com/64x64?text=🐶' },
+						{ id: 3003, url: 'https://via.placeholder.com/64x64?text=🐼' },
+						{ id: 3004, url: 'https://via.placeholder.com/64x64?text=🦁' },
+					]
+				}
+			];
+
+			const result = { success: true, categories: mockCategories };
+
+			// Зберігаємо в кеш
+			this.stickersCache.set(cacheKey, { data: result, timestamp: now });
+
+			return result;
+		}
+
+		let session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+		}
+
+		try {
+			const url = 'https://talkytimes.com/platform/chat/stickers';
+			const headers = this.sessionService.getRequestHeaders(session);
+
+			// Оновлюємо referer для конкретного діалогу
+			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${interlocutorId}`;
+
+			console.log(`🚀 TalkyTimes stickers request for profile ${profileId}:`, {
+				profileId,
+				interlocutorId,
+				url,
+				referer: headers['referer']
+			});
+
+			const requestBody = {
+				idInterlocutor: interlocutorId
+			};
+
+			console.log(`📤 Request body:`, requestBody);
+			console.log(`📋 Full headers:`, headers);
+
+			const res = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers: headers,
+				body: JSON.stringify(requestBody),
+				timeoutMs: 15000
+			});
+
+			if (!res.ok) {
+				const errorText = await res.text();
+				console.error(`❌ TalkyTimes stickers API error ${res.status}:`, errorText);
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+					return { success: false, error: `Session expired for profile ${profileId}. Please re-authenticate.` };
+				}
+				return { success: false, error: `HTTP ${res.status}: ${errorText}` };
+			}
+
+			const result = await res.json();
+			console.log(`📥 TalkyTimes stickers response for profile ${profileId}:`, result);
+
+			if (result && result.categories && Array.isArray(result.categories)) {
+				const response = {
+					success: true,
+					categories: result.categories
+				};
+
+				// Зберігаємо в кеш
+				this.stickersCache.set(cacheKey, { data: response, timestamp: now });
+
+				return response;
+			} else {
+				return {
+					success: false,
+					error: 'Invalid response format'
+				};
+			}
+		} catch (error) {
+			console.error('TalkyTimes getStickers error:', error);
+			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
+
+	async sendSticker(ctx: ProviderRequestContext, params: { idProfile: number; idRegularUser: number; stickerId: number; stickerUrl: string }): Promise<{ success: boolean; data?: any; error?: string }> {
+		console.log(`😀 TalkyTimes.sendSticker: profile ${params.idProfile} → user ${params.idRegularUser}, sticker ${params.stickerId}`);
+
+		if (this.isMock()) {
+			return {
+				success: true,
+				data: {
+					messageId: `sticker-msg-${Date.now()}`,
+					stickerId: params.stickerId,
+					stickerUrl: params.stickerUrl
+				}
+			};
+		}
+
+		try {
+			// Отримуємо активну сесію для профілю
+			const session = await this.sessionService.getActiveSession(params.idProfile);
+			if (!session) {
+				return { success: false, error: `No active session found for profile ${params.idProfile}` };
+			}
+
+			// Формуємо URL для відправки стікера
+			const url = `${this.baseUrl}/api/send-sticker`;
+
+			// Підготовуємо headers
+			const headers = {
+				'Accept': 'application/json',
+				'Content-Type': 'application/json',
+				'Cookie': session.cookies,
+				'Referer': `${this.baseUrl}/chat/${params.idProfile}_${params.idRegularUser}`,
+				'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+			};
+
+			const payload = {
+				idProfile: params.idProfile,
+				idRegularUser: params.idRegularUser,
+				stickerId: params.stickerId,
+				stickerUrl: params.stickerUrl
+			};
+
+			console.log(`🌐 Sending sticker request to ${url}`, payload);
+
+			const response = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(payload),
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				console.error(`❌ Sticker send failed with status ${response.status}:`, errorText);
+				return { success: false, error: `HTTP ${response.status}: ${errorText}` };
+			}
+
+			const result = await response.json();
+			console.log(`✅ Sticker sent successfully:`, result);
+
+			return { success: true, data: result };
+
+		} catch (error) {
+			console.error(`💥 Error sending sticker:`, error);
+			return { success: false, error: error.message };
+		}
+	}
+
+	async sendStickerById(profileId: string, interlocutorId: number, stickerId: number): Promise<{ success: boolean; data?: any; error?: string }> {
+		console.log(`😀 TalkyTimes.sendStickerById: profile ${profileId} → user ${interlocutorId}, sticker ${stickerId}`);
+
+		if (this.isMock()) {
+			return {
+				success: true,
+				data: {
+					messageId: `sticker-msg-${Date.now()}`,
+					stickerId: stickerId
+				}
+			};
+		}
+
+		let session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+		}
+
+		try {
+			const url = 'https://talkytimes.com/platform/chat/send/sticker';
+			const headers = this.sessionService.getRequestHeaders(session);
+
+			// Оновлюємо referer для конкретного діалогу
+			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${interlocutorId}`;
+
+			console.log(`🚀 TalkyTimes send sticker request for profile ${profileId}:`, {
+				profileId,
+				interlocutorId,
+				stickerId,
+				url,
+				referer: headers['referer']
+			});
+
+			const requestBody = {
+				idSticker: stickerId,
+				idRegularUser: interlocutorId
+			};
+
+			console.log(`📤 Request body:`, requestBody);
+			console.log(`📋 Full headers:`, headers);
+
+			const res = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers: headers,
+				body: JSON.stringify(requestBody),
+				timeoutMs: 15000
+			});
+
+			if (!res.ok) {
+				const errorText = await res.text();
+				console.error(`❌ TalkyTimes send sticker API error ${res.status}:`, errorText);
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+					return { success: false, error: `Session expired for profile ${profileId}. Please re-authenticate.` };
+				}
+				return { success: false, error: `HTTP ${res.status}: ${errorText}` };
+			}
+
+			const result = await res.json();
+			console.log(`📥 TalkyTimes send sticker response for profile ${profileId}:`, result);
+
+			return { success: true, data: result };
+
+		} catch (error) {
+			console.error(`💥 Error sending sticker by ID:`, error);
+			return { success: false, error: error.message };
 		}
 	}
 }

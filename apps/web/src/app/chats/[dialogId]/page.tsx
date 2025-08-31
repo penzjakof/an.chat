@@ -19,7 +19,10 @@ type ChatMessage = {
 		message?: string;
 		idPhoto?: number;
 		url?: string;
+		id?: number; // Для стікерів
 	};
+	isSending?: boolean; // Для локальних повідомлень що відправляються
+	error?: boolean; // Для повідомлень з помилкою відправки
 	[key: string]: unknown;
 };
 
@@ -37,6 +40,16 @@ type UserProfile = {
 type SourceProfile = {
 	id: string;
 	displayName: string;
+};
+
+type Sticker = {
+	id: number;
+	url: string;
+};
+
+type StickerCategory = {
+	name: string;
+	stickers: Sticker[];
 };
 
 export default function DialogPage() {
@@ -64,6 +77,19 @@ export default function DialogPage() {
 	const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const canLoadMore = useRef<boolean>(true);
 	const [isMediaGalleryOpen, setIsMediaGalleryOpen] = useState(false);
+	const [isStickerModalOpen, setIsStickerModalOpen] = useState(false);
+	const [stickerCategories, setStickerCategories] = useState<StickerCategory[]>([]);
+	const [isLoadingStickers, setIsLoadingStickers] = useState(false);
+	const [activeCategoryIndex, setActiveCategoryIndex] = useState<number>(0);
+	const stickerScrollRef = useRef<HTMLDivElement>(null);
+
+	// Кеш для стікерів
+	const stickersCache = useRef<{
+		data: StickerCategory[];
+		timestamp: number;
+		profileId: string;
+	} | null>(null);
+	const STICKERS_CACHE_TTL = 30 * 60 * 1000; // 30 хвилин
 
 	// ВИПРАВЛЕННЯ: dialogId має формат "idProfile-idRegularUser" (наш профіль - співрозмовник)
 	const [idProfile, idRegularUser] = dialogId.split('-').map(Number);
@@ -284,7 +310,7 @@ export default function DialogPage() {
 	const loadRestrictions = async () => {
 		try {
 			setIsLoadingRestrictions(true);
-			
+
 			// Читаємо messagesLeft з localStorage (отримано з діалогу)
 			const storedMessagesLeft = localStorage.getItem(`messagesLeft_${dialogId}`);
 			if (storedMessagesLeft && !isNaN(parseInt(storedMessagesLeft))) {
@@ -293,7 +319,7 @@ export default function DialogPage() {
 				console.warn(`No valid messagesLeft found in localStorage for ${dialogId}`);
 				setMessagesLeft(0); // Fallback значення
 			}
-			
+
 			// Завантажуємо lettersLeft через API
 			const response = await apiGet<{ lettersLeft: number }>(`/api/chats/dialogs/${encodeURIComponent(dialogId)}/restrictions`);
 			if (typeof response.lettersLeft === 'number') {
@@ -309,6 +335,59 @@ export default function DialogPage() {
 			setLettersLeft(0);
 		} finally {
 			setIsLoadingRestrictions(false);
+		}
+	};
+
+	// Функція для очищення кеша стікерів (якщо потрібно примусово оновити)
+	const clearStickersCache = () => {
+		stickersCache.current = null;
+		console.log('🗑️ Stickers cache cleared');
+	};
+
+	const loadStickers = async () => {
+		try {
+			// Перевіряємо кеш спочатку
+			const now = Date.now();
+			if (
+				stickersCache.current &&
+				stickersCache.current.profileId === idProfile.toString() &&
+				(now - stickersCache.current.timestamp) < STICKERS_CACHE_TTL
+			) {
+				console.log('📋 Using cached stickers (age:', Math.round((now - stickersCache.current.timestamp) / 1000), 'seconds)');
+				setStickerCategories(stickersCache.current.data);
+				return;
+			}
+
+			setIsLoadingStickers(true);
+			console.log('📥 Loading stickers from server...');
+
+			// Викликаємо API для отримання стікерів
+			const response = await apiPost<{ categories: StickerCategory[] }>(`/api/chats/stickers`, {
+				idInterlocutor: idRegularUser
+			});
+
+			if (response.categories && Array.isArray(response.categories)) {
+				setStickerCategories(response.categories);
+
+				// Зберігаємо в кеш
+				stickersCache.current = {
+					data: response.categories,
+					timestamp: now,
+					profileId: idProfile.toString()
+				};
+
+				console.log(`✅ Loaded ${response.categories.length} sticker categories and cached them`);
+			} else {
+				console.warn('Invalid stickers response:', response);
+				setStickerCategories([]);
+			}
+		} catch (error) {
+			console.error('Failed to load stickers:', error);
+			// Очищуємо кеш при помилці, щоб при наступній спробі завантажити свіжі дані
+			stickersCache.current = null;
+			setStickerCategories([]);
+		} finally {
+			setIsLoadingStickers(false);
 		}
 	};
 
@@ -463,32 +542,70 @@ export default function DialogPage() {
 		};
 	}, [dialogId, idProfile, idRegularUser]);
 
+		// Обробка закриття модального вікна стікерів по Escape
+	useEffect(() => {
+		const handleEscape = (event: KeyboardEvent) => {
+			if (event.key === 'Escape' && isStickerModalOpen) {
+				setIsStickerModalOpen(false);
+			}
+		};
+
+		if (isStickerModalOpen) {
+			document.addEventListener('keydown', handleEscape);
+		}
+
+		return () => {
+			document.removeEventListener('keydown', handleEscape);
+		};
+	}, [isStickerModalOpen]);
+
 	// Використовуємо WebSocket pool для цього профілю та діалогу
 	useDialogWebSocket({
 		profileId: idProfile.toString(),
 		dialogId,
 		onMessage: (payload: ChatMessage) => {
 			console.log('📨 RTM Pool: Received new message', payload);
-			
+
 			setMessages((prev) => {
 				// Перевіряємо чи повідомлення вже існує
 				const exists = prev.some(msg => msg.id === payload.id);
 				if (exists) {
 					return prev;
 				}
-				
-				const newMessages = [...prev, payload].sort((a, b) => 
+
+				// Якщо це стікер від нас і у нас є локальна версія з тимчасовим ID,
+				// замінюємо її на справжнє повідомлення від сервера
+				if (payload.type === 'sticker' && payload.idUserFrom === idProfile) {
+					const localStickerIndex = prev.findIndex(msg =>
+						msg.type === 'sticker' &&
+						msg.idUserFrom === idProfile &&
+						msg.idUserTo === idRegularUser &&
+						msg.content.id === payload.content.id &&
+						msg.isSending === true // Шукаємо тільки повідомлення що відправляються
+					);
+
+					if (localStickerIndex !== -1) {
+						// Замінюємо локальне повідомлення на справжнє від сервера
+						const newMessages = [...prev];
+						newMessages[localStickerIndex] = payload; // Видаляємо isSending поле
+						return newMessages.sort((a, b) =>
+							new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime()
+						);
+					}
+				}
+
+				const newMessages = [...prev, payload].sort((a, b) =>
 					new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime()
 				);
-				
+
 				// Оновлюємо лічільник повідомлень якщо це наше повідомлення
 				if (payload.idUserFrom === idProfile) {
 					updateCountersAfterSend();
 				}
-				
+
 				return newMessages;
 			});
-			
+
 			// Автоматично прокручуємо до низу при новому повідомленні
 			setTimeout(() => {
 				bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -496,7 +613,7 @@ export default function DialogPage() {
 		},
 		onUserOnlineStatus: (data: { userId: number; isOnline: boolean }) => {
 			console.log('👤 RTM Pool: User online status changed', data);
-			
+
 			// Оновлюємо статус користувача якщо це наш співрозмовник
 			if (data.userId === idRegularUser) {
 				setUserProfile(prev => prev ? { ...prev, is_online: data.isOnline } : null);
@@ -513,16 +630,16 @@ export default function DialogPage() {
 	// Обробка вибору фото з галереї
 	const handlePhotoSelect = async (selectedPhotos: Photo[]) => {
 		console.log('Selected photos:', selectedPhotos);
-		
+
 		try {
 			const photoIds = selectedPhotos.map(photo => photo.idPhoto);
-			
+
 			const response = await apiPost('/api/chats/send-photo', {
 				idProfile,
 				idRegularUser,
 				photoIds
 			});
-			
+
 			if (response.success) {
 				console.log(`✅ Successfully sent ${response.data.successCount}/${response.data.totalCount} photos`);
 				// Фото будуть додані в чат через WebSocket/RTM
@@ -532,8 +649,114 @@ export default function DialogPage() {
 		} catch (error) {
 			console.error('Error sending photos:', error);
 		}
-		
+
 		setIsMediaGalleryOpen(false);
+	};
+
+	// Обробка вибору стікера
+	const handleStickerSelect = async (sticker: Sticker) => {
+		console.log('Selected sticker:', sticker);
+		console.log('Dialog info:', { idProfile, idRegularUser });
+
+		// Створюємо локальне повідомлення стікера для негайного відображення
+		const localStickerMessage: ChatMessage = {
+			id: Date.now(), // Тимчасовий ID до отримання з сервера
+			dateCreated: new Date().toISOString(),
+			idUserFrom: idProfile,
+			idUserTo: idRegularUser,
+			type: 'sticker',
+			content: {
+				id: sticker.id,
+				url: sticker.url
+			},
+			isSending: true // Позначаємо що повідомлення відправляється
+		};
+
+		// Додаємо стікер до повідомлень негайно
+		setMessages(prev => [...prev, localStickerMessage].sort((a, b) =>
+			new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime()
+		));
+
+		// Прокручуємо донизу для показу нового стікера
+		setTimeout(() => {
+			bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+		}, 100);
+
+		// Закриваємо модальне вікно одразу
+		setIsStickerModalOpen(false);
+
+		try {
+			// Використовуємо новий API з тільки необхідними параметрами
+			const response = await apiPost('/api/chats/send-sticker', {
+				stickerId: sticker.id,
+				idRegularUser,
+				idProfile // Додаємо idProfile явно
+			});
+
+			if (response.success) {
+				console.log('✅ Successfully sent sticker');
+				// Стікер буде доданий в чат через WebSocket/RTM, але він вже відображається локально
+				// Позначаємо повідомлення як успішно відправлене
+				setMessages(prev => prev.map(msg =>
+					msg.id === localStickerMessage.id
+						? { ...msg, isSending: false }
+						: msg
+				));
+			} else {
+				console.error('Failed to send sticker:', response.error);
+				// Позначаємо повідомлення як помилкове
+				setMessages(prev => prev.map(msg =>
+					msg.id === localStickerMessage.id
+						? { ...msg, isSending: false, error: true }
+						: msg
+				));
+			}
+		} catch (error) {
+			console.error('Error sending sticker:', error);
+			console.error('Request details:', {
+				stickerId: sticker.id,
+				idRegularUser,
+				idProfile
+			});
+			// Позначаємо повідомлення як помилкове
+			setMessages(prev => prev.map(msg =>
+				msg.id === localStickerMessage.id
+					? { ...msg, isSending: false, error: true }
+					: msg
+			));
+		}
+	};
+
+	// Обробка відкриття модального вікна стікерів
+	const handleStickerModalOpen = () => {
+		setIsStickerModalOpen(true);
+		setActiveCategoryIndex(0); // Скидаємо активну категорію
+		// Завантажуємо стікери тільки якщо вони ще не завантажені
+		if (stickerCategories.length === 0) {
+			loadStickers();
+		}
+	};
+
+	// Обробка кліку на категорію в боковій панелі
+	const handleCategoryClick = (categoryIndex: number) => {
+		setActiveCategoryIndex(categoryIndex);
+
+		// Знаходимо елемент секції категорії та скролимо до нього
+		const categoryElement = document.getElementById(`sticker-category-${categoryIndex}`);
+		if (categoryElement && stickerScrollRef.current) {
+			const container = stickerScrollRef.current;
+			const elementTop = categoryElement.offsetTop;
+			const containerHeight = container.clientHeight;
+			const elementHeight = categoryElement.clientHeight;
+
+			// Розраховуємо позицію для центрування елемента в контейнері
+			const scrollTop = elementTop - (containerHeight / 2) + (elementHeight / 2);
+
+			container.scrollTo({
+				top: Math.max(0, scrollTop),
+				behavior: 'smooth'
+			});
+		}
 	};
 
 	const formatDateTime = (dateString: string) => {
@@ -597,8 +820,37 @@ export default function DialogPage() {
 							<img src={message.content.url} alt="Photo" className="rounded max-w-full h-auto" />
 						</div>
 					)}
+					{message.type === 'sticker' && message.content.url && (
+						<div className="text-sm relative">
+							<img
+								src={message.content.url}
+								alt={`Sticker ${message.content.id || ''}`}
+								className={`max-w-[124px] max-h-[124px] object-contain rounded-md ${
+									message.isSending ? 'opacity-70' : message.error ? 'opacity-50' : ''
+								}`}
+							/>
+							{/* Індикатор відправки */}
+							{message.isSending && (
+								<div className="absolute -bottom-1 -right-1">
+									<div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+										<div className="w-2 h-2 border border-white border-t-transparent rounded-full animate-spin"></div>
+									</div>
+								</div>
+							)}
+							{/* Індикатор помилки */}
+							{message.error && (
+								<div className="absolute -bottom-1 -right-1">
+									<div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+										<svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+											<path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+										</svg>
+									</div>
+								</div>
+							)}
+						</div>
+					)}
 					{/* Відображення невідомих типів повідомлень для дебагу */}
-					{!['message', 'text', 'likephoto', 'photo', 'system'].includes(message.type) && (
+					{!['message', 'text', 'likephoto', 'photo', 'sticker', 'system'].includes(message.type) && (
 						<div className="text-sm italic text-gray-500">
 							Тип повідомлення: {message.type}
 							{message.content.message && <p className="mt-1">{message.content.message}</p>}
@@ -792,6 +1044,20 @@ export default function DialogPage() {
 						</svg>
 					</button>
 
+					{/* Кнопка стікера */}
+					<button
+						onClick={handleStickerModalOpen}
+						className="flex-shrink-0 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+						title="Вибрати стікер"
+					>
+						<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<circle cx="12" cy="12" r="10"/>
+							<circle cx="9" cy="9" r="1"/>
+							<circle cx="15" cy="9" r="1"/>
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 14c1 1 3 1 5 0"/>
+						</svg>
+					</button>
+
 					<input 
 						className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
 						placeholder="Напишіть повідомлення..." 
@@ -818,6 +1084,110 @@ export default function DialogPage() {
 				context="chat"
 				idRegularUser={idRegularUser}
 			/>
+
+			{/* Модальне вікно стікерів */}
+			{isStickerModalOpen && (
+				<div
+					className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+					onClick={(e) => {
+						// Закриваємо тільки при кліку на backdrop, не на контент
+						if (e.target === e.currentTarget) {
+							setIsStickerModalOpen(false);
+						}
+					}}
+				>
+					<div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[85vh] overflow-hidden">
+						{/* Хедер модального вікна */}
+						<div className="flex items-center justify-between p-3 border-b border-gray-200">
+							<h3 className="text-lg font-semibold text-gray-900">Виберіть стікер</h3>
+							<button
+								onClick={() => setIsStickerModalOpen(false)}
+								className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+							>
+								<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</button>
+						</div>
+
+						{/* Контент модального вікна */}
+						<div className="flex h-[70vh]">
+							{isLoadingStickers ? (
+								<div className="flex items-center justify-center w-full">
+									<div className="flex items-center gap-2 text-gray-500">
+										<div className="animate-spin w-6 h-6 border-2 border-gray-300 border-t-purple-500 rounded-full"></div>
+										Завантаження стікерів...
+									</div>
+								</div>
+							) : stickerCategories.length === 0 ? (
+								<div className="flex items-center justify-center w-full">
+									<p className="text-gray-500">Не вдалося завантажити стікери</p>
+								</div>
+							) : (
+								<>
+									{/* Бокова панель з категоріями */}
+									<div className="w-20 bg-gray-50 border-r border-gray-200 overflow-y-auto">
+										<div className="p-2 space-y-2">
+											{stickerCategories.map((category, categoryIndex) => (
+												<div
+													key={categoryIndex}
+													onClick={() => handleCategoryClick(categoryIndex)}
+													className={`cursor-pointer rounded-lg transition-all duration-200 p-1 m-1 ${
+														activeCategoryIndex === categoryIndex
+															? 'bg-purple-200 ring-2 ring-purple-400'
+															: 'hover:bg-gray-200'
+													}`}
+													title={category.name}
+												>
+													{category.stickers.length > 0 && (
+														<img
+															src={category.stickers[0].url}
+															alt={category.name}
+															className="w-11 h-11 mx-auto object-cover rounded-md hover:scale-150 transition-transform"
+															loading="lazy"
+														/>
+													)}
+												</div>
+											))}
+										</div>
+									</div>
+
+									{/* Основна область з стікерами */}
+									<div ref={stickerScrollRef} className="flex-1 overflow-y-auto">
+										<div className="p-3">
+											{stickerCategories.map((category, categoryIndex) => (
+												<div
+													key={categoryIndex}
+													id={`sticker-category-${categoryIndex}`}
+													className="mb-6 last:mb-0"
+												>
+													<div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
+														{category.stickers.map((sticker) => (
+															<button
+																key={sticker.id}
+																onClick={() => handleStickerSelect(sticker)}
+																className="w-24 h-24 overflow-hidden hover:scale-150 transition-transform"
+																title={`Стікер ${sticker.id}`}
+															>
+																<img
+																	src={sticker.url}
+																	alt={`Sticker ${sticker.id}`}
+																	className="w-full h-full object-cover rounded-md"
+																	loading="lazy"
+																/>
+															</button>
+														))}
+													</div>
+												</div>
+											))}
+										</div>
+									</div>
+								</>
+							)}
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

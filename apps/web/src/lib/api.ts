@@ -33,13 +33,23 @@ async function handle<T>(res: Response, path: string): Promise<T> {
 }
 
 async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+	const headers = {
+		...authz(),
+		...(options.body ? { 'content-type': 'application/json' } : {}),
+		...options.headers
+	};
+
+	console.log('🌐 API Request:', {
+		url: `${API_BASE}${path}`,
+		method: options.method || 'GET',
+		hasAuth: !!headers.Authorization,
+		hasBody: !!options.body,
+		headers: Object.keys(headers)
+	});
+
 	const res = await fetch(`${API_BASE}${path}`, {
 		...options,
-		headers: { 
-			...authz(), 
-			...(options.body ? { 'content-type': 'application/json' } : {}),
-			...options.headers 
-		},
+		headers,
 		cache: 'no-store',
 	});
 	return handle<T>(res, path);

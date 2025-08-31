@@ -404,4 +404,83 @@ export class ChatsService {
 			throw error;
 		}
 	}
+
+	async getStickers(auth: RequestAuthContext, interlocutorId: number): Promise<unknown> {
+		console.log(`😀 ChatsService.getStickers: interlocutorId=${interlocutorId}`);
+
+		try {
+			// Перевіряємо доступ до профілів
+			const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
+
+			if (accessibleProfiles.length === 0) {
+				throw new ForbiddenException('No accessible profiles found');
+			}
+
+			// Використовуємо перший доступний профіль
+			const targetProfile = accessibleProfiles.find(p => p.profileId);
+			if (!targetProfile || !targetProfile.profileId) {
+				throw new ForbiddenException('No valid profile found');
+			}
+
+			// Викликаємо метод провайдера
+			if (!this.provider.getStickers) {
+				throw new Error('Stickers are not supported by this provider');
+			}
+
+			const result = await this.provider.getStickers(targetProfile.profileId, interlocutorId);
+
+			if (result.success) {
+				return { categories: result.categories || [] };
+			} else {
+				throw new Error(result.error || 'Failed to fetch stickers');
+			}
+		} catch (error) {
+			console.error(`💥 ПОМИЛКА в ChatsService.getStickers:`, error);
+			throw error;
+		}
+	}
+
+	async sendSticker(auth: RequestAuthContext, params: { idProfile: number; idRegularUser: number; stickerId: number; stickerUrl?: string }): Promise<unknown> {
+		console.log(`😀 ChatsService.sendSticker: profile ${params.idProfile} → user ${params.idRegularUser}, sticker ${params.stickerId}`);
+
+		try {
+			// Перевіряємо доступ до профілю
+			const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
+			const targetProfile = accessibleProfiles.find(p => p.profileId === params.idProfile.toString());
+
+			if (!targetProfile) {
+				throw new ForbiddenException(`Access denied to profile ${params.idProfile}`);
+			}
+
+			// Визначаємо який метод використовувати залежно від наявності stickerUrl
+			const useNewMethod = !params.stickerUrl;
+
+			if (useNewMethod && this.provider.sendStickerById) {
+				// Використовуємо новий метод з тільки idSticker та idRegularUser
+				const result = await this.provider.sendStickerById(params.idProfile.toString(), params.idRegularUser, params.stickerId);
+
+				if (result.success) {
+					console.log(`✅ Sticker sent successfully (by ID)`);
+					return result;
+				} else {
+					throw new Error(result.error || 'Failed to send sticker');
+				}
+			} else if (this.provider.sendSticker) {
+				// Використовуємо старий метод з усіма параметрами
+				const result = await this.provider.sendSticker(this.toCtx(auth), params as { idProfile: number; idRegularUser: number; stickerId: number; stickerUrl: string });
+
+				if (result.success) {
+					console.log(`✅ Sticker sent successfully (by URL)`);
+					return result;
+				} else {
+					throw new Error(result.error || 'Failed to send sticker');
+				}
+			} else {
+				throw new Error('Sticker sending is not supported by this provider');
+			}
+		} catch (error) {
+			console.error(`💥 ПОМИЛКА в ChatsService.sendSticker:`, error);
+			throw error;
+		}
+	}
 }

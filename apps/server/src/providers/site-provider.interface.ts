@@ -24,6 +24,9 @@ export interface SiteProvider {
 	fetchMessagesByProfile?(profileId: string, dialogId: string, cursor?: string): Promise<{ success: boolean; messages?: any[]; error?: string }>;
 	sendTextMessage(ctx: ProviderRequestContext, dialogId: string, text: string): Promise<unknown>;
 	sendPhoto?(ctx: ProviderRequestContext, params: { idProfile: number; idRegularUser: number; idPhoto: number }): Promise<{ success: boolean; data?: any; error?: string }>;
+	sendSticker?(ctx: ProviderRequestContext, params: { idProfile: number; idRegularUser: number; stickerId: number; stickerUrl: string }): Promise<{ success: boolean; data?: any; error?: string }>;
+	sendStickerById?(profileId: string, interlocutorId: number, stickerId: number): Promise<{ success: boolean; data?: any; error?: string }>;
+	getStickers?(profileId: string, interlocutorId: number): Promise<{ success: boolean; categories?: any[]; error?: string }>;
 	makeRequest?(options: { method: 'GET' | 'POST' | 'PUT' | 'DELETE'; url: string; data?: any; profileId: number; headers?: Record<string, string> }): Promise<{ success: boolean; data?: any; error?: string }>;
 	searchDialogByPair?(profileId: string, clientId: number): Promise<{ success: boolean; dialog?: any; error?: string }>;
 	fetchRestrictions?(profileId: string, clientId: number): Promise<{ success: boolean; lettersLeft?: number; error?: string }>;
