@@ -68,4 +68,22 @@ export class ProfilesController {
 	getProfileData(@Param('id') id: string, @Req() req: Request) {
 		return this.profiles.getProfileData(id, req.auth!.agencyCode);
 	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post(':id/gift-limits')
+	getGiftLimits(@Param('id') id: string, @Body() body: { clientId: number }, @Req() req: Request) {
+		return this.profiles.getGiftLimits(id, body.clientId, req.auth!.agencyCode);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post(':id/gift-list')
+	getGiftList(@Param('id') id: string, @Body() body: { clientId: number; cursor?: string; limit?: number }, @Req() req: Request) {
+		return this.profiles.getGiftList(id, body.clientId, body.cursor, body.limit || 30, req.auth!.agencyCode);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post(':id/send-gift')
+	sendGift(@Param('id') id: string, @Body() body: { clientId: number; giftId: number; message?: string }, @Req() req: Request) {
+		return this.profiles.sendGift(id, body.clientId, body.giftId, body.message, req.auth!.agencyCode);
+	}
 }

@@ -7,7 +7,28 @@ import { getAccessToken, getSession } from '@/lib/session';
 import { ChatHeaderSkeleton, MessageSkeleton } from '@/components/SkeletonLoader';
 import { useDialogWebSocket } from '@/hooks/useDialogWebSocket';
 import { MediaGallery, Photo } from '@/components/MediaGallery';
+import LottieErrorBoundary from '@/components/LottieErrorBoundary';
 
+// Типи для Lottie
+declare global {
+	interface Window {
+		lottie?: {
+			loadAnimation: (params: {
+				container: HTMLElement;
+				animationData: any;
+				renderer: string;
+				loop: boolean;
+				autoplay: boolean;
+				rendererSettings?: {
+					preserveAspectRatio: string;
+				};
+			}) => {
+				addEventListener: (event: string, callback: (data?: any) => void) => void;
+			};
+		};
+		activeLottieInstances?: Map<string, any>;
+	}
+}
 
 type ChatMessage = {
 	id: number;
@@ -52,6 +73,31 @@ type StickerCategory = {
 	stickers: Sticker[];
 };
 
+type VirtualGiftLimit = {
+	limit: number;
+	canSendWithoutLimit: boolean;
+};
+
+type VirtualGiftCategory = {
+	id: number;
+	name: string;
+};
+
+type VirtualGiftItem = {
+	id: number;
+	cost: number;
+	name: string;
+	imageSrc: string | null;
+	animationSrc: string | null;
+	category: VirtualGiftCategory;
+	gender: string | null;
+};
+
+type VirtualGiftListResponse = {
+	cursor: string;
+	items: VirtualGiftItem[];
+};
+
 export default function DialogPage() {
 	const router = useRouter();
 	const params = useParams();
@@ -82,6 +128,147 @@ export default function DialogPage() {
 	const [isLoadingStickers, setIsLoadingStickers] = useState(false);
 	const [activeCategoryIndex, setActiveCategoryIndex] = useState<number>(0);
 	const stickerScrollRef = useRef<HTMLDivElement>(null);
+	const [giftLimit, setGiftLimit] = useState<VirtualGiftLimit | null>(null);
+	const [isLoadingGiftLimit, setIsLoadingGiftLimit] = useState(false);
+	const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
+	const [giftItems, setGiftItems] = useState<VirtualGiftItem[]>([]);
+	const [isLoadingGifts, setIsLoadingGifts] = useState(false);
+	const [giftCursor, setGiftCursor] = useState<string>('');
+	const [hasMoreGifts, setHasMoreGifts] = useState(true);
+
+	// Прапор для запобігання race condition
+	const isLoadingGiftsRef = useRef(false);
+	const abortControllerRef = useRef<AbortController | null>(null);
+
+	// Стан для відправки подарунку
+	const [selectedGift, setSelectedGift] = useState<VirtualGiftItem | null>(null);
+	const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+	const [giftMessage, setGiftMessage] = useState('');
+	const [isSendingGift, setIsSendingGift] = useState(false);
+
+	// Ініціалізуємо глобальну змінну для Lottie інстансів
+	useEffect(() => {
+		if (!window.activeLottieInstances) {
+			window.activeLottieInstances = new Map();
+		}
+		return () => {
+			// Cleanup при unmount компонента
+			cleanupLottieAnimations();
+		};
+	}, []);
+
+	// Функція cleanup для Lottie анімацій
+	const cleanupLottieAnimations = () => {
+		console.log('🧹 Cleaning up Lottie animations...');
+		if (window.activeLottieInstances) {
+			window.activeLottieInstances.forEach((animation, key) => {
+				try {
+					if (animation && typeof animation.destroy === 'function') {
+						animation.destroy();
+						console.log(`✅ Destroyed Lottie animation: ${key}`);
+					}
+				} catch (error) {
+					console.warn(`⚠️ Error destroying Lottie animation ${key}:`, error);
+				}
+			});
+			window.activeLottieInstances.clear();
+		}
+	};
+
+	// Функція cleanup для активних запитів
+	const cleanupActiveRequests = () => {
+		console.log('🧹 Cleaning up active requests...');
+		if (abortControllerRef.current) {
+			abortControllerRef.current.abort();
+			abortControllerRef.current = null;
+			isLoadingGiftsRef.current = false;
+			console.log('✅ Cancelled active gift loading request');
+		}
+	};
+
+	// Функція для завантаження Lottie анімації для конкретного елемента
+	const loadLottieForElement = async (container: HTMLElement, gift: VirtualGiftItem) => {
+		try {
+			console.log('🎭 Loading Lottie for gift:', gift.name, gift.animationSrc);
+
+			// Завантажуємо Lottie бібліотеку якщо її немає
+			if (!window.lottie) {
+				await new Promise<void>((resolve, reject) => {
+					const script = document.createElement('script');
+					script.src = 'https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js';
+					script.onload = () => {
+						console.log('✅ Lottie library loaded');
+						resolve();
+					};
+					script.onerror = () => {
+						console.error('❌ Failed to load Lottie library');
+						reject(new Error('Failed to load Lottie'));
+					};
+					document.head.appendChild(script);
+				});
+			}
+
+			// Завантажуємо анімаційні дані
+			const response = await fetch(gift.animationSrc);
+			if (!response.ok) {
+				throw new Error('Failed to fetch Lottie data: ' + response.status);
+			}
+
+			const data = await response.json();
+			console.log('🎭 Lottie data loaded for:', gift.name);
+
+			// Очищуємо контейнер і створюємо анімацію
+			container.innerHTML = '';
+			const animation = window.lottie.loadAnimation({
+				container: container,
+				animationData: data,
+				renderer: 'svg',
+				loop: true,
+				autoplay: true,
+				rendererSettings: {
+					preserveAspectRatio: 'xMidYMid meet'
+				}
+			});
+
+			// Зберігаємо інстанс для cleanup
+			const animationKey = gift.id + '-' + Date.now();
+			if (window.activeLottieInstances) {
+				window.activeLottieInstances.set(animationKey, animation);
+			}
+
+			animation.addEventListener('data_ready', () => {
+				console.log('✅ Lottie animation loaded and playing for:', gift.name);
+			});
+
+			animation.addEventListener('error', (error: any) => {
+				console.error('❌ Lottie animation error for:', gift.name, error);
+				// Спробуємо fallback
+				showLottieFallback(container, gift);
+			});
+
+		} catch (error) {
+			console.error('❌ Failed to load Lottie for:', gift.name, error);
+			showLottieFallback(container, gift);
+		}
+	};
+
+	// Fallback для Lottie
+	const showLottieFallback = (container: HTMLElement, gift: VirtualGiftItem) => {
+		// Спробуємо завантажити статичну версію (PNG)
+		const staticUrl = gift.animationSrc.replace('.json', '.png');
+		const img = new Image();
+
+		img.onload = () => {
+			container.innerHTML = '<img src="' + staticUrl + '" class="w-full h-full object-cover" alt="Static version" />';
+		};
+
+		img.onerror = () => {
+			// Якщо і PNG немає, показуємо placeholder
+			container.innerHTML = '<div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-100 to-purple-100"><div class="text-center"><div class="text-2xl mb-1">🎭</div><div class="text-xs text-gray-600">Lottie анімація</div></div></div>';
+		};
+
+		img.src = staticUrl;
+	};
 
 	// Кеш для стікерів
 	const stickersCache = useRef<{
@@ -187,7 +374,15 @@ export default function DialogPage() {
 		
 		// Завантажуємо обмеження
 		loadRestrictions();
+
 	}, [dialogId, router]);
+
+	// Завантажуємо ліміти подарунків після завантаження профілю
+	useEffect(() => {
+		if (sourceProfile?.id && !isLoadingGiftLimit && !giftLimit) {
+			loadGiftLimits();
+		}
+	}, [sourceProfile?.id, isLoadingGiftLimit, giftLimit]);
 
 	const loadMessages = async (isInitial = true) => {
 		try {
@@ -335,6 +530,125 @@ export default function DialogPage() {
 			setLettersLeft(0);
 		} finally {
 			setIsLoadingRestrictions(false);
+		}
+	};
+
+	const loadGiftLimits = async () => {
+		// Перевірка race condition для лімітів
+		if (isLoadingGiftLimit) {
+			console.log('🎁 Skipping loadGiftLimits - already loading');
+			return;
+		}
+
+		try {
+			setIsLoadingGiftLimit(true);
+			console.log('🎁 Loading gift limits for dialog:', dialogId, 'client:', idRegularUser);
+
+			// Робимо запит до нашого API для отримання лімітів подарунків
+			const response = await apiPost<{ success: boolean; data?: VirtualGiftLimit; error?: string }>(`/profiles/${sourceProfile?.id}/gift-limits`, {
+				clientId: idRegularUser
+			});
+
+			if (response.success && response.data) {
+				console.log('✅ Gift limits loaded:', response.data);
+				setGiftLimit(response.data);
+			} else {
+				console.warn('Failed to load gift limits:', response.error);
+				setGiftLimit(null);
+			}
+		} catch (error) {
+			console.error('Failed to load gift limits:', error);
+			setGiftLimit(null);
+		} finally {
+			setIsLoadingGiftLimit(false);
+		}
+	};
+
+	const loadGifts = async (isInitial = true) => {
+		// Перевірка race condition
+		if (isLoadingGiftsRef.current) {
+			console.log('🎁 Skipping loadGifts - already loading');
+			return;
+		}
+
+		// Скасовуємо попередній запит якщо він існує
+		if (abortControllerRef.current) {
+			abortControllerRef.current.abort();
+		}
+
+		// Створюємо новий AbortController
+		abortControllerRef.current = new AbortController();
+
+		try {
+			isLoadingGiftsRef.current = true;
+
+			if (isInitial) {
+				setIsLoadingGifts(true);
+				setGiftItems([]);
+				setGiftCursor('');
+				setHasMoreGifts(true);
+			} else {
+				setIsLoadingGifts(true);
+			}
+
+			console.log('🎁 Loading gifts for client:', idRegularUser, 'cursor:', giftCursor);
+
+			// Перевіряємо чи увімкнений mock режим
+			const isMockMode = process.env.NODE_ENV === 'development' && localStorage.getItem('mockMode') === 'true';
+			console.log('🎭 Mock mode:', isMockMode ? 'enabled' : 'disabled');
+
+			// Робимо запит до нашого API для отримання списку подарунків
+			const response = await apiPost<{ success: boolean; data?: VirtualGiftListResponse; error?: string }>(`/profiles/${sourceProfile?.id}/gift-list`, {
+				clientId: idRegularUser,
+				cursor: isInitial ? '' : giftCursor,
+				limit: 30
+			}, {
+				signal: abortControllerRef.current.signal
+			});
+
+			if (response.success && response.data) {
+				console.log('✅ Gifts loaded:', response.data.items.length, 'items');
+
+				// Логуємо інформацію про перші кілька зображень для діагностики
+				response.data.items.slice(0, 3).forEach((gift, index) => {
+					const displaySrc = gift.imageSrc || gift.animationSrc;
+					const isAnimated = !!gift.animationSrc;
+					const animationType = gift.animationSrc?.endsWith('.json') ? 'JSON/Lottie' :
+										gift.animationSrc?.endsWith('.gif') || gift.animationSrc?.includes('gif') ? 'GIF' :
+										gift.animationSrc ? 'Other' : 'Static';
+					console.log(`🎁 Gift ${index + 1}: ${gift.name}${isAnimated ? ` (${animationType})` : ''}, src: ${displaySrc}`);
+					console.log(`🎁 Final URL for ${gift.name}:`, displaySrc.startsWith('http') || displaySrc.startsWith('//')
+						? displaySrc.startsWith('//') ? `https:${displaySrc}` : displaySrc
+						: `https://talkytimes.com${displaySrc}`);
+				});
+
+				if (isInitial) {
+					setGiftItems(response.data.items);
+				} else {
+					// Додаємо нові подарунки до існуючих
+					setGiftItems(prev => [...prev, ...response.data!.items]);
+				}
+
+				setGiftCursor(response.data.cursor);
+				setHasMoreGifts(response.data.items.length === 30); // Якщо отримали повний ліміт, можливо є ще
+			} else {
+				console.warn('Failed to load gifts:', response.error);
+				setGiftItems([]);
+				setHasMoreGifts(false);
+			}
+		} catch (error: any) {
+			// Не логуємо помилки для скасованих запитів
+			if (error.name !== 'AbortError') {
+				console.error('❌ Failed to load gifts:', error);
+				setGiftItems([]);
+				setHasMoreGifts(false);
+			} else {
+				console.log('🎁 Gift loading was cancelled');
+			}
+		} finally {
+			setIsLoadingGifts(false);
+			isLoadingGiftsRef.current = false;
+			abortControllerRef.current = null;
 		}
 	};
 
@@ -542,22 +856,38 @@ export default function DialogPage() {
 		};
 	}, [dialogId, idProfile, idRegularUser]);
 
-		// Обробка закриття модального вікна стікерів по Escape
+		// Обробка закриття модальних вікон по Escape
 	useEffect(() => {
 		const handleEscape = (event: KeyboardEvent) => {
-			if (event.key === 'Escape' && isStickerModalOpen) {
-				setIsStickerModalOpen(false);
+			if (event.key === 'Escape') {
+				if (isStickerModalOpen) {
+					setIsStickerModalOpen(false);
+				}
+				if (isGiftModalOpen) {
+					setIsGiftModalOpen(false);
+				}
+				if (isMessageModalOpen) {
+					setIsMessageModalOpen(false);
+				}
 			}
 		};
 
-		if (isStickerModalOpen) {
+		if (isStickerModalOpen || isGiftModalOpen || isMessageModalOpen) {
 			document.addEventListener('keydown', handleEscape);
 		}
 
 		return () => {
 			document.removeEventListener('keydown', handleEscape);
 		};
-	}, [isStickerModalOpen]);
+	}, [isStickerModalOpen, isGiftModalOpen, isMessageModalOpen]);
+
+	// Cleanup Lottie анімацій та запитів при закритті модальних вікон
+	useEffect(() => {
+		if (!isGiftModalOpen && !isMessageModalOpen) {
+			cleanupLottieAnimations();
+			cleanupActiveRequests();
+		}
+	}, [isGiftModalOpen, isMessageModalOpen]);
 
 	// Використовуємо WebSocket pool для цього профілю та діалогу
 	useDialogWebSocket({
@@ -653,6 +983,76 @@ export default function DialogPage() {
 		setIsMediaGalleryOpen(false);
 	};
 
+	// Обробка вибору подарунку
+	const handleGiftSelect = async (gift: VirtualGiftItem) => {
+		console.log('🎁 Selected gift:', gift);
+		console.log('Dialog info:', { idProfile, idRegularUser });
+
+		// Закриваємо модальне вікно подарунків
+		setIsGiftModalOpen(false);
+
+		// Відкриваємо діалог введення повідомлення
+		setSelectedGift(gift);
+		setGiftMessage(''); // Очищуємо повідомлення
+		setIsMessageModalOpen(true);
+	};
+
+	const handleSendGift = async () => {
+		if (!selectedGift || !sourceProfile?.id) return;
+
+		try {
+			setIsSendingGift(true);
+
+			console.log('📤 Sending gift:', {
+				giftId: selectedGift.id,
+				fromProfile: sourceProfile.id,
+				toClient: idRegularUser,
+				message: giftMessage
+			});
+
+			const response = await apiPost<{ success: boolean; data?: any; error?: string }>(`/profiles/${sourceProfile.id}/send-gift`, {
+				clientId: idRegularUser,
+				giftId: selectedGift.id,
+				message: giftMessage
+			});
+
+			if (response.success) {
+				console.log('✅ Gift sent successfully:', response.data);
+
+				// Показуємо успішне повідомлення
+				toast.success(`🎁 Подарунок "${selectedGift.name}" відправлено!`);
+
+				// Закриваємо діалог
+				setIsMessageModalOpen(false);
+				setSelectedGift(null);
+				setGiftMessage('');
+
+				// Можливо оновити ліміт подарунків
+				loadGiftLimits();
+
+			} else {
+				console.error('❌ Failed to send gift:', response.error);
+				toast.error(`❌ Помилка відправки: ${response.error || 'Невідома помилка'}`);
+			}
+
+		} catch (error: any) {
+			console.error('❌ Error sending gift:', error);
+			toast.error(`❌ Помилка відправки: ${error.message || 'Невідома помилка'}`);
+		} finally {
+			setIsSendingGift(false);
+		}
+	};
+
+	// Завантаження більше подарунків для пагінації
+	const loadMoreGifts = async () => {
+		if (!hasMoreGifts || isLoadingGifts || !giftCursor || isLoadingGiftsRef.current) {
+			console.log('🔄 Skipping loadMoreGifts - conditions not met');
+			return;
+		}
+		console.log('🔄 Loading more gifts with cursor:', giftCursor);
+		await loadGifts(false);
+	};
+
 	// Обробка вибору стікера
 	const handleStickerSelect = async (sticker: Sticker) => {
 		console.log('Selected sticker:', sticker);
@@ -734,6 +1134,15 @@ export default function DialogPage() {
 		// Завантажуємо стікери тільки якщо вони ще не завантажені
 		if (stickerCategories.length === 0) {
 			loadStickers();
+		}
+	};
+
+	// Обробка відкриття модального вікна подарунків
+	const handleGiftModalOpen = () => {
+		setIsGiftModalOpen(true);
+		// Завантажуємо подарунки тільки якщо вони ще не завантажені
+		if (giftItems.length === 0) {
+			loadGifts();
 		}
 	};
 
@@ -1058,6 +1467,25 @@ export default function DialogPage() {
 						</svg>
 					</button>
 
+					{/* Кнопка віртуальних подарунків */}
+					{(giftLimit && (giftLimit.limit > 0 || giftLimit.canSendWithoutLimit)) && (
+						<button
+							onClick={handleGiftModalOpen}
+							className="flex-shrink-0 p-2 text-pink-500 hover:text-pink-700 hover:bg-pink-50 rounded-lg transition-colors relative"
+							title={`Віртуальні подарунки (${giftLimit.canSendWithoutLimit ? 'без ліміту' : `${giftLimit.limit} залишилось`})`}
+						>
+							<svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+								<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+							</svg>
+							{/* Індикатор кількості, якщо є ліміт */}
+							{!giftLimit.canSendWithoutLimit && giftLimit.limit > 0 && (
+								<span className="absolute -top-1 -right-1 bg-pink-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
+									{giftLimit.limit > 99 ? '99+' : giftLimit.limit}
+								</span>
+							)}
+						</button>
+					)}
+
 					<input 
 						className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
 						placeholder="Напишіть повідомлення..." 
@@ -1184,6 +1612,327 @@ export default function DialogPage() {
 									</div>
 								</>
 							)}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Модальне вікно віртуальних подарунків */}
+			{isGiftModalOpen && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+					<div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
+						{/* Хедер */}
+						<div className="flex items-center justify-between p-4 border-b border-gray-200">
+							<h3 className="text-lg font-semibold text-gray-900">Віртуальні подарунки</h3>
+							<button
+								onClick={() => setIsGiftModalOpen(false)}
+								className="text-gray-400 hover:text-gray-600 p-1"
+							>
+								<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</button>
+						</div>
+
+						{/* Контент */}
+						<div className="flex-1 overflow-y-auto p-4">
+
+
+							{isLoadingGifts && giftItems.length === 0 ? (
+								<div className="flex items-center justify-center h-32">
+									<div className="text-gray-500">Завантаження...</div>
+								</div>
+							) : giftItems.length === 0 ? (
+								<div className="flex items-center justify-center h-32">
+									<div className="text-gray-500">Немає доступних подарунків</div>
+								</div>
+							) : (
+								<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+									{giftItems.map((gift) => (
+										<div
+											key={gift.id}
+											className="border border-gray-200 rounded-lg p-3 hover:border-pink-300 transition-colors cursor-pointer"
+											onClick={() => handleGiftSelect(gift)}
+											title={`${gift.name} - ${gift.cost} монет${gift.animationSrc ? ' (анімований)' : ''}`}
+										>
+											{/* Зображення або анімація */}
+											<div className="relative w-full aspect-square mb-2 bg-gray-100 rounded-md overflow-hidden">
+												{gift.imageSrc || gift.animationSrc ? (
+													<>
+														{gift.animationSrc && gift.animationSrc.endsWith('.json') ? (
+															/* Lottie анімація або спеціальний JSON */
+															<LottieErrorBoundary
+																onError={(error, errorInfo) => {
+																	console.error(`🎭 Lottie error for gift "${gift.name}":`, error);
+																	// Можна додати додаткову логіку обробки помилок тут
+																}}
+															>
+																{/* Спробуємо завантажити як Lottie JSON */}
+																<div
+																	className="w-full h-full"
+																	data-lottie-url={gift.animationSrc}
+																	style={{
+																		background: 'linear-gradient(135deg, #fce7f3 0%, #e9d5ff 100%)',
+																		display: 'flex',
+																		alignItems: 'center',
+																		justifyContent: 'center'
+																	}}
+																>
+																	<div className="text-center">
+																		<div className="text-3xl mb-2 animate-pulse">💖</div>
+																		<div className="text-xs text-gray-600 font-medium">Завантаження анімації...</div>
+																		<div className="text-xs text-gray-500 mt-1">Lottie</div>
+																	</div>
+																</div>
+
+																{/* Lottie буде завантажено через useEffect */}
+																<div
+																	ref={(el) => {
+																		if (el && gift.animationSrc && !el.hasAttribute('data-lottie-loaded')) {
+																			el.setAttribute('data-lottie-loaded', 'true');
+																			el.setAttribute('data-gift-id', gift.id.toString());
+																			el.setAttribute('data-animation-src', gift.animationSrc);
+
+																			// Завантажуємо Lottie асинхронно
+																			setTimeout(() => {
+																				loadLottieForElement(el, gift);
+																			}, 100);
+																		}
+																	}}
+																	className="w-full h-full"
+																	data-lottie-url={gift.animationSrc}
+																	style={{
+																		background: 'linear-gradient(135deg, #fce7f3 0%, #e9d5ff 100%)',
+																		display: 'flex',
+																		alignItems: 'center',
+																		justifyContent: 'center'
+																	}}
+																>
+																	<div className="text-center">
+																		<div className="text-3xl mb-2 animate-pulse">💖</div>
+																		<div className="text-xs text-gray-600 font-medium">Завантаження анімації...</div>
+																		<div className="text-xs text-gray-500 mt-1">Lottie</div>
+																	</div>
+																</div>
+
+																{/* Індикатор анімації */}
+																<div className="absolute top-1 right-1 bg-pink-500 text-white text-xs px-1 py-0.5 rounded flex items-center gap-0.5">
+																	🎭
+																	<span className="text-xs">Lottie</span>
+																</div>
+															</LottieErrorBoundary>
+														) : gift.animationSrc && (gift.animationSrc.endsWith('.gif') || gift.animationSrc.includes('gif')) ? (
+															/* GIF анімація */
+															<img
+																src={
+																	gift.animationSrc.startsWith('http') || gift.animationSrc.startsWith('//')
+																		? gift.animationSrc.startsWith('//') ? `https:${gift.animationSrc}` : gift.animationSrc
+																		: `https://talkytimes.com${gift.animationSrc}`
+																}
+																alt={gift.name}
+																className="w-full h-full object-cover"
+																loading="lazy"
+																onError={(e) => {
+																	console.error(`GIF failed for ${gift.name}:`, e.target.src);
+																	const target = e.target as HTMLImageElement;
+																	target.src = `https://picsum.photos/64/64?random=${gift.id}`;
+																	target.onerror = null;
+																}}
+															/>
+														) : (
+															/* Звичайне зображення */
+															<img
+																src={
+																	(gift.imageSrc || gift.animationSrc).startsWith('http') || (gift.imageSrc || gift.animationSrc).startsWith('//')
+																		? (gift.imageSrc || gift.animationSrc).startsWith('//') ? `https:${gift.imageSrc || gift.animationSrc}` : (gift.imageSrc || gift.animationSrc)
+																		: `https://talkytimes.com${gift.imageSrc || gift.animationSrc}`
+																}
+																alt={gift.name}
+																className="w-full h-full object-cover"
+																loading="lazy"
+																onError={(e) => {
+																	const target = e.target as HTMLImageElement;
+																	if (gift.animationSrc) {
+																		// Спробуємо як GIF
+																		target.src = gift.animationSrc.replace('.json', '.gif');
+																	} else {
+																		target.src = `https://picsum.photos/64/64?random=${gift.id}`;
+																	}
+																	target.onerror = null;
+																}}
+															/>
+														)}
+														{/* Індикатор анімації для різних типів */}
+														{gift.animationSrc && (
+															<div className="absolute top-1 right-1 bg-pink-500 text-white text-xs px-1 py-0.5 rounded flex items-center gap-0.5">
+																{gift.animationSrc.endsWith('.json') ? '🎭' : '🎬'}
+																<span className="text-xs">
+																	{gift.animationSrc.endsWith('.json') ? 'JSON' :
+																	 gift.animationSrc.endsWith('.gif') || gift.animationSrc.includes('gif') ? 'GIF' : '🎬'}
+																</span>
+															</div>
+														)}
+													</>
+												) : (
+													<div className="w-full h-full bg-gray-200 flex items-center justify-center">
+														<svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+															<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+														</svg>
+													</div>
+												)}
+											</div>
+
+											{/* Назва */}
+											<h4 className="text-xs font-medium text-gray-900 text-center mb-1 truncate flex items-center justify-center gap-1">
+												{gift.name}
+												{gift.animationSrc && (
+													<span className="text-pink-500 text-xs" title={
+														gift.animationSrc.endsWith('.json') ? 'Lottie анімація (JSON)' :
+														gift.animationSrc.endsWith('.gif') || gift.animationSrc.includes('gif') ? 'GIF анімація' :
+														'Анімований подарунок'
+													}>
+														{gift.animationSrc.endsWith('.json') ? '🎭' : '🎬'}
+													</span>
+												)}
+											</h4>
+
+											{/* Вартість */}
+											<div className="flex items-center justify-center gap-1 text-xs text-pink-600 font-medium">
+												<svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+													<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+												</svg>
+												{gift.cost}
+											</div>
+										</div>
+									))}
+								</div>
+							)}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Модальне вікно для введення повідомлення до подарунку */}
+			{isMessageModalOpen && selectedGift && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+					<div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+						{/* Хедер */}
+						<div className="flex items-center justify-between p-4 border-b border-gray-200">
+							<h3 className="text-lg font-semibold text-gray-900">Надіслати подарунок</h3>
+							<button
+								onClick={() => setIsMessageModalOpen(false)}
+								className="text-gray-400 hover:text-gray-600 p-1"
+								disabled={isSendingGift}
+							>
+								<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</button>
+						</div>
+
+						{/* Контент */}
+						<div className="p-6">
+							{/* Попередній перегляд вибраного подарунку */}
+							<div className="flex items-center gap-3 mb-4 p-3 bg-pink-50 rounded-lg">
+								<div className="relative w-12 h-12 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
+									{selectedGift.imageSrc || selectedGift.animationSrc ? (
+										selectedGift.animationSrc && selectedGift.animationSrc.endsWith('.json') ? (
+											<LottieErrorBoundary
+												onError={(error, errorInfo) => {
+													console.error(`🎭 Lottie error in message modal for gift "${selectedGift.name}":`, error);
+												}}
+											>
+												<div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-100 to-purple-100">
+													<span className="text-lg">🎭</span>
+												</div>
+											</LottieErrorBoundary>
+										) : (
+											<img
+												src={
+													(selectedGift.imageSrc || selectedGift.animationSrc).startsWith('http') || (selectedGift.imageSrc || selectedGift.animationSrc).startsWith('//')
+														? (selectedGift.imageSrc || selectedGift.animationSrc).startsWith('//') ? `https:${selectedGift.imageSrc || selectedGift.animationSrc}` : (selectedGift.imageSrc || selectedGift.animationSrc)
+														: `https://talkytimes.com${selectedGift.imageSrc || selectedGift.animationSrc}`
+												}
+												alt={selectedGift.name}
+												className="w-full h-full object-cover"
+											/>
+										)
+									) : (
+										<div className="w-full h-full bg-gray-200 flex items-center justify-center">
+											<svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+												<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+											</svg>
+										</div>
+									)}
+									{selectedGift.animationSrc && (
+										<div className="absolute top-0 right-0 bg-pink-500 text-white text-xs px-1 py-0.5 rounded">
+											🎬
+										</div>
+									)}
+								</div>
+								<div className="flex-1 min-w-0">
+									<h4 className="font-medium text-gray-900 truncate">{selectedGift.name}</h4>
+									<div className="flex items-center gap-1 text-sm text-pink-600">
+										<svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+											<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+										</svg>
+										{selectedGift.cost}
+									</div>
+								</div>
+							</div>
+
+							{/* Поле введення повідомлення */}
+							<div className="mb-4">
+								<label htmlFor="gift-message" className="block text-sm font-medium text-gray-700 mb-2">
+									Особисте повідомлення (не обов'язково)
+								</label>
+								<textarea
+									id="gift-message"
+									value={giftMessage}
+									onChange={(e) => setGiftMessage(e.target.value)}
+									placeholder="Напишіть тепле повідомлення до подарунку..."
+									className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-pink-500 focus:border-pink-500 resize-none"
+									rows={3}
+									maxLength={200}
+									disabled={isSendingGift}
+								/>
+								<div className="text-xs text-gray-500 mt-1 text-right">
+									{giftMessage.length}/200
+								</div>
+							</div>
+
+							{/* Кнопки дій */}
+							<div className="flex gap-3">
+								<button
+									onClick={() => setIsMessageModalOpen(false)}
+									className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+									disabled={isSendingGift}
+								>
+									Відмінити
+								</button>
+								<button
+									onClick={handleSendGift}
+									disabled={isSendingGift}
+									className="flex-1 px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+								>
+									{isSendingGift ? (
+										<>
+											<svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+												<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+												<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+											</svg>
+											Надсилаю...
+										</>
+									) : (
+										<>
+											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+											</svg>
+											Надіслати
+										</>
+									)}
+								</button>
+							</div>
 						</div>
 					</div>
 				</div>

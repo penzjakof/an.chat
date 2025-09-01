@@ -287,4 +287,88 @@ export class ProfilesService {
 
 		return this.talkyTimesProvider.fetchProfileData(profile.profileId);
 	}
+
+	async getGiftLimits(profileId: string, clientId: number, agencyCode: string) {
+		console.log(`🎁 Getting gift limits for profile ${profileId}, client ${clientId}, agency ${agencyCode}`);
+
+		const profile = await this.prisma.profile.findFirst({
+			where: {
+				id: profileId,
+				group: {
+					agency: { code: agencyCode }
+				}
+			}
+		});
+
+		if (!profile) {
+			throw new NotFoundException('Profile not found');
+		}
+
+		if (!profile.profileId) {
+			throw new BadRequestException('Profile not authenticated');
+		}
+
+		// Викликаємо метод отримання лімітів з TalkyTimes провайдера
+		return this.talkyTimesProvider.getVirtualGiftLimits(profile.profileId, clientId);
+	}
+
+	async getGiftList(profileId: string, clientId: number, cursor: string = '', limit: number = 30, agencyCode: string) {
+		console.log(`🎁 Getting gift list for profile ${profileId}, client ${clientId}, cursor=${cursor}, limit=${limit}, agency ${agencyCode}`);
+
+		const profile = await this.prisma.profile.findFirst({
+			where: {
+				id: profileId,
+				group: {
+					agency: { code: agencyCode }
+				}
+			}
+		});
+
+		if (!profile) {
+			throw new NotFoundException('Profile not found');
+		}
+
+		if (!profile.profileId) {
+			throw new BadRequestException('Profile not authenticated');
+		}
+
+		// Викликаємо метод отримання списку подарунків з TalkyTimes провайдера
+		const result = await this.talkyTimesProvider.getVirtualGiftList(profile.profileId, clientId, cursor, limit);
+
+		// Логуємо результат для діагностики
+		if (result.success && result.data) {
+			console.log(`🎁 ProfilesService returning ${result.data.items?.length || 0} gifts`);
+			result.data.items?.slice(0, 2).forEach((item, index) => {
+				console.log(`🎁 Gift ${index + 1}: ${item.name}, imageSrc: ${item.imageSrc}`);
+			});
+		}
+
+		return result;
+	}
+
+	async sendGift(profileId: string, clientId: number, giftId: number, message: string = '', agencyCode: string) {
+		console.log(`🎁 Sending gift ${giftId} from profile ${profileId} to client ${clientId}, message: "${message}"`);
+
+		const profile = await this.prisma.profile.findFirst({
+			where: {
+				id: profileId,
+				group: {
+					agency: { code: agencyCode }
+				}
+			}
+		});
+
+		if (!profile) {
+			throw new NotFoundException('Profile not found');
+		}
+
+		if (!profile.profileId) {
+			throw new BadRequestException('Profile not authenticated');
+		}
+
+		const result = await this.talkyTimesProvider.sendVirtualGift(profile.profileId, clientId, giftId, message);
+
+		console.log(`🎁 Gift send result:`, result);
+		return result;
+	}
 }

@@ -1146,6 +1146,79 @@ export class TalkyTimesProvider implements SiteProvider {
 		}
 	}
 
+	async getVirtualGiftLimits(profileId: string, clientId: number): Promise<{ success: boolean; data?: { limit: number; canSendWithoutLimit: boolean }; error?: string }> {
+		console.log(`🎁 TalkyTimes.getVirtualGiftLimits: profileId=${profileId}, clientId=${clientId}, isMock=${this.isMock()}`);
+
+		if (this.isMock()) {
+			console.log(`🎭 Mock mode: generating gift limits for profile ${profileId} and client ${clientId}`);
+
+			// Генеруємо мок ліміти
+			const mockLimits = {
+				limit: Math.floor(Math.random() * 20) + 1, // Випадкове число від 1 до 20
+				canSendWithoutLimit: Math.random() > 0.8 // 20% шанс мати canSendWithoutLimit = true
+			};
+
+			return { success: true, data: mockLimits };
+		}
+
+		let session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+		}
+
+		try {
+			const url = 'https://talkytimes.com/platform/virtual-gift/limit/get';
+			const headers = this.sessionService.getRequestHeaders(session);
+
+			// Оновлюємо referer для конкретного діалогу
+			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${clientId}`;
+
+			console.log(`🚀 TalkyTimes get gift limits request for profile ${profileId}:`, {
+				profileId,
+				clientId,
+				url,
+				referer: headers['referer']
+			});
+
+			const requestBody = {
+				idUserFrom: parseInt(profileId),
+				idUserTo: clientId
+			};
+
+			console.log(`📤 Request body:`, requestBody);
+			console.log(`📋 Full headers:`, headers);
+
+			const res = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers: headers,
+				body: JSON.stringify(requestBody),
+				timeoutMs: 15000
+			});
+
+			if (!res.ok) {
+				const errorText = await res.text();
+				console.error(`❌ TalkyTimes get gift limits API error ${res.status}:`, errorText);
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+					return { success: false, error: `Session expired for profile ${profileId}. Please re-authenticate.` };
+				}
+				return { success: false, error: `HTTP ${res.status}: ${errorText}` };
+			}
+
+			const result = await res.json();
+			console.log(`📥 TalkyTimes get gift limits response for profile ${profileId}:`, result);
+
+			if (result && typeof result.limit === 'number' && typeof result.canSendWithoutLimit === 'boolean') {
+				return { success: true, data: result };
+			} else {
+				return { success: false, error: 'Invalid response format' };
+			}
+		} catch (error) {
+			console.error('TalkyTimes getVirtualGiftLimits error:', error);
+			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
+
 	async sendStickerById(profileId: string, interlocutorId: number, stickerId: number): Promise<{ success: boolean; data?: any; error?: string }> {
 		console.log(`😀 TalkyTimes.sendStickerById: profile ${profileId} → user ${interlocutorId}, sticker ${stickerId}`);
 
@@ -1214,4 +1287,253 @@ export class TalkyTimesProvider implements SiteProvider {
 			return { success: false, error: error.message };
 		}
 	}
+
+	async getVirtualGiftList(profileId: string, clientId: number, cursor: string = '', limit: number = 30): Promise<{ success: boolean; data?: { cursor: string; items: any[] }; error?: string }> {
+		console.log(`🎁 TalkyTimes.getVirtualGiftList: profileId=${profileId}, clientId=${clientId}, cursor=${cursor}, limit=${limit}, isMock=${this.isMock()}`);
+
+		if (this.isMock()) {
+			console.log(`🎭 Mock mode: generating gift list for profile ${profileId} and client ${clientId}`);
+
+			// Генеруємо мок подарунки з реалістичними URL (fallback на picsum.photos)
+			const mockItems = [
+				{
+					id: 1180,
+					cost: 3340,
+					name: "Ocean diamond",
+					imageSrc: "https://picsum.photos/100/100?random=diamond",
+					animationSrc: null,
+					category: { id: 74, name: "Labor Day in the U.S." },
+					gender: "female"
+				},
+				{
+					id: 1181,
+					cost: 4490,
+					name: "Forever mine ring",
+					imageSrc: "https://picsum.photos/100/100?random=ring",
+					animationSrc: null,
+					category: { id: 74, name: "Labor Day in the U.S." },
+					gender: "female"
+				},
+				{
+					id: 1182,
+					cost: 95,
+					name: "Fresh XL bouquet",
+					imageSrc: "https://picsum.photos/100/100?random=flowers",
+					animationSrc: null,
+					category: { id: 75, name: "Flowers" },
+					gender: "unisex"
+				},
+				{
+					id: 1183,
+					cost: 1090,
+					name: "Floral symphony",
+					imageSrc: "https://picsum.photos/100/100?random=floral",
+					animationSrc: null,
+					category: { id: 75, name: "Flowers" },
+					gender: "female"
+				},
+				{
+					id: 1184,
+					cost: 240,
+					name: "Hair styling set",
+					imageSrc: "https://picsum.photos/100/100?random=hair",
+					animationSrc: null,
+					category: { id: 75, name: "Beauty" },
+					gender: "female"
+				},
+				{
+					id: 1185,
+					cost: 89,
+					name: "Glam bag",
+					imageSrc: "https://picsum.photos/100/100?random=bag",
+					animationSrc: null,
+					category: { id: 75, name: "Beauty" },
+					gender: "female"
+				},
+				{
+					id: 1186,
+					cost: 690,
+					name: "Eagle power",
+					imageSrc: "https://picsum.photos/100/100?random=eagle",
+					animationSrc: null,
+					category: { id: 77, name: "Animals" },
+					gender: "male"
+				},
+				{
+					id: 1187,
+					cost: 289,
+					name: "I heart you!",
+					imageSrc: null,
+					animationSrc: "https://i.gstatvb.com/1b9c94ba16c5a89a891483b104a276581675182874.rng.json",
+					category: { id: 7, name: "animated" },
+					gender: null
+				},
+				{
+					id: 1188,
+					cost: 450,
+					name: "Dancing cat",
+					imageSrc: "https://picsum.photos/100/100?random=cat",
+					animationSrc: "https://picsum.photos/100/100?random=dancing",
+					category: { id: 7, name: "animated" },
+					gender: "unisex"
+				},
+				{
+					id: 1189,
+					cost: 320,
+					name: "Sparkling heart",
+					imageSrc: null,
+					animationSrc: "https://picsum.photos/100/100?random=sparkle",
+					category: { id: 7, name: "animated" },
+					gender: "unisex"
+				}
+			];
+
+			const mockCursor = cursor ? parseInt(cursor) + 10 : "35";
+
+			return {
+				success: true,
+				data: {
+					cursor: mockCursor.toString(),
+					items: mockItems.slice(0, limit)
+				}
+			};
+		}
+
+		let session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+		}
+
+		try {
+			const url = 'https://talkytimes.com/platform/virtual-gift/gift/list';
+			const headers = this.sessionService.getRequestHeaders(session);
+
+			// Оновлюємо referer для конкретного діалогу
+			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${clientId}`;
+
+			console.log(`🚀 TalkyTimes get gift list request for profile ${profileId}:`, {
+				profileId,
+				clientId,
+				cursor,
+				limit,
+				url,
+				referer: headers['referer']
+			});
+
+			const requestBody = {
+				limit,
+				cursor: cursor || '',
+				idRegularUser: clientId
+			};
+
+			console.log(`📤 Request body:`, requestBody);
+			console.log(`📋 Full headers:`, headers);
+
+			const res = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers: headers,
+				body: JSON.stringify(requestBody),
+				timeoutMs: 15000
+			});
+
+			if (!res.ok) {
+				const errorText = await res.text();
+				console.error(`❌ TalkyTimes get gift list API error ${res.status}:`, errorText);
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+					return { success: false, error: `Session expired for profile ${profileId}. Please re-authenticate.` };
+				}
+				return { success: false, error: `HTTP ${res.status}: ${errorText}` };
+			}
+
+			const result = await res.json();
+			console.log(`📥 TalkyTimes get gift list response for profile ${profileId}:`, result);
+
+			// Детальне логування перших 3 елементів
+			if (result && result.items && Array.isArray(result.items)) {
+				console.log(`🎁 Processing ${result.items.length} gift items`);
+				result.items.slice(0, 3).forEach((item, index) => {
+					console.log(`🎁 Item ${index + 1}: ${item.name}, imageSrc: ${item.imageSrc}`);
+				});
+			}
+
+			if (result && result.items && Array.isArray(result.items)) {
+				return { success: true, data: result };
+			} else {
+				return { success: false, error: 'Invalid response format' };
+			}
+		} catch (error) {
+					console.error('TalkyTimes getVirtualGiftList error:', error);
+		return { success: false, error: error.message || 'Unknown error' };
+	}
+
+	async sendVirtualGift(profileId: string, clientId: number, giftId: number, message: string = ''): Promise<{ success: boolean; data?: any; error?: string }> {
+		try {
+			console.log(`🎁 TalkyTimes.sendVirtualGift: profileId=${profileId}, clientId=${clientId}, giftId=${giftId}, message="${message}", isMock=${this.isMock()}`);
+
+			if (this.isMock()) {
+				console.log(`🎭 Mock mode: simulating gift send for profile ${profileId} to client ${clientId}`);
+
+				// Імітуємо успішну відправку подарунку
+				await new Promise(resolve => setTimeout(resolve, 1000)); // Імітація затримки API
+
+				return {
+					success: true,
+					data: {
+						success: true,
+						message: `Подарунок успішно відправлено! Повідомлення: "${message || 'Без повідомлення'}"`,
+						giftId,
+						timestamp: new Date().toISOString()
+					}
+				};
+			}
+
+			// Реальний API запит до TalkyTimes
+			const session = await this.getSession(profileId);
+			if (!session) {
+				throw new Error('Failed to get session for profile');
+			}
+
+			const url = 'https://talkytimes.com/platform/virtual-gift/send';
+			const payload = {
+				idUserTo: clientId,
+				idGift: giftId,
+				message: message || 'kiss' // fallback повідомлення як у прикладі
+			};
+
+			console.log(`🎁 Making API request to: ${url}`);
+			console.log(`🎁 Payload:`, JSON.stringify(payload, null, 2));
+
+			const response = await this.httpService.axiosRef.post(url, payload, {
+				headers: {
+					'accept': 'application/json',
+					'accept-language': 'en-US,en;q=0.9',
+					'content-type': 'application/json',
+					'origin': 'https://talkytimes.com',
+					'referer': `https://talkytimes.com/virtual-gifts/buy/000${clientId}/cart/checkout`,
+					'sec-ch-ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+					'sec-ch-ua-mobile': '?0',
+					'sec-ch-ua-platform': '"macOS"',
+					'sec-fetch-dest': 'empty',
+					'sec-fetch-mode': 'cors',
+					'sec-fetch-site': 'same-origin',
+					'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+					'x-requested-with': '2055',
+					'Cookie': session.cookies
+				}
+			});
+
+			console.log(`🎁 TalkyTimes sendVirtualGift response:`, response.status, response.data);
+
+			return {
+				success: true,
+				data: response.data
+			};
+
+		} catch (error: any) {
+			console.error('TalkyTimes sendVirtualGift error:', error);
+			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
+}
 }
