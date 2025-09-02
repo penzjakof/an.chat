@@ -6,5 +6,6 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
 	imports: [ProvidersModule, AuthModule],
 	controllers: [TTController],
+	exports: [ProvidersModule], // Експортуємо ProvidersModule щоб TalkyTimesRTMService був доступний
 })
 export class TTModule {}

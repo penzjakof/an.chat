@@ -5,8 +5,15 @@ import { TalkyTimesSessionService } from './session.service';
 
 export interface RTMMessage {
 	id?: string;
-	type: 'connect' | 'push' | 'subscribe' | 'unsubscribe';
+	type?: 'connect' | 'push' | 'subscribe' | 'unsubscribe';
 	data?: any;
+	connect?: any;
+	subscribe?: { channel: string };
+	unsubscribe?: { channel: string };
+	push?: {
+		channel: string;
+		data: any;
+	};
 	pub?: {
 		data: {
 			type: string;
@@ -46,18 +53,15 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 	) {}
 
 	async onModuleInit() {
-		// ТИМЧАСОВЕ РІШЕННЯ: використовуємо робочі cookies для тестування
-		this.logger.log('🔌 RTM: Using temporary working cookies for testing');
-		await this.connectWithWorkingCookies();
-		return;
-
 		// Підключаємося тільки якщо не в mock режимі
 		if (this.isMockMode()) {
 			this.logger.log('🔌 RTM: Mock mode detected, skipping WebSocket connection');
 			return;
 		}
 
-		await this.connect();
+		// Оптимізоване RTM підключення з обмеженнями
+		this.logger.log('🔌 RTM: Starting optimized RTM connection');
+		await this.connectOptimized();
 	}
 
 	onModuleDestroy() {
@@ -84,6 +88,155 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 	private isMockMode(): boolean {
 		const baseUrl = process.env.TT_BASE_URL || 'mock:dev';
 		return baseUrl.startsWith('mock:');
+	}
+
+	private async connectOptimized() {
+		if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) {
+			return;
+		}
+
+		// Обмежуємо кількість спроб підключення
+		if (this.reconnectAttempts >= 3) {
+			this.logger.warn('🔌 RTM: Max reconnection attempts reached, stopping RTM');
+			return;
+		}
+
+		this.isConnecting = true;
+		this.logger.log(`🔌 RTM: Optimized connection attempt ${this.reconnectAttempts + 1}/3`);
+
+		try {
+			// Використовуємо робочі cookies
+			const workingCookies = 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=8c13911a-9578-4fc8-905a-5abbe3edbacf; _hjSessionUser_2813883=eyJpZCI6IjZlYWQ2MDE4LTFkNmItNWMxOC04MGEyLThiNWZiMmJiYWMzYyIsImNyZWF0ZWQiOjE3NTM4OTI2NzkzNDAsImV4aXN0aW5nIjp0cnVlfQ==; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1NjU1NzM0NCwiZXhwIjoxNzU5MjM1NzQ0LCJzdWIiOjcxNjI0Mzd9.WC8R1Jxh-fsKf3ufPm7_efmzOHDxDzSsvtzi7XcfB0A; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A7162437%2C%22refreshToken%22%3A%221cf0985f8c594b4c2d713a0bc66cd0be1b4bc85c%22%7D; _csrf=GED4Ups3_DncYKdpO7ss-xXW12ioIlg-';
+			
+			const headers = {
+				'Origin': 'https://talkytimes.com',
+				'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+				'Cookie': workingCookies
+			};
+
+			this.ws = new WebSocket('wss://talkytimes.com/rtm', { headers });
+
+			// Встановлюємо таймаут для підключення
+			const connectionTimeout = setTimeout(() => {
+				if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
+					this.logger.warn('🔌 RTM: Connection timeout, closing');
+					this.ws.close();
+				}
+			}, 10000); // 10 секунд таймаут
+
+			this.ws.on('open', () => {
+				clearTimeout(connectionTimeout);
+				this.logger.log('✅ RTM: Optimized connection established');
+				this.isConnecting = false;
+				this.reconnectAttempts = 0;
+				
+				// Відправляємо connect повідомлення
+				const connectMessage = {
+					connect: { name: "js" },
+					id: 1
+				};
+				this.ws!.send(JSON.stringify(connectMessage));
+
+				// Встановлюємо heartbeat з більшим інтервалом
+				this.startOptimizedHeartbeat();
+			});
+
+			this.ws.on('message', (data) => {
+				try {
+					const message = JSON.parse(data.toString());
+					this.handleOptimizedMessage(message);
+				} catch (error) {
+					this.logger.error('❌ RTM: Failed to parse message', error);
+				}
+			});
+
+			this.ws.on('close', (code, reason) => {
+				clearTimeout(connectionTimeout);
+				this.isConnecting = false;
+				this.logger.warn(`🔌 RTM: Connection closed (${code}): ${reason}`);
+				
+				// Обмежене переподключення
+				if (this.reconnectAttempts < 3) {
+					this.scheduleOptimizedReconnect();
+				} else {
+					this.logger.warn('🔌 RTM: Max reconnection attempts reached, RTM disabled');
+				}
+			});
+
+			this.ws.on('error', (error) => {
+				clearTimeout(connectionTimeout);
+				this.isConnecting = false;
+				this.logger.error('❌ RTM: Connection error', error);
+				
+				if (this.reconnectAttempts < 3) {
+					this.scheduleOptimizedReconnect();
+				}
+			});
+
+		} catch (error) {
+			this.isConnecting = false;
+			this.logger.error('❌ RTM: Failed to create connection', error);
+			
+			if (this.reconnectAttempts < 3) {
+				this.scheduleOptimizedReconnect();
+			}
+		}
+	}
+
+	private startOptimizedHeartbeat() {
+		// Heartbeat кожні 60 секунд замість 30
+		this.heartbeatInterval = setInterval(() => {
+			if (this.ws?.readyState === WebSocket.OPEN) {
+				this.ws.ping();
+			}
+		}, 60000);
+	}
+
+	private scheduleOptimizedReconnect() {
+		if (this.reconnectTimeout) {
+			clearTimeout(this.reconnectTimeout);
+		}
+
+		this.reconnectAttempts++;
+		// Експоненційна затримка: 5s, 15s, 45s
+		const delay = 5000 * Math.pow(3, this.reconnectAttempts - 1);
+		
+		this.logger.log(`🔄 RTM: Scheduling reconnection in ${delay/1000}s (attempt ${this.reconnectAttempts}/3)`);
+		
+		this.reconnectTimeout = setTimeout(() => {
+			this.connectOptimized();
+		}, delay);
+	}
+
+	private handleOptimizedMessage(message: any) {
+		// Обробляємо тільки важливі повідомлення
+		if (message.connect) {
+			this.logger.log('🔗 RTM: Connect response received');
+			this.sendOptimizedSubscriptions();
+		} else if (message.push && message.push.channel) {
+			// Обробляємо тільки повідомлення з каналів
+			const channel = message.push.channel;
+			if (channel.includes('user_') || channel.includes('broadcast')) {
+				this.eventEmitter.emit('rtm.message', {
+					channel,
+					data: message.push.data
+				});
+			}
+		}
+		// Ігноруємо інші типи повідомлень для зменшення навантаження
+	}
+
+	private sendOptimizedSubscriptions() {
+		// Підписуємося тільки на критично важливі канали
+		this.logger.log('📡 RTM: Sending optimized subscriptions...');
+		
+		// Підписка на broadcast канал для загальних сповіщень
+		this.sendMessage({
+			subscribe: { channel: "broadcast" },
+			id: "2"
+		});
+
+		this.logger.log('📡 RTM: Optimized subscriptions sent');
 	}
 
 	private async connectWithWorkingCookies() {
@@ -473,5 +626,36 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 
 	getSubscriptions(): string[] {
 		return Array.from(this.subscriptions);
+	}
+
+	// Новий метод для підписки на користувача з перевіркою
+	subscribeToUserOptimized(userId: string) {
+		if (this.ws?.readyState !== WebSocket.OPEN) {
+			this.logger.warn(`⚠️ RTM: Cannot subscribe to user ${userId}, connection not ready`);
+			return;
+		}
+
+		this.logger.log(`📡 RTM: Optimized subscription to user ${userId}`);
+		this.sendMessage({
+			subscribe: { channel: `user_${userId}` },
+			id: Date.now().toString()
+		});
+	}
+
+	// Метод для отримання статусу RTM
+	getConnectionStatus(): { connected: boolean; attempts: number; maxAttempts: number } {
+		return {
+			connected: this.ws?.readyState === WebSocket.OPEN,
+			attempts: this.reconnectAttempts,
+			maxAttempts: 3
+		};
+	}
+
+	// Метод для ручного перезапуску RTM
+	async restartConnection() {
+		this.logger.log('🔄 RTM: Manual restart requested');
+		this.cleanup();
+		this.reconnectAttempts = 0;
+		await this.connectOptimized();
 	}
 }

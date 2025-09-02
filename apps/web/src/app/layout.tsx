@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { WebSocketPoolProvider } from "@/contexts/WebSocketPoolContext";
 import { ToastProvider } from "@/contexts/ToastContext";
-import "@/utils/debug"; // Додаємо debug утиліти
+// import "@/utils/debug"; // Додаємо debug утиліти
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
