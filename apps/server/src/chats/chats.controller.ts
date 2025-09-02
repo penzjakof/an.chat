@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Roles, RolesGuard } from '../common/auth/roles.guard';
 import { Role } from '@prisma/client';
 import type { Request } from 'express';
@@ -7,6 +8,7 @@ import { JwtAuthGuard } from '../auth/jwt.guard';
 import { SendPhotoDto } from './dto/send-photo.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Throttle({ default: { limit: 60, ttl: 60000 } }) // 60 запитів до чатів за хвилину
 @Controller('api/chats')
 export class ChatsController {
 	constructor(private readonly chats: ChatsService) {}
@@ -44,6 +46,7 @@ export class ChatsController {
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)
+	@Throttle({ default: { limit: 20, ttl: 60000 } }) // 20 текстових повідомлень за хвилину
 	@Post('dialogs/:id/text')
 	sendText(@Req() req: Request, @Param('id') id: string, @Body() body: { text: string }) {
 		return this.chats.sendText(req.auth!, id, body.text);
@@ -74,6 +77,7 @@ export class ChatsController {
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)
+	@Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 фото за хвилину
 	@Post('send-photo')
 	async sendPhoto(@Req() req: Request, @Body() sendPhotoDto: SendPhotoDto) {
 		console.log('📸 ChatsController.sendPhoto called with:', sendPhotoDto);
@@ -88,6 +92,7 @@ export class ChatsController {
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)
+	@Throttle({ default: { limit: 15, ttl: 60000 } }) // 15 стікерів за хвилину
 	@Post('send-sticker')
 	async sendSticker(@Req() req: Request, @Body() body: { idProfile?: number; idRegularUser: number; stickerId: number; stickerUrl?: string }) {
 		console.log('😀 ChatsController.sendSticker called with:', body);

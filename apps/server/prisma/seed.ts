@@ -51,8 +51,8 @@ async function main() {
 	});
 	await prisma.profile.upsert({
 		where: { provider_externalId: { provider: ProviderSite.TALKYTIMES, externalId: 'aaallonnno44ka03@gmail.com' } },
-		create: { provider: ProviderSite.TALKYTIMES, externalId: 'aaallonnno44ka03@gmail.com', displayName: 'TT B', credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: encrypt('aaallonnno44ka03'), profileId: '7162438', groupId: group.id },
-		update: { groupId: group.id, credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: encrypt('aaallonnno44ka03'), profileId: '7162438' },
+		create: { provider: ProviderSite.TALKYTIMES, externalId: 'aaallonnno44ka03@gmail.com', displayName: 'TT B', credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: encrypt('aaallonnno44ka03'), profileId: '117326723', groupId: group.id },
+		update: { groupId: group.id, credentialLogin: 'aaallonnno44ka03@gmail.com', credentialPassword: encrypt('aaallonnno44ka03'), profileId: '117326723' },
 	});
 
 	console.log('Seed completed with usernames: owner/operator');

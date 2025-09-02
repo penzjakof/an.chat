@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { apiGet, apiPost } from '@/lib/api';
 import { getAccessToken, getSession } from '@/lib/session';
@@ -8,6 +8,8 @@ import { ChatHeaderSkeleton, MessageSkeleton } from '@/components/SkeletonLoader
 import { useDialogWebSocket } from '@/hooks/useDialogWebSocket';
 import { MediaGallery, Photo } from '@/components/MediaGallery';
 import LottieErrorBoundary from '@/components/LottieErrorBoundary';
+import EmailHistory from '@/components/EmailHistory';
+import { useResourceManager, cleanupLottieAnimations } from '@/utils/memoryCleanup';
 
 // Типи для Lottie
 declare global {
@@ -102,6 +104,9 @@ export default function DialogPage() {
 	const router = useRouter();
 	const params = useParams();
 	const dialogId = params.dialogId as string;
+	
+	// Resource manager для безпечного cleanup
+	const resourceManager = useResourceManager();
 
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [text, setText] = useState('');
@@ -124,6 +129,7 @@ export default function DialogPage() {
 	const canLoadMore = useRef<boolean>(true);
 	const [isMediaGalleryOpen, setIsMediaGalleryOpen] = useState(false);
 	const [isStickerModalOpen, setIsStickerModalOpen] = useState(false);
+	const [isEmailHistoryOpen, setIsEmailHistoryOpen] = useState(false);
 	const [stickerCategories, setStickerCategories] = useState<StickerCategory[]>([]);
 	const [isLoadingStickers, setIsLoadingStickers] = useState(false);
 	const [activeCategoryIndex, setActiveCategoryIndex] = useState<number>(0);
@@ -158,14 +164,20 @@ export default function DialogPage() {
 	}, []);
 
 	// Функція cleanup для Lottie анімацій
-	const cleanupLottieAnimations = () => {
+	const cleanupLottieAnimations = useCallback(() => {
 		console.log('🧹 Cleaning up Lottie animations...');
-		if (window.activeLottieInstances) {
+		if (typeof window !== 'undefined' && window.activeLottieInstances) {
 			window.activeLottieInstances.forEach((animation, key) => {
 				try {
 					if (animation && typeof animation.destroy === 'function') {
 						animation.destroy();
 						console.log(`✅ Destroyed Lottie animation: ${key}`);
+					}
+					// Також видаляємо event listeners якщо є
+					if (animation && typeof animation.removeEventListener === 'function') {
+						animation.removeEventListener('data_ready');
+						animation.removeEventListener('error');
+						animation.removeEventListener('complete');
 					}
 				} catch (error) {
 					console.warn(`⚠️ Error destroying Lottie animation ${key}:`, error);
@@ -173,18 +185,41 @@ export default function DialogPage() {
 			});
 			window.activeLottieInstances.clear();
 		}
-	};
+		
+		// Також очищуємо всі DOM елементи з Lottie
+		if (typeof document !== 'undefined') {
+			const lottieContainers = document.querySelectorAll('[data-lottie-url]');
+			lottieContainers.forEach(container => {
+				if (container instanceof HTMLElement) {
+					container.innerHTML = ''; // Очищуємо вміст
+				}
+			});
+		}
+	}, []);
 
 	// Функція cleanup для активних запитів
-	const cleanupActiveRequests = () => {
+	const cleanupActiveRequests = useCallback(() => {
 		console.log('🧹 Cleaning up active requests...');
 		if (abortControllerRef.current) {
-			abortControllerRef.current.abort();
-			abortControllerRef.current = null;
-			isLoadingGiftsRef.current = false;
-			console.log('✅ Cancelled active gift loading request');
+			try {
+				abortControllerRef.current.abort();
+				console.log('✅ Cancelled active gift loading request');
+			} catch (error) {
+				console.warn('⚠️ Error aborting request:', error);
+			} finally {
+				abortControllerRef.current = null;
+				isLoadingGiftsRef.current = false;
+			}
 		}
-	};
+		
+		// Також скидаємо всі loading стейти
+		setIsLoadingGifts(false);
+		setIsLoadingMore(false);
+		setIsLoadingHeader(false);
+		
+		// Очищуємо всі можливі pending promises
+		// (це допоможе уникнути setState на unmounted компонентах)
+	}, []);
 
 	// Функція для завантаження Lottie анімації для конкретного елемента
 	const loadLottieForElement = async (container: HTMLElement, gift: VirtualGiftItem) => {
@@ -869,17 +904,20 @@ export default function DialogPage() {
 				if (isMessageModalOpen) {
 					setIsMessageModalOpen(false);
 				}
+				if (isEmailHistoryOpen) {
+					setIsEmailHistoryOpen(false);
+				}
 			}
 		};
 
-		if (isStickerModalOpen || isGiftModalOpen || isMessageModalOpen) {
+		if (isStickerModalOpen || isGiftModalOpen || isMessageModalOpen || isEmailHistoryOpen) {
 			document.addEventListener('keydown', handleEscape);
 		}
 
 		return () => {
 			document.removeEventListener('keydown', handleEscape);
 		};
-	}, [isStickerModalOpen, isGiftModalOpen, isMessageModalOpen]);
+	}, [isStickerModalOpen, isGiftModalOpen, isMessageModalOpen, isEmailHistoryOpen]);
 
 	// Cleanup Lottie анімацій та запитів при закритті модальних вікон
 	useEffect(() => {
@@ -888,6 +926,36 @@ export default function DialogPage() {
 			cleanupActiveRequests();
 		}
 	}, [isGiftModalOpen, isMessageModalOpen]);
+
+	// Глобальний cleanup при unmount компонента
+	useEffect(() => {
+		return () => {
+			console.log('🧹 Component unmounting, cleaning up all resources...');
+			
+			// Очищуємо всі timeouts
+			if (loadingTimeoutRef.current) {
+				clearTimeout(loadingTimeoutRef.current);
+				loadingTimeoutRef.current = null;
+			}
+			if (unlockTimeoutRef.current) {
+				clearTimeout(unlockTimeoutRef.current);
+				unlockTimeoutRef.current = null;
+			}
+			
+			// Очищуємо Lottie анімації
+			cleanupLottieAnimations();
+			
+			// Очищуємо активні запити
+			cleanupActiveRequests();
+			
+			// Очищуємо глобальні event listeners якщо є
+			if (typeof window !== 'undefined') {
+				// Видаляємо всі можливі event listeners
+				window.removeEventListener('beforeunload', cleanupLottieAnimations);
+				window.removeEventListener('unload', cleanupLottieAnimations);
+			}
+		};
+	}, []); // Порожній масив залежностей - виконується тільки при unmount
 
 	// Використовуємо WebSocket pool для цього профілю та діалогу
 	useDialogWebSocket({
@@ -1453,6 +1521,17 @@ export default function DialogPage() {
 						</svg>
 					</button>
 
+					{/* Кнопка листа */}
+					<button
+						onClick={() => setIsEmailHistoryOpen(true)}
+						className="flex-shrink-0 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+						title="Історія листування"
+					>
+						<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+						</svg>
+					</button>
+
 					{/* Кнопка стікера */}
 					<button
 						onClick={handleStickerModalOpen}
@@ -1511,6 +1590,15 @@ export default function DialogPage() {
 				maxSelection={6}
 				context="chat"
 				idRegularUser={idRegularUser}
+			/>
+
+			{/* Історія листування */}
+			<EmailHistory
+				isOpen={isEmailHistoryOpen}
+				onClose={() => setIsEmailHistoryOpen(false)}
+				profileId={idProfile.toString()}
+				clientId={idRegularUser.toString()}
+				correspondenceId={dialogId}
 			/>
 
 			{/* Модальне вікно стікерів */}

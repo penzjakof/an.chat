@@ -19,7 +19,13 @@ describe('TalkyTimesProvider', () => {
 			cleanupExpiredSessions: jest.fn()
 		} as any;
 		
-		provider = new TalkyTimesProvider(baseUrl, mockSessionService);
+		const mockConnectionPool = {
+			getAgentForUrl: jest.fn().mockReturnValue({}),
+			getPoolStats: jest.fn().mockReturnValue({}),
+			logPoolStats: jest.fn(),
+		} as any;
+		
+		provider = new TalkyTimesProvider(baseUrl, mockSessionService, mockConnectionPool);
 		global.fetch = jest.fn(async (url: string, _opts?: any) => {
 			return {
 				ok: true,

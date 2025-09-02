@@ -39,13 +39,21 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T
 		...options.headers
 	};
 
-	console.log('🌐 API Request:', {
-		url: `${API_BASE}${path}`,
-		method: options.method || 'GET',
-		hasAuth: !!headers.Authorization,
-		hasBody: !!options.body,
-		headers: Object.keys(headers)
-	});
+	// Логуємо тільки в development і тільки важливі запити (не photo-statuses)
+	if (process.env.NODE_ENV === 'development') {
+		const method = options.method || 'GET';
+		const isPhotoStatusRequest = path.includes('photo-statuses');
+		const shouldLog = (method !== 'GET' || !headers.Authorization) && !isPhotoStatusRequest;
+		
+		if (shouldLog) {
+			console.log('🌐 API Request:', {
+				url: `${API_BASE}${path}`,
+				method,
+				hasAuth: !!headers.Authorization,
+				hasBody: !!options.body
+			});
+		}
+	}
 
 	const res = await fetch(`${API_BASE}${path}`, {
 		...options,

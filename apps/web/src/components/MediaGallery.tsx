@@ -123,7 +123,10 @@ export function MediaGallery({
         }
       });
 
-      console.log('📦 Loaded from unified cache:', validData.size, 'photos');
+      // Повністю відключаємо логування завантаження кешу
+      // if (process.env.NODE_ENV === 'development' && validData.size > 0) {
+      //   console.log('📦 Loaded from unified cache:', validData.size, 'photos');
+      // }
       return validData;
     } catch (error) {
       console.warn('Failed to load unified photo cache:', error);
@@ -131,16 +134,43 @@ export function MediaGallery({
     }
   }, [UNIFIED_PHOTO_CACHE_KEY, CACHE_DURATION]);
 
+  // Debounced save function для зменшення частоти збереження
+  const debouncedSave = useRef<NodeJS.Timeout | null>(null);
+  
   const saveUnifiedPhotoCache = useCallback((cacheMap: Map<number, CachedPhotoData>) => {
-    try {
-      // Конвертуємо Map в об'єкт для збереження
-      const cacheObject = Object.fromEntries(cacheMap);
-      localStorage.setItem(UNIFIED_PHOTO_CACHE_KEY, JSON.stringify(cacheObject));
-      console.log('📦 Unified cache saved:', cacheMap.size, 'photos');
-    } catch (error) {
-      console.warn('Failed to save unified photo cache:', error);
+    // Скасовуємо попередній таймер
+    if (debouncedSave.current) {
+      clearTimeout(debouncedSave.current);
     }
+    
+    // Встановлюємо новий таймер на 500мс
+    debouncedSave.current = setTimeout(() => {
+      try {
+        // Конвертуємо Map в об'єкт для збереження
+        const cacheObject = Object.fromEntries(cacheMap);
+        localStorage.setItem(UNIFIED_PHOTO_CACHE_KEY, JSON.stringify(cacheObject));
+        // Повністю відключаємо логування збереження кешу
+        // if (process.env.NODE_ENV === 'development' && cacheMap.size > 1000) {
+        //   console.log('📦 Unified cache saved:', cacheMap.size, 'photos');
+        // }
+      } catch (error) {
+        console.warn('Failed to save unified photo cache:', error);
+      }
+    }, 500);
   }, [UNIFIED_PHOTO_CACHE_KEY]);
+
+  // Cleanup debounced save on unmount
+  useEffect(() => {
+    return () => {
+      console.log('🧹 MediaGallery unmounting, cleaning up resources...');
+      
+      // Очищуємо debounced save
+      if (debouncedSave.current) {
+        clearTimeout(debouncedSave.current);
+        debouncedSave.current = null;
+      }
+    };
+  }, []);
 
   // Мемоізована функція для перевірки special тегів
   const isSpecialPhoto = useCallback((photo: Photo) => {
@@ -203,9 +233,21 @@ export function MediaGallery({
     }
   }, [loadUnifiedPhotoCache, saveUnifiedPhotoCache, profileId, isSpecialPhoto]);
 
+  // Мемоізований кеш для зменшення операцій завантаження
+  const [cachedPhotoMap, setCachedPhotoMap] = useState<Map<number, CachedPhotoData> | null>(null);
+  
+  const getCachedPhotoMap = useCallback(() => {
+    if (!cachedPhotoMap) {
+      const loaded = loadUnifiedPhotoCache();
+      setCachedPhotoMap(loaded);
+      return loaded;
+    }
+    return cachedPhotoMap;
+  }, [cachedPhotoMap, loadUnifiedPhotoCache]);
+
   const updatePhotoStatusesInCache = useCallback((statuses: Map<number, 'accessed' | 'sent' | null>) => {
     try {
-      const cacheMap = loadUnifiedPhotoCache();
+      const cacheMap = getCachedPhotoMap(); // Використовуємо мемоізований кеш
       const now = Date.now();
       let updatedCount = 0;
 
@@ -222,16 +264,16 @@ export function MediaGallery({
       });
 
       if (updatedCount > 0) {
-        saveUnifiedPhotoCache(cacheMap);
-        console.log('📦 Updated statuses in unified cache:', updatedCount, 'photos');
+        setCachedPhotoMap(new Map(cacheMap)); // Оновлюємо мемоізований стейт
+        saveUnifiedPhotoCache(cacheMap); // Debounced збереження
       }
 
       return cacheMap;
     } catch (error) {
       console.warn('Failed to update photo statuses in unified cache:', error);
-      return loadUnifiedPhotoCache();
+      return getCachedPhotoMap();
     }
-  }, [loadUnifiedPhotoCache, saveUnifiedPhotoCache]);
+  }, [getCachedPhotoMap, saveUnifiedPhotoCache, setCachedPhotoMap]);
 
   // Централізована логіка фільтрації фото
   const filterPhotosByTypeAndStatus = useCallback((
@@ -391,12 +433,19 @@ export function MediaGallery({
       batches.push(photosToRequest.slice(i, i + batchSize));
     }
 
-    console.log(`📊 Processing ${batches.length} batches of photo statuses`);
+    // Повністю відключаємо логування батчів
+    // if (process.env.NODE_ENV === 'development' && batches.length > 5) {
+    //   console.log(`📊 Processing ${batches.length} batches of photo statuses`);
+    // }
 
     // Обробляємо кожен батч
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
       const batch = batches[batchIndex];
-      console.log(`📊 Processing batch ${batchIndex + 1}/${batches.length} with ${batch.length} photos`);
+      
+      // Повністю відключаємо логування окремих батчів
+      // if (process.env.NODE_ENV === 'development' && (batchIndex + 1) % 5 === 0) {
+      //   console.log(`📊 Processing batch ${batchIndex + 1}/${batches.length} with ${batch.length} photos`);
+      // }
 
       try {
         const idsPhotos = batch.map(p => p.idPhoto);
@@ -416,7 +465,10 @@ export function MediaGallery({
 
         const typedResponse = response as { success: boolean; data?: { photos: PhotoConnectionStatus[] }; error?: string };
         if (typedResponse.success && typedResponse.data?.photos) {
-          console.log(`📊 Batch ${batchIndex + 1}: Received statuses for ${typedResponse.data.photos.length} photos`);
+          // Повністю відключаємо логування результатів батчів
+          // if (process.env.NODE_ENV === 'development' && ((batchIndex + 1) % 10 === 0 || batchIndex === batches.length - 1)) {
+          //   console.log(`📊 Batch ${batchIndex + 1}: Received statuses for ${typedResponse.data.photos.length} photos`);
+          // }
           setPhotoStatuses(prev => {
             const newStatusMap = new Map(prev);
             typedResponse.data!.photos.forEach((photoStatus: PhotoConnectionStatus) => {

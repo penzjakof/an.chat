@@ -1,23 +1,58 @@
 import type { ProviderRequestContext, SiteProvider, DialogsFilters } from '../site-provider.interface';
 import { TalkyTimesSessionService } from './session.service';
+import { ConnectionPoolService } from '../../common/http/connection-pool.service';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_BASE_DELAY_MS = 1000;
 
+interface RetryOptions {
+	maxRetries?: number;
+	baseDelayMs?: number;
+	timeoutMs?: number;
+	retryCondition?: (error: any, attempt: number) => boolean;
+}
+
+// Функція для затримки з exponential backoff
+function delay(ms: number): Promise<void> {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Перевірка чи потрібно повторювати запит
+function shouldRetry(error: any, attempt: number, maxRetries: number): boolean {
+	if (attempt >= maxRetries) return false;
+	
+	// Повторюємо при мережевих помилках
+	if (error.name === 'AbortError') return false; // Timeout - не повторюємо
+	if (error.name === 'TypeError' && error.message.includes('fetch')) return true; // Network error
+	
+	// Повторюємо при серверних помилках (5xx)
+	if (error.status >= 500) return true;
+	
+	// Повторюємо при 429 (Too Many Requests)
+	if (error.status === 429) return true;
+	
+	// Повторюємо при 408 (Request Timeout)
+	if (error.status === 408) return true;
+	
+	return false;
+}
+
+// Backward compatibility - deprecated, use TalkyTimesProvider.fetchWithConnectionPool instead
 async function fetchWithTimeout(url: string, options: RequestInit & { timeoutMs?: number }): Promise<Response> {
 	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+	const timeout = setTimeout(() => controller.abort(), options.timeoutMs || DEFAULT_TIMEOUT_MS);
+	
 	try {
-		// ВИПРАВЛЕННЯ: правильно зберігаємо всі headers включаючи cookies
-		const cleanOptions = { ...options };
-		delete cleanOptions.timeoutMs;
-		
-		const res = await fetch(url, { 
-			...cleanOptions, 
+		const res = await fetch(url, {
+			...options,
 			signal: controller.signal
 		});
-		return res;
-	} finally {
 		clearTimeout(timeout);
+		return res;
+	} catch (error) {
+		clearTimeout(timeout);
+		throw error;
 	}
 }
 
@@ -28,9 +63,87 @@ export class TalkyTimesProvider implements SiteProvider {
 
 	constructor(
 		private readonly baseUrl: string,
-		private readonly sessionService: TalkyTimesSessionService
+		private readonly sessionService: TalkyTimesSessionService,
+		private readonly connectionPool: ConnectionPoolService
 	) {
 		console.log('TalkyTimesProvider baseUrl:', this.baseUrl);
+	}
+
+	/**
+	 * Оптимізований fetch з connection pooling, timeout та retry логікою
+	 */
+	private async fetchWithConnectionPool(
+		url: string, 
+		options: RequestInit & RetryOptions = {}
+	): Promise<Response> {
+		const {
+			maxRetries = DEFAULT_MAX_RETRIES,
+			baseDelayMs = DEFAULT_BASE_DELAY_MS,
+			timeoutMs = DEFAULT_TIMEOUT_MS,
+			retryCondition = shouldRetry,
+			...fetchOptions
+		} = options;
+		
+		let lastError: any;
+		
+		for (let attempt = 0; attempt <= maxRetries; attempt++) {
+			const controller = new AbortController();
+			const timeout = setTimeout(() => controller.abort(), timeoutMs);
+			
+			try {
+				// Використовуємо connection pool agent
+				const agent = this.connectionPool.getAgentForUrl(url);
+				
+				const res = await fetch(url, {
+					...fetchOptions,
+					signal: controller.signal,
+					// @ts-ignore - Node.js fetch підтримує agent
+					agent: agent
+				});
+				
+				clearTimeout(timeout);
+				
+				if (!res.ok) {
+					const error = new Error(`HTTP ${res.status}: ${res.statusText}`);
+					(error as any).status = res.status;
+					(error as any).response = res;
+					
+					if (retryCondition(error, attempt, maxRetries)) {
+						lastError = error;
+						console.warn(`🔄 Request failed (attempt ${attempt + 1}/${maxRetries + 1}): ${error.message}. Retrying...`);
+						
+						const delayMs = baseDelayMs * Math.pow(2, attempt);
+						await delay(delayMs);
+						continue;
+					}
+					
+					throw error;
+				}
+				
+				if (attempt > 0) {
+					console.log(`✅ Request succeeded after ${attempt + 1} attempts`);
+				}
+				
+				return res;
+				
+			} catch (error) {
+				clearTimeout(timeout);
+				lastError = error;
+				
+				if (retryCondition(error, attempt, maxRetries)) {
+					console.warn(`🔄 Request failed (attempt ${attempt + 1}/${maxRetries + 1}): ${error.message}. Retrying...`);
+					
+					const delayMs = baseDelayMs * Math.pow(2, attempt);
+					const jitter = Math.random() * 0.1 * delayMs;
+					await delay(delayMs + jitter);
+					continue;
+				}
+				
+				throw error;
+			}
+		}
+		
+		throw lastError;
 	}
 
 	/**
@@ -43,7 +156,10 @@ export class TalkyTimesProvider implements SiteProvider {
 		profileId: number;
 		headers?: Record<string, string>;
 	}): Promise<{ success: boolean; data?: any; error?: string }> {
-		console.log(`🌐 TalkyTimesProvider.makeRequest: ${options.method} ${options.url} for profile ${options.profileId}`);
+		// Логуємо тільки POST/PUT/DELETE запити для зменшення спаму
+		if (options.method !== 'GET') {
+			console.log(`🌐 TalkyTimesProvider.makeRequest: ${options.method} ${options.url} for profile ${options.profileId}`);
+		}
 
 		if (this.isMock()) {
 			return { 
@@ -77,20 +193,26 @@ export class TalkyTimesProvider implements SiteProvider {
 
 			console.log(`🌐 Making ${options.method} request to ${fullUrl}`);
 
-			const response = await fetchWithTimeout(fullUrl, {
+			// Налаштування retry в залежності від типу запиту
+			const retryOptions: RetryOptions = {
+				timeoutMs: 15000, // 15 секунд timeout
+				maxRetries: options.method === 'GET' ? 3 : 2, // GET запити повторюємо більше
+				baseDelayMs: options.method === 'GET' ? 1000 : 2000, // POST запити чекають довше
+			};
+
+			const response = await this.fetchWithConnectionPool(fullUrl, {
 				method: options.method,
 				headers,
 				body: options.data ? JSON.stringify(options.data) : undefined,
+				...retryOptions
 			});
 
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error(`❌ Request failed with status ${response.status}:`, errorText);
-				return { success: false, error: `HTTP ${response.status}: ${errorText}` };
-			}
-
 			const result = await response.json();
-			console.log(`✅ Request successful:`, result);
+			
+			// Логуємо тільки важливі успішні операції
+			if (options.method !== 'GET' || result.error) {
+				console.log(`✅ Request successful:`, result);
+			}
 
 			return { success: true, data: result };
 
@@ -203,7 +325,10 @@ export class TalkyTimesProvider implements SiteProvider {
 
 	async fetchDialogsByProfile(profileId: string, criteria: string[] = ['active'], cursor = '', limit = 15): Promise<unknown> {
 		const isMockMode = this.isMock();
-		console.log(`🔍 TalkyTimes.fetchDialogsByProfile: profileId=${profileId}, isMock=${isMockMode}, cursor="${cursor}"`);
+		// Логуємо тільки якщо є cursor (пагінація) або в mock режимі
+		if (cursor || isMockMode) {
+			console.log(`🔍 TalkyTimes.fetchDialogsByProfile: profileId=${profileId}, isMock=${isMockMode}, cursor="${cursor}"`);
+		}
 		
 		if (isMockMode) {
 			console.log(`🎭 Mock fetchDialogsByProfile for profile ${profileId}`);
@@ -367,7 +492,7 @@ export class TalkyTimesProvider implements SiteProvider {
 				url
 			});
 			
-			const res = await fetchWithTimeout(url, {
+			const res = await this.fetchWithConnectionPool(url, {
 				method: 'POST',
 				headers,
 				body: JSON.stringify({
@@ -375,7 +500,9 @@ export class TalkyTimesProvider implements SiteProvider {
 					cursor,
 					limit
 				}),
-				timeoutMs: 15000
+				timeoutMs: 15000,
+				maxRetries: 2, // Діалоги критичні, але не повторюємо багато
+				baseDelayMs: 1500
 			});
 
 			if (!res.ok) {
@@ -529,11 +656,13 @@ export class TalkyTimesProvider implements SiteProvider {
 			console.log(`📤 Request body:`, requestBody);
 			console.log(`📋 Full headers:`, headers);
 
-					const res = await fetchWithTimeout(url, {
+					const res = await this.fetchWithConnectionPool(url, {
 			method: 'POST',
 			headers: headers,
 			body: JSON.stringify(requestBody),
-			timeoutMs: 15000
+			timeoutMs: 15000,
+			maxRetries: 3, // Повідомлення важливі, повторюємо більше
+			baseDelayMs: 1000
 		});
 
 			if (!res.ok) {
@@ -607,10 +736,12 @@ export class TalkyTimesProvider implements SiteProvider {
 			const url = 'https://talkytimes.com/platform/private/personal-profile';
 			const headers = this.sessionService.getRequestHeaders(session);
 
-			const res = await fetchWithTimeout(url, {
+			const res = await this.fetchWithConnectionPool(url, {
 				method: 'POST',
 				headers,
-				timeoutMs: 15000
+				timeoutMs: 15000,
+				maxRetries: 2, // Профіль критичний, але не спамимо
+				baseDelayMs: 2000
 			});
 
 			if (!res.ok) {
@@ -702,7 +833,7 @@ export class TalkyTimesProvider implements SiteProvider {
 
 		try {
 			const loginUrl = 'https://talkytimes.com/platform/auth/login';
-			const res = await fetchWithTimeout(loginUrl, {
+			const res = await this.fetchWithConnectionPool(loginUrl, {
 				method: 'POST',
 				headers: {
 					'accept': 'application/json',
@@ -726,7 +857,9 @@ export class TalkyTimesProvider implements SiteProvider {
 					password,
 					captcha: ''
 				}),
-				timeoutMs: 15000 // Збільшуємо таймаут для логіну
+				timeoutMs: 20000, // Збільшуємо таймаут для логіну
+				maxRetries: 1, // Логін повторюємо тільки один раз
+				baseDelayMs: 3000 // Довша затримка для логіну
 			});
 
 			if (!res.ok) {
@@ -1462,9 +1595,122 @@ export class TalkyTimesProvider implements SiteProvider {
 			} else {
 				return { success: false, error: 'Invalid response format' };
 			}
-		} catch (error) {
+				} catch (error) {
 					console.error('TalkyTimes getVirtualGiftList error:', error);
 		return { success: false, error: error.message || 'Unknown error' };
+	}
+	}
+
+	async getEmailHistory(profileId: string, clientId: number, correspondenceId: string, page: number = 1, limit: number = 10): Promise<{ success: boolean; data?: any; error?: string }> {
+		try {
+			console.log(`📧 TalkyTimes.getEmailHistory: profileId=${profileId}, clientId=${clientId}, correspondenceId=${correspondenceId}, page=${page}, limit=${limit}, isMock=${this.isMock()}`);
+
+			if (this.isMock()) {
+				console.log(`🎭 Mock mode: simulating email history for profile ${profileId} with client ${clientId}`);
+				await new Promise(resolve => setTimeout(resolve, 500));
+				const mockEmails = [
+					{
+						id: "9085270527",
+						id_user_from: profileId,
+						id_user_to: clientId.toString(),
+						id_correspondence: correspondenceId,
+						content: "<p>Привіт! Як справи?</p>",
+						date_created: new Date().toISOString(),
+						date_read: new Date().toISOString(),
+						is_paid: false,
+						is_sent: "1",
+						is_deleted: "0",
+						status: "read",
+						title: "Привітання",
+						attachments: {
+							images: [
+								{
+									id: "img_12345",
+									url_thumbnail: "https://talkytimes.com/uploads/images/thumbnail_12345.jpg",
+									url_original: "https://talkytimes.com/uploads/images/original_12345.jpg"
+								},
+								{
+									id: "img_67890",
+									url_thumbnail: "https://talkytimes.com/uploads/images/thumbnail_67890.jpg",
+									url_original: "https://talkytimes.com/uploads/images/original_67890.jpg"
+								}
+							],
+							videos: []
+						}
+					}
+				];
+				return {
+					success: true,
+					data: {
+						status: "success",
+						history: mockEmails,
+						limit: limit,
+						page: page
+					}
+				};
+			}
+
+					const session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			throw new Error('Failed to get session for profile');
+		}
+		
+		// Додаткова перевірка для TypeScript
+		if (!session.cookies) {
+			throw new Error('Session cookies are missing');
+		}
+
+		const url = 'https://talkytimes.com/platform/correspondence/emails-history';
+			const payload = {
+				page: page,
+				limit: limit,
+				id_correspondence: correspondenceId,
+				id_interlocutor: clientId,
+				id_user: parseInt(profileId),
+				without_translation: false
+			};
+
+			console.log(`📧 Making API request to: ${url}`);
+			console.log(`📧 Payload:`, JSON.stringify(payload, null, 2));
+
+			const response = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers: {
+					'accept': 'application/json',
+					'accept-language': 'en-US,en;q=0.9',
+					'baggage': 'sentry-environment=PROD,sentry-release=PROD%3A68578-1-71d5,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=a494bc58364b41d89afcab5b46233489,sentry-sampled=false,sentry-sample_rand=0.38253945589427885,sentry-sample_rate=0.0001',
+					'content-type': 'application/json',
+					'origin': 'https://talkytimes.com',
+					'priority': 'u=1, i',
+					'referer': `https://talkytimes.com/mails/view/${profileId}_${clientId}`,
+					'sec-ch-ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+					'sec-ch-ua-mobile': '?0',
+					'sec-ch-ua-platform': '"macOS"',
+					'sec-fetch-dest': 'empty',
+					'sec-fetch-mode': 'cors',
+					'sec-fetch-site': 'same-origin',
+					'sentry-trace': 'a494bc58364b41d89afcab5b46233489-b3d30c6c2f41a5f9-0',
+					'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+					'x-requested-with': '2055',
+					'Cookie': session.cookies
+				},
+				body: JSON.stringify(payload),
+				timeoutMs: DEFAULT_TIMEOUT_MS
+			});
+
+			console.log(`📧 TalkyTimes getEmailHistory response:`, response.status);
+
+			const responseData = await response.json();
+
+			return {
+				success: true,
+				data: responseData
+			};
+
+		} catch (error: any) {
+			console.error('TalkyTimes getEmailHistory error:', error);
+			return { success: false, error: error.message || 'Unknown error' };
+		}
 	}
 
 	async sendVirtualGift(profileId: string, clientId: number, giftId: number, message: string = ''): Promise<{ success: boolean; data?: any; error?: string }> {
@@ -1489,7 +1735,7 @@ export class TalkyTimesProvider implements SiteProvider {
 			}
 
 			// Реальний API запит до TalkyTimes
-			const session = await this.getSession(profileId);
+			const session = await this.sessionService.getSession(profileId);
 			if (!session) {
 				throw new Error('Failed to get session for profile');
 			}
@@ -1504,7 +1750,8 @@ export class TalkyTimesProvider implements SiteProvider {
 			console.log(`🎁 Making API request to: ${url}`);
 			console.log(`🎁 Payload:`, JSON.stringify(payload, null, 2));
 
-			const response = await this.httpService.axiosRef.post(url, payload, {
+			const response = await fetchWithTimeout(url, {
+				method: 'POST',
 				headers: {
 					'accept': 'application/json',
 					'accept-language': 'en-US,en;q=0.9',
@@ -1520,14 +1767,18 @@ export class TalkyTimesProvider implements SiteProvider {
 					'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
 					'x-requested-with': '2055',
 					'Cookie': session.cookies
-				}
+				},
+				body: JSON.stringify(payload),
+				timeoutMs: DEFAULT_TIMEOUT_MS
 			});
 
-			console.log(`🎁 TalkyTimes sendVirtualGift response:`, response.status, response.data);
+			console.log(`🎁 TalkyTimes sendVirtualGift response:`, response.status);
+
+			const responseData = await response.json();
 
 			return {
 				success: true,
-				data: response.data
+				data: responseData
 			};
 
 		} catch (error: any) {
@@ -1535,5 +1786,4 @@ export class TalkyTimesProvider implements SiteProvider {
 			return { success: false, error: error.message || 'Unknown error' };
 		}
 	}
-}
 }

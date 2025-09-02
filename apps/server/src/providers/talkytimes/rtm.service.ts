@@ -92,7 +92,10 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 		}
 
 		this.isConnecting = true;
-		this.logger.log('🔌 RTM: Connecting with working cookies to wss://talkytimes.com/rtm');
+		// Зменшуємо кількість логів для повторюваних підключень
+		if (this.reconnectAttempts === 0) {
+			this.logger.log('🔌 RTM: Connecting with working cookies to wss://talkytimes.com/rtm');
+		}
 
 		try {
 			// Використовуємо робочі cookies з curl прикладу
@@ -152,7 +155,10 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 		}
 
 		this.isConnecting = true;
-		this.logger.log('🔌 RTM: Connecting to wss://talkytimes.com/rtm');
+		// Зменшуємо кількість логів для повторюваних підключень
+		if (this.reconnectAttempts === 0) {
+			this.logger.log('🔌 RTM: Connecting to wss://talkytimes.com/rtm');
+		}
 
 		try {
 			// Отримуємо активну сесію для RTM підключення
@@ -236,7 +242,10 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 		const delay = this.reconnectDelays[Math.min(this.reconnectAttempts, this.reconnectDelays.length - 1)];
 		this.reconnectAttempts++;
 
-		this.logger.log(`🔄 RTM: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+		// Зменшуємо кількість логів для повторюваних пере підключень
+		if (this.reconnectAttempts <= 2) {
+			this.logger.log(`🔄 RTM: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+		}
 		
 		this.reconnectTimeout = setTimeout(() => {
 			this.connectWithWorkingCookies();
@@ -270,7 +279,8 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	private handleMessage(message: any) {
-		this.logger.debug('📨 RTM: Received message', JSON.stringify(message));
+		// Зменшуємо кількість логів - логуємо тільки важливі повідомлення
+		// this.logger.debug('📨 RTM: Received message', JSON.stringify(message));
 
 		// Обробляємо відповідь на connect
 		if (message.id === 1 && message.connect) {
@@ -306,7 +316,8 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	private handlePublication(publication: { type: string; data: any }) {
-		this.logger.debug(`📢 RTM: Publication ${publication.type}`);
+		// Зменшуємо кількість логів для публікацій
+		// this.logger.debug(`📢 RTM: Publication ${publication.type}`);
 
 		switch (publication.type) {
 			case 'MessageSent':
@@ -325,7 +336,8 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 				this.handleDialogLimitChanged(publication.data);
 				break;
 			default:
-				this.logger.debug(`📢 RTM: Unknown publication type: ${publication.type}`);
+				// Зменшуємо кількість логів для невідомих типів
+				// this.logger.debug(`📢 RTM: Unknown publication type: ${publication.type}`);
 		}
 	}
 
@@ -333,7 +345,8 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 		// MessageSent має структуру: data.message.idUserFrom, data.message.idUserTo
 		const message = data.message;
 		if (message) {
-			this.logger.log(`💬 RTM: New message ${message.id} from ${message.idUserFrom} to ${message.idUserTo}`);
+			// Зменшуємо кількість логів для нових повідомлень (занадто багато)
+			// this.logger.log(`💬 RTM: New message ${message.id} from ${message.idUserFrom} to ${message.idUserTo}`);
 			
 			// Емітимо подію для toast сповіщення (аналогічно до chat_MessageDisplayAttributesApplied)
 			this.eventEmitter.emit('rtm.message.new', {
@@ -368,7 +381,8 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	private handleNewMessage(data: any) {
-		this.logger.log(`📨 RTM: New message ${data.idMessage} from ${data.idUserFrom} to ${data.idUserTo}`);
+		// Зменшуємо кількість логів для нових повідомлень
+		// this.logger.log(`📨 RTM: New message ${data.idMessage} from ${data.idUserFrom} to ${data.idUserTo}`);
 		
 		// Емітимо подію для toast сповіщення
 		this.eventEmitter.emit('rtm.message.new', {
