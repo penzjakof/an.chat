@@ -89,6 +89,9 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
   const [previousEmailCount, setPreviousEmailCount] = useState(0);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  
+  // 🎯 useRef для page - вирішує проблему stale closure
+  const pageRef = useRef(1);
 
   // Завантаження листів
   const loadEmails = useCallback(async (pageNum: number = 1, append: boolean = false) => {
@@ -111,8 +114,22 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
         );
 
         if (append) {
-          setEmails(prev => [...newEmails, ...prev]);
-          setPreviousEmailCount(prev => prev + newEmails.length);
+          // Фільтруємо дублікати перед додаванням
+          setEmails(prev => {
+            const existingIds = new Set(prev.map((email: EmailMessage) => email.id));
+            const uniqueNewEmails = newEmails.filter((email: EmailMessage) => !existingIds.has(email.id));
+            const duplicatesCount = newEmails.length - uniqueNewEmails.length;
+            if (duplicatesCount > 0) {
+              console.log(`📧 EmailHistory: Відфільтровано ${duplicatesCount} дублікатів`);
+            }
+            return [...uniqueNewEmails, ...prev];
+          });
+          // Оновлюємо лічильник тільки для унікальних листів
+          setPreviousEmailCount(prevCount => {
+            const existingIds = new Set(emails.map((email: EmailMessage) => email.id));
+            const uniqueCount = newEmails.filter((email: EmailMessage) => !existingIds.has(email.id)).length;
+            return prevCount + uniqueCount;
+          });
         } else {
           setEmails(newEmails);
           setPreviousEmailCount(0);
@@ -120,6 +137,8 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
         }
 
         setHasMore(newEmails.length === 10);
+        // 🎯 Оновлюємо і pageRef, і state одночасно
+        pageRef.current = pageNum;
         setPage(pageNum);
       }
     } catch (error) {
@@ -135,7 +154,11 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
 
     setLoadingTop(true);
     try {
-      const nextPage = page + 1;
+      // 🔥 Використовуємо pageRef.current для отримання актуального значення
+      const currentPage = pageRef.current;
+      const nextPage = currentPage + 1;
+      
+      console.log(`📧 EmailHistory: Завантажуємо сторінку ${nextPage} (поточна: ${currentPage})`);
       const response = await apiPost('/api/tt/emails-history', {
         page: nextPage,
         limit: 10,
@@ -151,12 +174,31 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
         );
 
         if (olderEmails.length > 0) {
-          setEmails(prev => [...olderEmails, ...prev]);
-          setPreviousEmailCount(prev => prev + olderEmails.length);
+          // Фільтруємо дублікати перед додаванням
+          setEmails(prev => {
+            const existingIds = new Set(prev.map((email: EmailMessage) => email.id));
+            const uniqueOlderEmails = olderEmails.filter((email: EmailMessage) => !existingIds.has(email.id));
+            const duplicatesCount = olderEmails.length - uniqueOlderEmails.length;
+            if (duplicatesCount > 0) {
+              console.log(`📧 EmailHistory: Відфільтровано ${duplicatesCount} дублікатів при пагінації`);
+            }
+            return [...uniqueOlderEmails, ...prev];
+          });
+          // Оновлюємо лічильник тільки для унікальних листів
+          setPreviousEmailCount(prevCount => {
+            const existingIds = new Set(emails.map((email: EmailMessage) => email.id));
+            const uniqueCount = olderEmails.filter((email: EmailMessage) => !existingIds.has(email.id)).length;
+            return prevCount + uniqueCount;
+          });
+          // 🎯 Оновлюємо і pageRef, і state одночасно
+          pageRef.current = nextPage;
           setPage(nextPage);
           setHasMore(olderEmails.length === 10);
+          
+          console.log(`✅ EmailHistory: Успішно завантажено сторінку ${nextPage}`);
         } else {
           setHasMore(false);
+          console.log(`📧 EmailHistory: Більше листів немає`);
         }
       }
     } catch (error) {
@@ -164,7 +206,7 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
     } finally {
       setLoadingTop(false);
     }
-  }, [page, correspondenceId, clientId, profileId]); // Залишили тільки стабільні залежності
+  }, [correspondenceId, clientId, profileId]); // 🎯 Прибрали page - використовуємо pageRef
 
   // Обробка скролу
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
