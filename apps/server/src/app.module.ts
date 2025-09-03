@@ -17,6 +17,7 @@ import { JwtAuthGuard } from './auth/jwt.guard';
 import { RolesGuard } from './common/auth/roles.guard';
 import { EncryptionValidatorService } from './profiles/encryption-validator.service';
 import { HttpModule } from './common/http/http.module';
+import { EncryptionModule } from './common/encryption/encryption.module';
 
 @Module({
 	imports: [
@@ -40,6 +41,7 @@ import { HttpModule } from './common/http/http.module';
 			}
 		]),
 		HttpModule,
+		EncryptionModule,
 		PrismaModule, 
 		UsersModule, 
 		GroupsModule, 
@@ -53,6 +55,7 @@ import { HttpModule } from './common/http/http.module';
 	controllers: [AppController],
 	providers: [
 		AppService,
+		EncryptionValidatorService,
 		// Rate limiting guard (глобальний)
 		{ provide: APP_GUARD, useClass: ThrottlerGuard },
 		// Тимчасово відключили для тестування
@@ -64,7 +67,12 @@ export class AppModule implements OnModuleInit {
 	constructor(private readonly encryptionValidator: EncryptionValidatorService) {}
 
 	async onModuleInit() {
-		// Автоматично перевіряємо і виправляємо шифрування при старті
-		await this.encryptionValidator.validateAndFixProfiles();
+		try {
+			// Автоматично перевіряємо і виправляємо шифрування при старті
+			await this.encryptionValidator.validateAndFixProfiles();
+		} catch (error) {
+			console.error('💥 Помилка при ініціалізації модуля:', error);
+			// Не кидаємо помилку далі, щоб додаток міг запуститись
+		}
 	}
 }

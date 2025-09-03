@@ -61,4 +61,27 @@ export class TTController {
 			timestamp: new Date().toISOString()
 		};
 	}
+
+	@Get('sessions')
+	async getActiveSessions() {
+		// Тимчасовий endpoint для діагностики сесій
+		return this.rtmService.getSessionsDebugInfo();
+	}
+
+	@Post('test-toast')
+	async testToast(@Body() body: { idUserFrom: number; idUserTo: number; message?: string }) {
+		// Тестовий endpoint для симуляції RTM повідомлення
+		const testData = {
+			messageId: Date.now(),
+			idUserFrom: body.idUserFrom || 126965361,
+			idUserTo: body.idUserTo || 7162437,
+			dateCreated: new Date().toISOString(),
+			content: { message: body.message || 'Test message' }
+		};
+
+		// Емітимо подію як RTM
+		this.rtmService.simulateRTMMessage(testData);
+		
+		return { success: true, testData };
+	}
 }

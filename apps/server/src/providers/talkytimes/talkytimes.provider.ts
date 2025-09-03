@@ -560,21 +560,53 @@ export class TalkyTimesProvider implements SiteProvider {
 			};
 		}
 
-		// Парсимо dialogId для отримання idRegularUser та idProfile
-		const [idRegularUser, idProfile] = dialogId.split('-').map(Number);
+		// Парсимо dialogId для отримання idProfile та idRegularUser
+		const [idProfile, idRegularUser] = dialogId.split('-').map(Number);
 		
 		const url = 'https://talkytimes.com/platform/chat/messages';
-		const res = await fetchWithTimeout(url, {
-			method: 'POST',
-			headers: this.buildHeaders(ctx),
-			body: JSON.stringify({
-				idLastMessage: cursor ? parseInt(cursor) : undefined,
-				idRegularUser: idRegularUser,
-				limit: 15,
-				withoutTranslation: false
-			}),
+		// Підготовка даних запиту
+		const requestBody = {
+			idLastMessage: cursor ? parseInt(cursor) : undefined,
+			idRegularUser: idRegularUser,
+			limit: 15,
+			withoutTranslation: false
+		};
+
+		console.log(`📤 TalkyTimes fetchMessages request:`, {
+			url,
+			profileId: idProfile,
+			regularUserId: idRegularUser,
+			requestBody
 		});
-		return res.json();
+
+		const headers = this.buildHeaders(ctx);
+		console.log(`📋 Request headers:`, headers);
+
+		try {
+			const res = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers: headers,
+				body: JSON.stringify(requestBody),
+			});
+
+			if (!res.ok) {
+				const errorText = await res.text();
+				console.error(`❌ TalkyTimes fetchMessages error ${res.status}:`, errorText);
+				throw new Error(`HTTP ${res.status}: ${errorText}`);
+			}
+
+			const data = await res.json();
+			console.log(`📥 TalkyTimes fetchMessages response:`, {
+				status: res.status,
+				hasData: !!data,
+				dataLength: data?.messages?.length
+			});
+
+			return data;
+		} catch (error) {
+			console.error(`💥 TalkyTimes fetchMessages critical error:`, error);
+			throw error;
+		}
 	}
 
 	async fetchMessagesByProfile(profileId: string, dialogId: string, cursor?: string): Promise<{ success: boolean; messages?: any[]; error?: string }> {

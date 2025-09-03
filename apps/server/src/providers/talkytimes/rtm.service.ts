@@ -3,36 +3,64 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import WebSocket from 'ws';
 import { TalkyTimesSessionService } from './session.service';
 
+// Типи RTM повідомлень
+export type RTMMessageType = 
+  | 'MessageSent'           // Нове повідомлення
+  | 'chat_DialogLimitChanged'; // Оновлення лімітів
+
+// Структура RTM повідомлення
 export interface RTMMessage {
-	id?: string;
-	type?: 'connect' | 'push' | 'subscribe' | 'unsubscribe';
-	data?: any;
-	connect?: any;
-	subscribe?: { channel: string };
-	unsubscribe?: { channel: string };
-	push?: {
-		channel: string;
-		data: any;
-	};
-	pub?: {
-		data: {
-			type: string;
-			data: any;
-		};
-	};
+  id?: string;
+  connect?: { name: string };
+  push?: {
+    channel: string;
+    data?: {
+      type: RTMMessageType;
+      data: any;
+    };
+  };
 }
 
-export interface MessageSentEvent {
-	from: number;
-	to: number;
-	text: string;
-	type: string;
-	createdAt?: string;
+// Структура нового повідомлення
+export interface MessageData {
+  message: {
+    id: number;
+    idUserFrom: number;
+    idUserTo: number;
+    content: {
+      message?: string;
+      id?: number;
+      url?: string;
+    };
+    dateCreated: string;
+  };
 }
 
-export interface OnlineStatusEvent {
-	userId: number;
-	status: 'online' | 'offline';
+// Структура оновлення лімітів
+export interface DialogLimitData {
+  idUser: number;
+  idInterlocutor: number;
+  limitLeft: number;
+}
+
+// Структура події нового повідомлення
+export interface MessageEvent {
+  messageId: number;
+  idUserFrom: number;
+  idUserTo: number;
+  dateCreated: string;
+  content: {
+    message?: string;
+    id?: number;
+    url?: string;
+  };
+}
+
+// Структура події оновлення лімітів
+export interface DialogLimitEvent {
+  idUser: number;
+  idInterlocutor: number;
+  limitLeft: number;
 }
 
 @Injectable()
@@ -41,10 +69,10 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 	private ws: WebSocket | null = null;
 	private reconnectTimeout: NodeJS.Timeout | null = null;
 	private isConnecting = false;
-	private subscriptions = new Set<string>();
-	private readonly maxReconnectAttempts = 5;
 	private reconnectAttempts = 0;
-	private readonly reconnectDelays = [1000, 2000, 5000, 10000, 30000]; // Exponential backoff
+	private readonly maxReconnectAttempts = 3;
+	private readonly reconnectDelay = 3000; // 3 секунди між спробами
+	private readonly connectionTimeout = 10000; // 10 секунд таймаут підключення
 	private heartbeatInterval: NodeJS.Timeout | null = null;
 
 	constructor(
@@ -53,15 +81,7 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 	) {}
 
 	async onModuleInit() {
-		// Підключаємося тільки якщо не в mock режимі
-		if (this.isMockMode()) {
-			this.logger.log('🔌 RTM: Mock mode detected, skipping WebSocket connection');
-			return;
-		}
-
-		// Оптимізоване RTM підключення з обмеженнями
-		this.logger.log('🔌 RTM: Starting optimized RTM connection');
-		await this.connectOptimized();
+		await this.connect();
 	}
 
 	onModuleDestroy() {
@@ -85,291 +105,112 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 		this.reconnectAttempts = 0;
 	}
 
-	private isMockMode(): boolean {
-		const baseUrl = process.env.TT_BASE_URL || 'mock:dev';
-		return baseUrl.startsWith('mock:');
-	}
 
-	private async connectOptimized() {
+
+	private async connect() {
 		if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) {
-			return;
-		}
-
-		// Обмежуємо кількість спроб підключення
-		if (this.reconnectAttempts >= 3) {
-			this.logger.warn('🔌 RTM: Max reconnection attempts reached, stopping RTM');
+			this.logger.log('🔌 RTM: Already connecting or connected');
 			return;
 		}
 
 		this.isConnecting = true;
-		this.logger.log(`🔌 RTM: Optimized connection attempt ${this.reconnectAttempts + 1}/3`);
+		this.logger.log('🔌 RTM: Starting connection...');
 
 		try {
-			// Використовуємо робочі cookies
-			const workingCookies = 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=8c13911a-9578-4fc8-905a-5abbe3edbacf; _hjSessionUser_2813883=eyJpZCI6IjZlYWQ2MDE4LTFkNmItNWMxOC04MGEyLThiNWZiMmJiYWMzYyIsImNyZWF0ZWQiOjE3NTM4OTI2NzkzNDAsImV4aXN0aW5nIjp0cnVlfQ==; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1NjU1NzM0NCwiZXhwIjoxNzU5MjM1NzQ0LCJzdWIiOjcxNjI0Mzd9.WC8R1Jxh-fsKf3ufPm7_efmzOHDxDzSsvtzi7XcfB0A; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A7162437%2C%22refreshToken%22%3A%221cf0985f8c594b4c2d713a0bc66cd0be1b4bc85c%22%7D; _csrf=GED4Ups3_DncYKdpO7ss-xXW12ioIlg-';
+			// Отримуємо активну сесію
+			const sessions = await this.sessionService.getAllActiveSessions();
+			if (!sessions.length) {
+				this.logger.warn('⚠️ RTM: No active sessions found');
+				return;
+			}
+
+			const session = sessions[0];
+			this.logger.log(`🔌 RTM: Using session for profile ${session.profileId}`);
 			
+			// Валідуємо сесію перед підключенням
+			const isValid = await this.sessionService.validateSession(session.profileId.toString());
+			if (!isValid) {
+				this.logger.warn('⚠️ RTM: Session validation failed');
+				return;
+			}
+
+			this.logger.log('🔌 RTM: Session validated, connecting to WebSocket...');
 			const headers = {
 				'Origin': 'https://talkytimes.com',
 				'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
-				'Cookie': workingCookies
+				'Cookie': session.cookies
 			};
 
 			this.ws = new WebSocket('wss://talkytimes.com/rtm', { headers });
 
 			// Встановлюємо таймаут для підключення
 			const connectionTimeout = setTimeout(() => {
-				if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
-					this.logger.warn('🔌 RTM: Connection timeout, closing');
+				if (this.ws?.readyState === WebSocket.CONNECTING) {
+					this.logger.warn('⚠️ RTM: Connection timeout, closing...');
 					this.ws.close();
 				}
-			}, 10000); // 10 секунд таймаут
+			}, this.connectionTimeout);
 
 			this.ws.on('open', () => {
 				clearTimeout(connectionTimeout);
-				this.logger.log('✅ RTM: Optimized connection established');
 				this.isConnecting = false;
 				this.reconnectAttempts = 0;
+				
+				this.logger.log('✅ RTM: Connected successfully!');
 				
 				// Відправляємо connect повідомлення
 				const connectMessage = {
-					connect: { name: "js" },
+					connect: { name: "js", version: "1.0" },
 					id: 1
 				};
 				this.ws!.send(JSON.stringify(connectMessage));
+				this.logger.log('📤 RTM: Sent connect message:', JSON.stringify(connectMessage, null, 2));
 
-				// Встановлюємо heartbeat з більшим інтервалом
-				this.startOptimizedHeartbeat();
-			});
-
-			this.ws.on('message', (data) => {
-				try {
-					const message = JSON.parse(data.toString());
-					this.handleOptimizedMessage(message);
-				} catch (error) {
-					this.logger.error('❌ RTM: Failed to parse message', error);
-				}
-			});
-
-			this.ws.on('close', (code, reason) => {
-				clearTimeout(connectionTimeout);
-				this.isConnecting = false;
-				this.logger.warn(`🔌 RTM: Connection closed (${code}): ${reason}`);
-				
-				// Обмежене переподключення
-				if (this.reconnectAttempts < 3) {
-					this.scheduleOptimizedReconnect();
-				} else {
-					this.logger.warn('🔌 RTM: Max reconnection attempts reached, RTM disabled');
-				}
-			});
-
-			this.ws.on('error', (error) => {
-				clearTimeout(connectionTimeout);
-				this.isConnecting = false;
-				this.logger.error('❌ RTM: Connection error', error);
-				
-				if (this.reconnectAttempts < 3) {
-					this.scheduleOptimizedReconnect();
-				}
-			});
-
-		} catch (error) {
-			this.isConnecting = false;
-			this.logger.error('❌ RTM: Failed to create connection', error);
-			
-			if (this.reconnectAttempts < 3) {
-				this.scheduleOptimizedReconnect();
-			}
-		}
-	}
-
-	private startOptimizedHeartbeat() {
-		// Heartbeat кожні 60 секунд замість 30
-		this.heartbeatInterval = setInterval(() => {
-			if (this.ws?.readyState === WebSocket.OPEN) {
-				this.ws.ping();
-			}
-		}, 60000);
-	}
-
-	private scheduleOptimizedReconnect() {
-		if (this.reconnectTimeout) {
-			clearTimeout(this.reconnectTimeout);
-		}
-
-		this.reconnectAttempts++;
-		// Експоненційна затримка: 5s, 15s, 45s
-		const delay = 5000 * Math.pow(3, this.reconnectAttempts - 1);
-		
-		this.logger.log(`🔄 RTM: Scheduling reconnection in ${delay/1000}s (attempt ${this.reconnectAttempts}/3)`);
-		
-		this.reconnectTimeout = setTimeout(() => {
-			this.connectOptimized();
-		}, delay);
-	}
-
-	private handleOptimizedMessage(message: any) {
-		// Обробляємо тільки важливі повідомлення
-		if (message.connect) {
-			this.logger.log('🔗 RTM: Connect response received');
-			this.sendOptimizedSubscriptions();
-		} else if (message.push && message.push.channel) {
-			// Обробляємо тільки повідомлення з каналів
-			const channel = message.push.channel;
-			if (channel.includes('user_') || channel.includes('broadcast')) {
-				this.eventEmitter.emit('rtm.message', {
-					channel,
-					data: message.push.data
-				});
-			}
-		}
-		// Ігноруємо інші типи повідомлень для зменшення навантаження
-	}
-
-	private sendOptimizedSubscriptions() {
-		// Підписуємося тільки на критично важливі канали
-		this.logger.log('📡 RTM: Sending optimized subscriptions...');
-		
-		// Підписка на broadcast канал для загальних сповіщень
-		this.sendMessage({
-			subscribe: { channel: "broadcast" },
-			id: "2"
-		});
-
-		this.logger.log('📡 RTM: Optimized subscriptions sent');
-	}
-
-	private async connectWithWorkingCookies() {
-		if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) {
-			return;
-		}
-
-		this.isConnecting = true;
-		// Зменшуємо кількість логів для повторюваних підключень
-		if (this.reconnectAttempts === 0) {
-			this.logger.log('🔌 RTM: Connecting with working cookies to wss://talkytimes.com/rtm');
-		}
-
-		try {
-			// Використовуємо робочі cookies з curl прикладу
-			const workingCookies = 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=8c13911a-9578-4fc8-905a-5abbe3edbacf; _hjSessionUser_2813883=eyJpZCI6IjZlYWQ2MDE4LTFkNmItNWMxOC04MGEyLThiNWZiMmJiYWMzYyIsImNyZWF0ZWQiOjE3NTM4OTI2NzkzNDAsImV4aXN0aW5nIjp0cnVlfQ==; _hjSession_2813883=eyJpZCI6IjcyZjRhMThmLTBmNjMtNGMzYi1iZWY1LTBlNDc1MDBlY2E2NSIsImMiOjE3NTY1NTEzODE3ODQsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MH0=; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1NjU1NzM0NCwiZXhwIjoxNzU5MjM1NzQ0LCJzdWIiOjcxNjI0Mzd9.WC8R1Jxh-fsKf3ufPm7_efmzOHDxDzSsvtzi7XcfB0A; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A7162437%2C%22refreshToken%22%3A%221cf0985f8c594b4c2d713a0bc66cd0be1b4bc85c%22%7D; _csrf=GED4Ups3_DncYKdpO7ss-xXW12ioIlg-';
-			
-			const headers = {
-				'Origin': 'https://talkytimes.com',
-				'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
-				'Cookie': workingCookies
-			};
-
-			this.ws = new WebSocket('wss://talkytimes.com/rtm', { headers });
-
-			this.ws.on('open', () => {
-				this.logger.log('✅ RTM: Connected with working cookies!');
-				this.isConnecting = false;
-				this.reconnectAttempts = 0;
-				
-				// Відправляємо connect повідомлення
-				const connectMessage = {
-					connect: { name: "js" },
-					id: 1
-				};
-				this.ws!.send(JSON.stringify(connectMessage));
-			});
-
-			this.ws.on('message', (data) => {
-				try {
-					const message = JSON.parse(data.toString());
-					this.handleMessage(message);
-				} catch (error) {
-					this.logger.error('❌ RTM: Failed to parse message', error);
-				}
-			});
-
-			this.ws.on('close', (code, reason) => {
-				this.logger.warn(`🔌 RTM: Connection closed (${code}): ${reason}`);
-				this.isConnecting = false;
-				this.scheduleReconnect();
-			});
-
-			this.ws.on('error', (error) => {
-				this.logger.error('❌ RTM: WebSocket error', error);
-				this.isConnecting = false;
-			});
-
-		} catch (error) {
-			this.logger.error('❌ RTM: Failed to create WebSocket connection', error);
-			this.isConnecting = false;
-			this.scheduleReconnect();
-		}
-	}
-
-	private async connect() {
-		if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) {
-			return;
-		}
-
-		this.isConnecting = true;
-		// Зменшуємо кількість логів для повторюваних підключень
-		if (this.reconnectAttempts === 0) {
-			this.logger.log('🔌 RTM: Connecting to wss://talkytimes.com/rtm');
-		}
-
-		try {
-			// Отримуємо активну сесію для RTM підключення
-			const sessions = await this.sessionService.getAllActiveSessions();
-			let headers = {
-				'Origin': 'https://talkytimes.com',
-				'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36'
-			};
-			
-			if (sessions.length > 0) {
-				// Використовуємо першу активну сесію
-				const session = sessions[0];
-				headers['Cookie'] = session.cookies;
-				this.logger.log(`🔌 RTM: Using session for profile ${session.profileId}`);
-			} else {
-				this.logger.warn('⚠️ RTM: No active sessions found, connecting without auth');
-			}
-
-			this.ws = new WebSocket('wss://talkytimes.com/rtm', { headers });
-
-			this.ws.on('open', () => {
-				this.logger.log('✅ RTM: Connected to TalkyTimes RTM');
-				this.isConnecting = false;
-				this.reconnectAttempts = 0;
-				
-				// Відправляємо connect повідомлення згідно з протоколом
-				this.logger.log('📡 RTM: Sending connect message...');
-				const connectMessage = {
-					connect: { name: "js" },
-					id: 1
-				};
-				this.ws!.send(JSON.stringify(connectMessage));
+				// Встановлюємо heartbeat
+				this.heartbeatInterval = setInterval(() => {
+					if (this.ws?.readyState === WebSocket.OPEN) {
+						this.ws.ping();
+						this.logger.log('💓 RTM: Sent heartbeat');
+					}
+				}, 30000);
 			});
 
 			this.ws.on('message', (data) => {
 				try {
 					const message: RTMMessage = JSON.parse(data.toString());
+					this.logger.log('📨 RTM: Received message:', JSON.stringify(message, null, 2));
 					this.handleMessage(message);
 				} catch (error) {
-					this.logger.error('❌ RTM: Failed to parse message', error);
+					this.logger.error('❌ RTM: Failed to parse message:', error);
 				}
 			});
 
 			this.ws.on('close', (code, reason) => {
-				this.logger.warn(`🔌 RTM: Connection closed (${code}): ${reason}`);
+				clearTimeout(connectionTimeout);
 				this.isConnecting = false;
-				this.scheduleReconnect();
+				this.logger.warn(`🔌 RTM: Connection closed (${code}): ${reason}`);
+				
+				if (this.reconnectAttempts < this.maxReconnectAttempts) {
+					this.scheduleReconnect();
+				}
 			});
 
 			this.ws.on('error', (error) => {
-				this.logger.error('❌ RTM: WebSocket error', error);
+				clearTimeout(connectionTimeout);
 				this.isConnecting = false;
+				this.logger.error('❌ RTM: WebSocket error:', error);
+				
+				if (this.reconnectAttempts < this.maxReconnectAttempts) {
+					this.scheduleReconnect();
+				}
 			});
 
 		} catch (error) {
-			this.logger.error('❌ RTM: Failed to create WebSocket connection', error);
 			this.isConnecting = false;
-			this.scheduleReconnect();
+			this.logger.error('❌ RTM: Connection error:', error);
+			if (this.reconnectAttempts < this.maxReconnectAttempts) {
+				this.scheduleReconnect();
+			}
 		}
 	}
 
@@ -391,232 +232,62 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 			return;
 		}
 
-		// Використовуємо предвизначені затримки для більш передбачуваної поведінки
-		const delay = this.reconnectDelays[Math.min(this.reconnectAttempts, this.reconnectDelays.length - 1)];
 		this.reconnectAttempts++;
-
-		// Зменшуємо кількість логів для повторюваних пере підключень
-		if (this.reconnectAttempts <= 2) {
-			this.logger.log(`🔄 RTM: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
-		}
+		this.logger.log(`🔄 RTM: Reconnecting in ${this.reconnectDelay}ms (attempt ${this.reconnectAttempts})`);
 		
 		this.reconnectTimeout = setTimeout(() => {
-			this.connectWithWorkingCookies();
-		}, delay);
+			this.connect();
+		}, this.reconnectDelay);
 	}
 
-	private resubscribe() {
-		for (const subscription of this.subscriptions) {
-			this.sendSubscribe(subscription);
-		}
-	}
 
-	private sendSubscriptions() {
-		this.logger.log('📡 RTM: Sending subscriptions...');
-		
-		// Підписуємося на online канал
-		const onlineMessage = {
-			subscribe: { channel: "online" },
-			id: 2
-		};
-		this.ws!.send(JSON.stringify(onlineMessage));
-		this.logger.log('📡 RTM: Subscribed to online');
-		
-		// Підписуємося на broadcast канал
-		const broadcastMessage = {
-			subscribe: { channel: "broadcast" },
-			id: 3
-		};
-		this.ws!.send(JSON.stringify(broadcastMessage));
-		this.logger.log('📡 RTM: Subscribed to broadcast');
-	}
 
-	private handleMessage(message: any) {
-		// Зменшуємо кількість логів - логуємо тільки важливі повідомлення
-		// this.logger.debug('📨 RTM: Received message', JSON.stringify(message));
-
-		// Обробляємо відповідь на connect
-		if (message.id === 1 && message.connect) {
-			this.logger.log('🔗 RTM: Connect response received');
-			this.sendSubscriptions();
+	private handleMessage(message: RTMMessage) {
+		// Ігноруємо відповідь на connect
+		if (message.id === "1" && message.connect) {
+			return;
 		}
 		
 		// Обробляємо push повідомлення
-		if (message.push) {
-			this.handlePushFrame(message);
+		if (message.push?.data) {
+			this.handlePushData(message.push.data);
 		}
 	}
 
-	private handleConnectFrame(message: RTMMessage) {
-		this.logger.log('🔗 RTM: Connect frame received');
-		
-		// Обробляємо початкові публікації
-		if (message.data?.publications) {
-			for (const publication of message.data.publications) {
-				this.handlePublication(publication);
-			}
-		}
-		
-		// Тепер можемо підписатися на канали
-		this.logger.log('📡 RTM: Connect frame processed, subscribing to channels...');
-		this.resubscribe();
-	}
-
-	private handlePushFrame(message: any) {
-		if (message.push?.pub?.data) {
-			this.handlePublication(message.push.pub.data);
-		}
-	}
-
-	private handlePublication(publication: { type: string; data: any }) {
-		// Зменшуємо кількість логів для публікацій
-		// this.logger.debug(`📢 RTM: Publication ${publication.type}`);
-
-		switch (publication.type) {
+	private handlePushData(data: { type: RTMMessageType; data: any }) {
+		switch (data.type) {
 			case 'MessageSent':
-				this.handleMessageSent(publication.data);
-				break;
-			case 'online':
-				this.handleOnlineStatus(publication.data as OnlineStatusEvent);
-				break;
-			case 'chat_MessageDisplayAttributesApplied':
-				this.handleNewMessage(publication.data);
-				break;
-			case 'chat_MessageRead':
-				this.handleMessageRead(publication.data);
+				this.handleMessageSent(data.data as MessageData);
 				break;
 			case 'chat_DialogLimitChanged':
-				this.handleDialogLimitChanged(publication.data);
+				this.handleDialogLimitChanged(data.data as DialogLimitData);
 				break;
-			default:
-				// Зменшуємо кількість логів для невідомих типів
-				// this.logger.debug(`📢 RTM: Unknown publication type: ${publication.type}`);
 		}
 	}
 
-	private handleMessageSent(data: any) {
-		// MessageSent має структуру: data.message.idUserFrom, data.message.idUserTo
-		const message = data.message;
-		if (message) {
-			// Зменшуємо кількість логів для нових повідомлень (занадто багато)
-			// this.logger.log(`💬 RTM: New message ${message.id} from ${message.idUserFrom} to ${message.idUserTo}`);
-			
-			// Емітимо подію для toast сповіщення (аналогічно до chat_MessageDisplayAttributesApplied)
-			this.eventEmitter.emit('rtm.message.new', {
-				messageId: message.id,
-				idUserFrom: message.idUserFrom,
-				idUserTo: message.idUserTo,
-				dateCreated: message.dateCreated,
-				content: message.content
-			});
-			
-			// Також емітимо стару подію для сумісності
-			this.eventEmitter.emit('rtm.message.sent', {
-				idUserFrom: message.idUserFrom,
-				idUserTo: message.idUserTo,
-				content: message.content,
-				type: message.type,
-				dateCreated: message.dateCreated
-			});
-		} else {
-			this.logger.log(`💬 RTM: MessageSent with unknown structure:`, data);
-		}
+	private handleMessageSent(data: MessageData) {
+		const { message } = data;
+		if (!message) return;
+
+		const event: MessageEvent = {
+			messageId: message.id,
+			idUserFrom: message.idUserFrom,
+			idUserTo: message.idUserTo,
+			dateCreated: message.dateCreated,
+			content: message.content
+		};
+
+		this.eventEmitter.emit('rtm.message.new', event);
 	}
 
-	private handleOnlineStatus(data: OnlineStatusEvent) {
-		this.logger.log(`👤 RTM: User ${data.userId} is ${data.status}`);
-		
-		// Емітимо подію для оновлення онлайн статусу
-		this.eventEmitter.emit('rtm.user.online', {
-			userId: data.userId,
-			isOnline: data.status === 'online'
-		});
-	}
-
-	private handleNewMessage(data: any) {
-		// Зменшуємо кількість логів для нових повідомлень
-		// this.logger.log(`📨 RTM: New message ${data.idMessage} from ${data.idUserFrom} to ${data.idUserTo}`);
-		
-		// Емітимо подію для toast сповіщення
-		this.eventEmitter.emit('rtm.message.new', {
-			messageId: data.idMessage,
-			idUserFrom: data.idUserFrom,
-			idUserTo: data.idUserTo,
-			dateCreated: data.dateCreated,
-			displayAttributes: data.displayAttributes
-		});
-	}
-
-	private handleMessageRead(data: any) {
-		this.logger.log(`👁️ RTM: Message ${data.idMessage} read by ${data.idInterlocutor}`);
-		
-		// Емітимо подію для оновлення статусу прочитання
-		this.eventEmitter.emit('rtm.message.read', {
-			messageId: data.idMessage,
-			idInterlocutor: data.idInterlocutor
-		});
-	}
-
-	private handleDialogLimitChanged(data: any) {
-		this.logger.log(`📊 RTM: Dialog limit changed for user ${data.idUser}, interlocutor ${data.idInterlocutor}, limit left: ${data.limitLeft}`);
-		
-		// Емітимо подію для оновлення лімітів
-		this.eventEmitter.emit('rtm.dialog.limit.changed', {
+	private handleDialogLimitChanged(data: DialogLimitData) {
+		const event: DialogLimitEvent = {
 			idUser: data.idUser,
 			idInterlocutor: data.idInterlocutor,
 			limitLeft: data.limitLeft
-		});
-	}
+		};
 
-	// Публічні методи для підписок
-	subscribeToUser(userId: number) {
-		const subscription = `personal:${userId}`;
-		this.subscriptions.add(subscription);
-		this.sendSubscribe(subscription);
-		this.logger.log(`📡 RTM: Subscribed to user ${userId}`);
-	}
-
-	unsubscribeFromUser(userId: number) {
-		const subscription = `personal:${userId}`;
-		this.subscriptions.delete(subscription);
-		this.sendUnsubscribe(subscription);
-		this.logger.log(`📡 RTM: Unsubscribed from user ${userId}`);
-	}
-
-	subscribeToOnline() {
-		const subscription = 'online';
-		this.subscriptions.add(subscription);
-		this.sendSubscribe(subscription);
-		this.logger.log('📡 RTM: Subscribed to online status');
-	}
-
-	subscribeToBroadcast() {
-		const subscription = 'broadcast';
-		this.subscriptions.add(subscription);
-		this.sendSubscribe(subscription);
-		this.logger.log('📡 RTM: Subscribed to broadcast');
-	}
-
-	private sendSubscribe(channel: string) {
-		this.sendMessage({
-			type: 'subscribe',
-			data: { channel }
-		});
-	}
-
-	private sendUnsubscribe(channel: string) {
-		this.sendMessage({
-			type: 'unsubscribe',
-			data: { channel }
-		});
-	}
-
-	private sendMessage(message: RTMMessage) {
-		if (this.ws?.readyState === WebSocket.OPEN) {
-			this.ws.send(JSON.stringify(message));
-		} else {
-			this.logger.warn('⚠️ RTM: Cannot send message, WebSocket not connected');
-		}
+		this.eventEmitter.emit('rtm.dialog.limit.changed', event);
 	}
 
 	// Статус підключення
@@ -624,38 +295,62 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 		return this.ws?.readyState === WebSocket.OPEN;
 	}
 
-	getSubscriptions(): string[] {
-		return Array.from(this.subscriptions);
-	}
-
-	// Новий метод для підписки на користувача з перевіркою
-	subscribeToUserOptimized(userId: string) {
-		if (this.ws?.readyState !== WebSocket.OPEN) {
-			this.logger.warn(`⚠️ RTM: Cannot subscribe to user ${userId}, connection not ready`);
-			return;
-		}
-
-		this.logger.log(`📡 RTM: Optimized subscription to user ${userId}`);
-		this.sendMessage({
-			subscribe: { channel: `user_${userId}` },
-			id: Date.now().toString()
-		});
-	}
-
 	// Метод для отримання статусу RTM
 	getConnectionStatus(): { connected: boolean; attempts: number; maxAttempts: number } {
 		return {
 			connected: this.ws?.readyState === WebSocket.OPEN,
 			attempts: this.reconnectAttempts,
-			maxAttempts: 3
+			maxAttempts: this.maxReconnectAttempts
 		};
 	}
 
-	// Метод для ручного перезапуску RTM
-	async restartConnection() {
-		this.logger.log('🔄 RTM: Manual restart requested');
-		this.cleanup();
-		this.reconnectAttempts = 0;
-		await this.connectOptimized();
+	// Тестовий метод для симуляції RTM повідомлення
+	simulateRTMMessage(testData: any) {
+		const event: MessageEvent = {
+			messageId: testData.messageId,
+			idUserFrom: testData.idUserFrom,
+			idUserTo: testData.idUserTo,
+			dateCreated: testData.dateCreated,
+			content: testData.content
+		};
+		
+		this.eventEmitter.emit('rtm.message.new', event);
+	}
+
+	// Методи для сумісності
+	subscribeToUser(userId: number) {
+		// RTM автоматично підписує на personal канал
+		this.logger.log(`📡 RTM: Auto-subscribed to personal:${userId}`);
+	}
+
+	unsubscribeFromUser(userId: number) {
+		// Нічого не робимо, бо підписка автоматична
+		this.logger.log(`📡 RTM: Auto-unsubscribed from personal:${userId}`);
+	}
+
+
+
+	// Діагностичний метод для перевірки сесій
+	async getSessionsDebugInfo() {
+		try {
+			const sessions = await this.sessionService.getAllActiveSessions();
+			return {
+				totalSessions: sessions.length,
+				sessions: sessions.map(s => ({
+					profileId: s.profileId,
+					hasToken: !!s.token,
+					hasRefreshToken: !!s.refreshToken,
+					expiresAt: s.expiresAt,
+					cookiesLength: s.cookies?.length || 0,
+					cookiesPreview: s.cookies?.substring(0, 100) + '...'
+				}))
+			};
+		} catch (error) {
+			return {
+				error: error.message,
+				totalSessions: 0,
+				sessions: []
+			};
+		}
 	}
 }

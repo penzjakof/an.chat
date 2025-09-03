@@ -113,7 +113,25 @@ export class TalkyTimesSessionService {
 
 	async validateSession(profileId: string): Promise<boolean> {
 		const session = await this.getSession(profileId);
-		return session !== null;
+		if (!session) {
+			console.log(`❌ Session not found for profile ${profileId}`);
+			return false;
+		}
+
+		// Перевіряємо наявність tld-token в cookies
+		if (!session.cookies.includes('tld-token=')) {
+			console.log(`❌ No tld-token found in cookies for profile ${profileId}`);
+			return false;
+		}
+
+		// Перевіряємо термін дії сесії
+		if (session.expiresAt < new Date()) {
+			console.log(`❌ Session expired for profile ${profileId}`);
+			return false;
+		}
+
+		console.log(`✅ Session valid for profile ${profileId}`);
+		return true;
 	}
 
 	// Метод для отримання заголовків з cookies для запитів

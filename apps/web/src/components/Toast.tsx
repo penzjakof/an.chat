@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 
 export interface ToastData {
   id: string;
@@ -9,6 +10,7 @@ export interface ToastData {
   idUserTo: number;
   dateCreated: string;
   type: 'new_message';
+  dialogId?: string; // Додаємо ID діалогу для навігації
 }
 
 interface ToastProps {
@@ -18,6 +20,8 @@ interface ToastProps {
 
 export function Toast({ toast, onClose }: ToastProps) {
   const [isVisible, setIsVisible] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     // Показуємо toast з анімацією
@@ -38,6 +42,20 @@ export function Toast({ toast, onClose }: ToastProps) {
   }, [toast.id, onClose]);
 
   const handleClick = () => {
+    // Якщо є dialogId, перевіряємо чи ми вже на цій сторінці
+    if (toast.dialogId) {
+      const targetPath = `/chats/${toast.dialogId}`;
+      const currentPath = pathname;
+      
+      if (currentPath === targetPath) {
+        console.log('🔗 Toast clicked: already on target page', toast.dialogId, '- just closing toast');
+      } else {
+        console.log('🔗 Toast clicked: navigating to dialog', toast.dialogId);
+        router.push(targetPath);
+      }
+    }
+    
+    // Закриваємо toast
     setIsVisible(false);
     setTimeout(() => onClose(toast.id), 300);
   };
@@ -78,13 +96,14 @@ export function Toast({ toast, onClose }: ToastProps) {
           </div>
           <div style={{ flex: 1 }}>
             <p style={{ color: 'white', fontSize: '14px', fontWeight: 'bold', margin: 0, lineHeight: '1.4' }}>
-              🍞 Нове повідомлення RTM!
+              💬 Нове повідомлення!
             </p>
             <p style={{ color: '#e0e7ff', fontSize: '14px', margin: '4px 0 0 0', lineHeight: '1.4' }}>
               Від користувача {toast.idUserFrom}
             </p>
             <p style={{ color: '#c7d2fe', fontSize: '12px', margin: '4px 0 0 0', lineHeight: '1.4' }}>
               {new Date(toast.dateCreated).toLocaleTimeString()}
+              {toast.dialogId && (pathname === `/chats/${toast.dialogId}` ? ' • Натисніть щоб закрити' : ' • Натисніть щоб відкрити')}
             </p>
           </div>
           <button

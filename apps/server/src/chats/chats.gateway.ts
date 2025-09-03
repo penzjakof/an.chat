@@ -20,10 +20,6 @@ export class ChatsGateway implements OnModuleInit {
 
 	onModuleInit(): void {
 		this.logger.log('🔌 WebSocket Gateway initialized');
-		
-		// Підписуємося на загальні події RTM
-		this.rtmService.subscribeToOnline();
-		this.rtmService.subscribeToBroadcast();
 	}
 
 	// Обробка RTM подій
@@ -55,20 +51,12 @@ export class ChatsGateway implements OnModuleInit {
 		});
 	}
 
-	@OnEvent('rtm.user.online')
-	handleRTMOnlineStatus(data: { userId: number; isOnline: boolean }) {
-		this.logger.log(`👤 RTM Online: User ${data.userId} is ${data.isOnline ? 'online' : 'offline'}`);
-		
-		// Відправляємо статус онлайн всім підключеним клієнтам
-		this.server.emit('user_online_status', {
-			userId: data.userId,
-			isOnline: data.isOnline
-		});
-	}
+
 
 	@OnEvent('rtm.message.new')
 	handleRTMNewMessage(data: any) {
 		this.logger.log(`🍞 RTM New Message Toast: ${data.idUserFrom} -> ${data.idUserTo}`);
+		this.logger.log('🍞 RTM New Message data:', JSON.stringify(data, null, 2));
 		
 		// Знаходимо всі сокети отримувача повідомлення
 		const toUserSockets = Array.from(this.userSockets.entries())
@@ -79,14 +67,24 @@ export class ChatsGateway implements OnModuleInit {
 			})
 			.flatMap(([userId, sockets]) => Array.from(sockets));
 
+		this.logger.log(`🍞 Connected users: ${Array.from(this.userSockets.keys()).join(', ')}`);
+		this.logger.log(`🍞 Total connected sockets: ${toUserSockets.length}`);
+
+		// Створюємо dialogId для навігації (формат: idUserTo-idUserFrom)
+		const dialogId = `${data.idUserTo}-${data.idUserFrom}`;
+		
 		// Відправляємо toast всім активним сокетам (поки що всім)
-		this.server.emit('message_toast', {
+		const toastPayload = {
 			messageId: data.messageId,
 			idUserFrom: data.idUserFrom,
 			idUserTo: data.idUserTo,
 			dateCreated: data.dateCreated,
-			type: 'new_message'
-		});
+			type: 'new_message',
+			dialogId: dialogId // Додаємо dialogId для навігації
+		};
+		
+		this.logger.log('🍞 Sending toast payload:', JSON.stringify(toastPayload, null, 2));
+		this.server.emit('message_toast', toastPayload);
 		
 		this.logger.log(`🍞 Toast sent to all connected clients for message ${data.messageId}`);
 	}

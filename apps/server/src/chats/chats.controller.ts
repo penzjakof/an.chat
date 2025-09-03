@@ -15,14 +15,34 @@ export class ChatsController {
 
 	@Roles(Role.OWNER, Role.OPERATOR)
 	@Get('dialogs')
-	dialogs(@Req() req: Request, @Query() filters: { status?: string; search?: string; onlineOnly?: string; cursor?: string }) {
-		// Перетворюємо onlineOnly з string в boolean
-		const processedFilters = {
-			...filters,
-			onlineOnly: filters.onlineOnly === 'true'
-		};
-		console.log('🔍 ChatsController.dialogs called with filters:', processedFilters);
-		return this.chats.fetchDialogs(req.auth!, processedFilters);
+	async dialogs(@Req() req: Request, @Query() filters: { status?: string; search?: string; onlineOnly?: string; cursor?: string }) {
+		try {
+			console.log('🔍 ChatsController.dialogs called with auth:', {
+				userId: req.auth?.userId,
+				role: req.auth?.role,
+				agencyCode: req.auth?.agencyCode,
+				operatorCode: req.auth?.operatorCode
+			});
+
+			// Перетворюємо onlineOnly з string в boolean
+			const processedFilters = {
+				...filters,
+				onlineOnly: filters.onlineOnly === 'true'
+			};
+			console.log('🔍 ChatsController.dialogs filters:', processedFilters);
+
+			const result = await this.chats.fetchDialogs(req.auth!, processedFilters);
+			console.log('✅ ChatsController.dialogs success:', {
+				hasDialogs: (result as any)?.dialogs?.length > 0,
+				dialogsCount: (result as any)?.dialogs?.length,
+				hasProfiles: Object.keys((result as any)?.profiles || {}).length > 0
+			});
+
+			return result;
+		} catch (error) {
+			console.error('💥 ChatsController.dialogs error:', error);
+			throw error;
+		}
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)

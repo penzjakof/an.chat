@@ -61,12 +61,14 @@ export function useDialogWebSocket({
     const handleMessageToast = (data: any) => {
       // Показуємо toast тільки якщо повідомлення не від нас
       if (data.idUserFrom.toString() !== profileId) {
+        console.log('🍞 Showing toast for message:', data);
         showToast({
           messageId: data.messageId,
           idUserFrom: data.idUserFrom,
           idUserTo: data.idUserTo,
           dateCreated: data.dateCreated,
-          type: 'new_message'
+          type: 'new_message',
+          dialogId: data.dialogId // Передаємо dialogId для навігації
         });
       }
     };
