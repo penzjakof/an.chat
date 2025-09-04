@@ -3,77 +3,50 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import WebSocket from 'ws';
 import { TalkyTimesSessionService } from './session.service';
 
-// Типи RTM повідомлень
-export type RTMMessageType = 
-  | 'MessageSent'           // Нове повідомлення
-  | 'chat_DialogLimitChanged'; // Оновлення лімітів
-
-// Структура RTM повідомлення
-export interface RTMMessage {
-  id?: string;
-  connect?: { name: string };
-  push?: {
-    channel: string;
-    data?: {
-      type: RTMMessageType;
-      data: any;
-    };
-  };
+interface RTMMessage {
+	id?: number;
+	connect?: {
+		client: string;
+		version: string;
+		subs?: Record<string, any>;
+		ping?: number;
+		pong?: boolean;
+	};
+	subscribe?: {
+		channel: string;
+		recoverable?: boolean;
+		epoch?: string;
+		offset?: string | number;
+		positioned?: boolean;
+	};
+	push?: {
+		channel: string;
+		pub: {
+			data: any;
+		};
+	};
+	error?: {
+		code: number;
+		message: string;
+	};
 }
 
-// Структура нового повідомлення
-export interface MessageData {
-  message: {
-    id: number;
-    idUserFrom: number;
-    idUserTo: number;
-    content: {
-      message?: string;
-      id?: number;
-      url?: string;
-    };
-    dateCreated: string;
-  };
-}
-
-// Структура оновлення лімітів
-export interface DialogLimitData {
-  idUser: number;
-  idInterlocutor: number;
-  limitLeft: number;
-}
-
-// Структура події нового повідомлення
-export interface MessageEvent {
-  messageId: number;
-  idUserFrom: number;
-  idUserTo: number;
-  dateCreated: string;
-  content: {
-    message?: string;
-    id?: number;
-    url?: string;
-  };
-}
-
-// Структура події оновлення лімітів
-export interface DialogLimitEvent {
-  idUser: number;
-  idInterlocutor: number;
-  limitLeft: number;
+interface ProfileConnection {
+	ws: WebSocket;
+	heartbeatInterval: NodeJS.Timeout;
+	reconnectTimeout?: NodeJS.Timeout;
+	reconnectAttempts: number;
+	session: any;
 }
 
 @Injectable()
 export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 	private readonly logger = new Logger(TalkyTimesRTMService.name);
-	private ws: WebSocket | null = null;
-	private reconnectTimeout: NodeJS.Timeout | null = null;
-	private isConnecting = false;
-	private reconnectAttempts = 0;
+	private connections = new Map<number, ProfileConnection>(); // Окреме підключення для кожного профілю
 	private readonly maxReconnectAttempts = 3;
 	private readonly reconnectDelay = 3000; // 3 секунди між спробами
 	private readonly connectionTimeout = 10000; // 10 секунд таймаут підключення
-	private heartbeatInterval: NodeJS.Timeout | null = null;
+	private isConnecting = false;
 
 	constructor(
 		private readonly eventEmitter: EventEmitter2,
@@ -81,6 +54,7 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 	) {}
 
 	async onModuleInit() {
+		this.logger.log('🚀 RTM Service initializing...');
 		await this.connect();
 	}
 
@@ -89,268 +63,261 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	private cleanup() {
-		if (this.ws) {
-			this.ws.close();
-			this.ws = null;
+		// Закриваємо всі підключення
+		for (const [profileId, connection] of this.connections) {
+			this.logger.log(`🔌 RTM: Closing connection for profile ${profileId}`);
+			connection.ws.close();
+			if (connection.heartbeatInterval) {
+				clearInterval(connection.heartbeatInterval);
+			}
+			if (connection.reconnectTimeout) {
+				clearTimeout(connection.reconnectTimeout);
+			}
 		}
-		if (this.reconnectTimeout) {
-			clearTimeout(this.reconnectTimeout);
-			this.reconnectTimeout = null;
-		}
-		if (this.heartbeatInterval) {
-			clearInterval(this.heartbeatInterval);
-			this.heartbeatInterval = null;
-		}
+		this.connections.clear();
 		this.isConnecting = false;
-		this.reconnectAttempts = 0;
 	}
 
-
-
 	private async connect() {
-		if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) {
-			this.logger.log('🔌 RTM: Already connecting or connected');
+		if (this.isConnecting) {
+			this.logger.log('🔌 RTM: Already connecting');
 			return;
 		}
 
 		this.isConnecting = true;
-		this.logger.log('🔌 RTM: Starting connection...');
+		this.logger.log('🔌 RTM: Starting connections for all profiles...');
 
 		try {
-			// Отримуємо активну сесію
 			const sessions = await this.sessionService.getAllActiveSessions();
 			if (!sessions.length) {
 				this.logger.warn('⚠️ RTM: No active sessions found');
+				this.isConnecting = false;
 				return;
 			}
 
-			const session = sessions[0];
-			this.logger.log(`🔌 RTM: Using session for profile ${session.profileId}`);
-			
-			// Валідуємо сесію перед підключенням
-			const isValid = await this.sessionService.validateSession(session.profileId.toString());
-			if (!isValid) {
-				this.logger.warn('⚠️ RTM: Session validation failed');
-				return;
+			this.logger.log(`🔌 RTM: Found ${sessions.length} profiles to connect`);
+
+			// Створюємо окреме підключення для кожного профілю
+			for (const session of sessions) {
+				await this.connectProfile(session);
+				// Невелика затримка між підключеннями
+				await new Promise(resolve => setTimeout(resolve, 500));
 			}
 
-			this.logger.log('🔌 RTM: Session validated, connecting to WebSocket...');
-			const headers = {
-				'Origin': 'https://talkytimes.com',
-				'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
-				'Cookie': session.cookies
-			};
-
-			this.ws = new WebSocket('wss://talkytimes.com/rtm', { headers });
-
-			// Встановлюємо таймаут для підключення
-			const connectionTimeout = setTimeout(() => {
-				if (this.ws?.readyState === WebSocket.CONNECTING) {
-					this.logger.warn('⚠️ RTM: Connection timeout, closing...');
-					this.ws.close();
-				}
-			}, this.connectionTimeout);
-
-			this.ws.on('open', () => {
-				clearTimeout(connectionTimeout);
-				this.isConnecting = false;
-				this.reconnectAttempts = 0;
-				
-				this.logger.log('✅ RTM: Connected successfully!');
-				
-				// Відправляємо connect повідомлення
-				const connectMessage = {
-					connect: { name: "js", version: "1.0" },
-					id: 1
-				};
-				this.ws!.send(JSON.stringify(connectMessage));
-				this.logger.log('📤 RTM: Sent connect message:', JSON.stringify(connectMessage, null, 2));
-
-				// Встановлюємо heartbeat
-				this.heartbeatInterval = setInterval(() => {
-					if (this.ws?.readyState === WebSocket.OPEN) {
-						this.ws.ping();
-						this.logger.log('💓 RTM: Sent heartbeat');
-					}
-				}, 30000);
-			});
-
-			this.ws.on('message', (data) => {
-				try {
-					const message: RTMMessage = JSON.parse(data.toString());
-					this.logger.log('📨 RTM: Received message:', JSON.stringify(message, null, 2));
-					this.handleMessage(message);
-				} catch (error) {
-					this.logger.error('❌ RTM: Failed to parse message:', error);
-				}
-			});
-
-			this.ws.on('close', (code, reason) => {
-				clearTimeout(connectionTimeout);
-				this.isConnecting = false;
-				this.logger.warn(`🔌 RTM: Connection closed (${code}): ${reason}`);
-				
-				if (this.reconnectAttempts < this.maxReconnectAttempts) {
-					this.scheduleReconnect();
-				}
-			});
-
-			this.ws.on('error', (error) => {
-				clearTimeout(connectionTimeout);
-				this.isConnecting = false;
-				this.logger.error('❌ RTM: WebSocket error:', error);
-				
-				if (this.reconnectAttempts < this.maxReconnectAttempts) {
-					this.scheduleReconnect();
-				}
-			});
-
+			this.isConnecting = false;
+			this.logger.log(`✅ RTM: All connections established (${this.connections.size} profiles)`);
 		} catch (error) {
 			this.isConnecting = false;
 			this.logger.error('❌ RTM: Connection error:', error);
-			if (this.reconnectAttempts < this.maxReconnectAttempts) {
-				this.scheduleReconnect();
+		}
+	}
+
+	private async connectProfile(session: any) {
+		const profileId = session.profileId;
+		const timestamp = new Date().toISOString();
+		
+		// Перевіряємо чи вже підключені
+		if (this.connections.has(profileId)) {
+			this.logger.log(`🔌 RTM: Profile ${profileId} already connected`);
+			return;
+		}
+
+		this.logger.log(`🔌 RTM: Connecting profile ${profileId} with own cookies at ${timestamp}`);
+		
+		// Валідуємо сесію
+		const isValid = await this.sessionService.validateSession(profileId.toString());
+		if (!isValid) {
+			this.logger.warn(`⚠️ RTM: Session validation failed for profile ${profileId}`);
+			return;
+		}
+
+		const headers = {
+			'Origin': 'https://talkytimes.com',
+			'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+			'Cookie': session.cookies
+		};
+
+		const ws = new WebSocket('wss://talkytimes.com/rtm', { headers });
+
+		const connectionTimeout = setTimeout(() => {
+			if (ws.readyState === WebSocket.CONNECTING) {
+				this.logger.warn(`⚠️ RTM: Connection timeout for profile ${profileId}, closing...`);
+				ws.close();
+			}
+		}, this.connectionTimeout);
+
+		ws.on('open', () => {
+			clearTimeout(connectionTimeout);
+			const timestamp = new Date().toISOString();
+			this.logger.log(`✅ RTM: Profile ${profileId} connected successfully at ${timestamp}!`);
+
+			// Відправляємо connect повідомлення
+			const connectMessage = { connect: { name: "js", version: "1.0" }, id: 1 };
+			ws.send(JSON.stringify(connectMessage));
+			this.logger.log(`📤 RTM: Sent connect message for profile ${profileId} at ${timestamp}`);
+
+			// Налаштовуємо heartbeat
+			const heartbeatInterval = setInterval(() => {
+				if (ws.readyState === WebSocket.OPEN) {
+					ws.ping();
+					const timestamp = new Date().toISOString();
+					this.logger.log(`💓 RTM: Sent heartbeat for profile ${profileId} at ${timestamp}`);
+				}
+			}, 30000);
+
+			// Зберігаємо підключення
+			this.connections.set(profileId, {
+				ws,
+				heartbeatInterval,
+				reconnectAttempts: 0,
+				session
+			});
+		});
+
+		ws.on('message', (data) => {
+			try {
+				const message: RTMMessage = JSON.parse(data.toString());
+				const timestamp = new Date().toISOString();
+				this.logger.log(`📨 RTM: Profile ${profileId} received message at ${timestamp}:`, JSON.stringify(message, null, 2));
+				this.handleMessage(message, profileId);
+			} catch (error) {
+				const timestamp = new Date().toISOString();
+				this.logger.error(`❌ RTM: Profile ${profileId} failed to parse message at ${timestamp}:`, error);
+			}
+		});
+
+		ws.on('close', (code, reason) => {
+			clearTimeout(connectionTimeout);
+			const timestamp = new Date().toISOString();
+			this.logger.warn(`🔌 RTM: Profile ${profileId} connection closed at ${timestamp} (${code}): ${reason}`);
+			
+			const connection = this.connections.get(profileId);
+			if (connection) {
+				clearInterval(connection.heartbeatInterval);
+				this.connections.delete(profileId);
+				
+				// Спробуємо перепідключитися
+				if (connection.reconnectAttempts < this.maxReconnectAttempts) {
+					this.scheduleReconnectProfile(profileId, session, connection.reconnectAttempts + 1);
+				}
+			}
+		});
+
+		ws.on('error', (error) => {
+			clearTimeout(connectionTimeout);
+			const timestamp = new Date().toISOString();
+			this.logger.error(`❌ RTM: Profile ${profileId} WebSocket error at ${timestamp}:`, error);
+			
+			const connection = this.connections.get(profileId);
+			if (connection) {
+				clearInterval(connection.heartbeatInterval);
+				this.connections.delete(profileId);
+			}
+		});
+	}
+
+	private scheduleReconnectProfile(profileId: number, session: any, attempt: number) {
+		const timestamp = new Date().toISOString();
+		this.logger.log(`🔄 RTM: Reconnecting profile ${profileId} in ${this.reconnectDelay}ms (attempt ${attempt}) at ${timestamp}`);
+		
+		const reconnectTimeout = setTimeout(async () => {
+			try {
+				await this.connectProfile({ ...session, reconnectAttempts: attempt });
+			} catch (error) {
+				this.logger.error(`❌ RTM: Profile ${profileId} reconnection failed:`, error);
+			}
+		}, this.reconnectDelay);
+
+		// Зберігаємо timeout для можливості скасування
+		const connection = this.connections.get(profileId);
+		if (connection) {
+			connection.reconnectTimeout = reconnectTimeout;
+		}
+	}
+
+	private handleMessage(message: RTMMessage, profileId: number) {
+		// Обробляємо різні типи повідомлень
+		if (message.push?.channel?.includes('personal:')) {
+			const timestamp = new Date().toISOString();
+			const data = message.push.pub.data;
+			this.logger.log(`🎯 RTM: Profile ${profileId} received personal message at ${timestamp}:`, data);
+			
+			// Емітимо події залежно від типу повідомлення
+			const messageType = data.type;
+			
+			if (messageType === 'chat_MessageRead') {
+				this.eventEmitter.emit('rtm.message.read', {
+					profileId,
+					idInterlocutor: data.data?.idInterlocutor,
+					idMessage: data.data?.idMessage,
+					timestamp
+				});
+				this.logger.log(`📖 RTM: Message read event emitted for profile ${profileId}`);
+			} 
+			else if (messageType === 'chat_DialogTyping') {
+				// Не емітимо подію для typing, це не потрібно для тоастів
+				this.logger.log(`⌨️ RTM: Typing event for profile ${profileId} (not emitted)`);
+			}
+			else if (messageType === 'chat_MessageNew' || messageType === 'chat_MessageSent' || messageType === 'MessageSent' || messageType === 'MessageNew') {
+				// Для MessageSent дані знаходяться в data.message
+				const messageData = data.data?.message || data.message || data;
+				
+				this.eventEmitter.emit('rtm.message.new', {
+					profileId,
+					idUserFrom: messageData?.idUserFrom,
+					idUserTo: messageData?.idUserTo,
+					content: messageData?.content,
+					messageId: messageData?.id || data.id,
+					timestamp
+				});
+				this.logger.log(`🆕 RTM: New message event emitted for profile ${profileId}, from: ${messageData?.idUserFrom}, to: ${messageData?.idUserTo}`);
+			}
+			else {
+				// Загальна подія для інших типів
+				this.eventEmitter.emit('rtm.message', {
+					profileId,
+					channel: message.push.channel,
+					data: data,
+					timestamp
+				});
+				this.logger.log(`📨 RTM: Generic message event emitted for profile ${profileId}, type: ${messageType}`);
 			}
 		}
-	}
 
-	private disconnect() {
-		if (this.reconnectTimeout) {
-			clearTimeout(this.reconnectTimeout);
-			this.reconnectTimeout = null;
+		if (message.connect) {
+			const timestamp = new Date().toISOString();
+			this.logger.log(`🔗 RTM: Profile ${profileId} connect response at ${timestamp}:`, message.connect);
 		}
 
-		if (this.ws) {
-			this.ws.close();
-			this.ws = null;
+		if (message.error) {
+			const timestamp = new Date().toISOString();
+			this.logger.error(`❌ RTM: Profile ${profileId} error at ${timestamp}:`, message.error);
 		}
 	}
 
-	private scheduleReconnect() {
-		if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-			this.logger.error('❌ RTM: Max reconnection attempts reached');
-			return;
+	// Публічні методи для управління RTM
+	public getConnectionStatus(): Record<number, boolean> {
+		const status: Record<number, boolean> = {};
+		for (const [profileId, connection] of this.connections) {
+			status[profileId] = connection.ws.readyState === WebSocket.OPEN;
 		}
-
-		this.reconnectAttempts++;
-		this.logger.log(`🔄 RTM: Reconnecting in ${this.reconnectDelay}ms (attempt ${this.reconnectAttempts})`);
-		
-		this.reconnectTimeout = setTimeout(() => {
-			this.connect();
-		}, this.reconnectDelay);
+		return status;
 	}
 
-
-
-	private handleMessage(message: RTMMessage) {
-		// Ігноруємо відповідь на connect
-		if (message.id === "1" && message.connect) {
-			return;
-		}
-		
-		// Обробляємо push повідомлення
-		if (message.push?.data) {
-			this.handlePushData(message.push.data);
-		}
+	public async reconnectAll() {
+		this.logger.log('🔄 RTM: Reconnecting all profiles...');
+		this.cleanup();
+		await this.connect();
 	}
 
-	private handlePushData(data: { type: RTMMessageType; data: any }) {
-		switch (data.type) {
-			case 'MessageSent':
-				this.handleMessageSent(data.data as MessageData);
-				break;
-			case 'chat_DialogLimitChanged':
-				this.handleDialogLimitChanged(data.data as DialogLimitData);
-				break;
-		}
+	public async subscribeToUser(userId: string) {
+		// Цей метод залишається для сумісності, але тепер не потрібен
+		// оскільки кожен профіль автоматично підписується на свій канал
+		this.logger.log(`📡 RTM: Subscribe to user ${userId} (handled automatically by profile connections)`);
 	}
 
-	private handleMessageSent(data: MessageData) {
-		const { message } = data;
-		if (!message) return;
-
-		const event: MessageEvent = {
-			messageId: message.id,
-			idUserFrom: message.idUserFrom,
-			idUserTo: message.idUserTo,
-			dateCreated: message.dateCreated,
-			content: message.content
-		};
-
-		this.eventEmitter.emit('rtm.message.new', event);
-	}
-
-	private handleDialogLimitChanged(data: DialogLimitData) {
-		const event: DialogLimitEvent = {
-			idUser: data.idUser,
-			idInterlocutor: data.idInterlocutor,
-			limitLeft: data.limitLeft
-		};
-
-		this.eventEmitter.emit('rtm.dialog.limit.changed', event);
-	}
-
-	// Статус підключення
-	isConnected(): boolean {
-		return this.ws?.readyState === WebSocket.OPEN;
-	}
-
-	// Метод для отримання статусу RTM
-	getConnectionStatus(): { connected: boolean; attempts: number; maxAttempts: number } {
-		return {
-			connected: this.ws?.readyState === WebSocket.OPEN,
-			attempts: this.reconnectAttempts,
-			maxAttempts: this.maxReconnectAttempts
-		};
-	}
-
-	// Тестовий метод для симуляції RTM повідомлення
-	simulateRTMMessage(testData: any) {
-		const event: MessageEvent = {
-			messageId: testData.messageId,
-			idUserFrom: testData.idUserFrom,
-			idUserTo: testData.idUserTo,
-			dateCreated: testData.dateCreated,
-			content: testData.content
-		};
-		
-		this.eventEmitter.emit('rtm.message.new', event);
-	}
-
-	// Методи для сумісності
-	subscribeToUser(userId: number) {
-		// RTM автоматично підписує на personal канал
-		this.logger.log(`📡 RTM: Auto-subscribed to personal:${userId}`);
-	}
-
-	unsubscribeFromUser(userId: number) {
-		// Нічого не робимо, бо підписка автоматична
-		this.logger.log(`📡 RTM: Auto-unsubscribed from personal:${userId}`);
-	}
-
-
-
-	// Діагностичний метод для перевірки сесій
-	async getSessionsDebugInfo() {
-		try {
-			const sessions = await this.sessionService.getAllActiveSessions();
-			return {
-				totalSessions: sessions.length,
-				sessions: sessions.map(s => ({
-					profileId: s.profileId,
-					hasToken: !!s.token,
-					hasRefreshToken: !!s.refreshToken,
-					expiresAt: s.expiresAt,
-					cookiesLength: s.cookies?.length || 0,
-					cookiesPreview: s.cookies?.substring(0, 100) + '...'
-				}))
-			};
-		} catch (error) {
-			return {
-				error: error.message,
-				totalSessions: 0,
-				sessions: []
-			};
-		}
+	public async unsubscribeFromUser(userId: string) {
+		// Цей метод залишається для сумісності
+		this.logger.log(`📡 RTM: Unsubscribe from user ${userId} (handled automatically)`);
 	}
 }

@@ -217,21 +217,11 @@ export class ChatsService {
 				throw new Error(`No authenticated profile found for this dialog. Looking for profileId: ${idUser}`);
 			}
 
-			// ВИПРАВЛЕННЯ: Якщо cursor не передано, знаходимо lastMessage.id з діалогів
+			// ВИПРАВЛЕННЯ: Якщо cursor не передано, передаємо undefined для отримання найновіших повідомлень
 			let effectiveCursor = cursor;
 			if (!effectiveCursor) {
-				try {
-					const dialogsResult = await this.fetchDialogs(auth, {}) as { dialogs?: any[] };
-					const targetDialog = dialogsResult.dialogs?.find((d: any) => 
-						`${d.idUser}-${d.idInterlocutor}` === dialogId
-					);
-					if (targetDialog?.lastMessage?.id) {
-						effectiveCursor = targetDialog.lastMessage.id.toString();
-						console.log(`🎯 Auto-found cursor from dialog: ${effectiveCursor}`);
-					}
-				} catch (error) {
-					console.warn('Failed to auto-find cursor, proceeding without:', error);
-				}
+				console.log(`🔄 No cursor provided, will fetch latest messages (idLastMessage=undefined)`);
+				effectiveCursor = undefined; // Явно встановлюємо undefined для першого завантаження
 			}
 
 			if (this.provider.fetchMessagesByProfile) {

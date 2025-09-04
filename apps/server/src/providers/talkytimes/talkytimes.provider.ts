@@ -616,7 +616,8 @@ export class TalkyTimesProvider implements SiteProvider {
 			const [idUser, idInterlocutor] = dialogId.split('-').map(Number);
 			
 			// Генеруємо повідомлення на основі cursor (lastMessageId)
-			const baseId = cursor ? parseInt(cursor) : 43256456550;
+			// Якщо cursor = undefined або null, генеруємо найновіші повідомлення
+			const baseId = (cursor && cursor !== 'null' && cursor !== 'undefined') ? parseInt(cursor) : 43256456550;
 			const messages: any[] = [];
 			
 			// Генеруємо 5-10 повідомлень перед lastMessage
@@ -676,10 +677,11 @@ export class TalkyTimesProvider implements SiteProvider {
 			
 			const requestBody: any = {};
 			
-					// Додаємо idLastMessage першим, якщо є cursor (як у вашому прикладі)
-		if (cursor) {
-			requestBody.idLastMessage = parseInt(cursor);
-		}
+			// Додаємо idLastMessage першим, якщо є cursor (як у вашому прикладі)
+			// Якщо cursor = undefined або null, не додаємо idLastMessage для отримання найновіших повідомлень
+			if (cursor && cursor !== 'null' && cursor !== 'undefined') {
+				requestBody.idLastMessage = parseInt(cursor);
+			}
 			
 			// Додаємо решту параметрів у точному порядку як у вашому прикладі
 			requestBody.idRegularUser = idRegularUser;

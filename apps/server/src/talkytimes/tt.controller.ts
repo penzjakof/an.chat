@@ -54,10 +54,11 @@ export class TTController {
 	@Get('rtm-status')
 	async getRtmStatus() {
 		const status = this.rtmService.getConnectionStatus();
+		const connectedProfiles = Object.keys(status).filter(profileId => status[parseInt(profileId)]);
 		return {
-			status: status.connected ? 'connected' : 'disconnected',
-			attempts: status.attempts,
-			maxAttempts: status.maxAttempts,
+			status: connectedProfiles.length > 0 ? 'connected' : 'disconnected',
+			connectedProfiles: connectedProfiles.map(id => parseInt(id)),
+			totalProfiles: Object.keys(status).length,
 			timestamp: new Date().toISOString()
 		};
 	}
@@ -65,7 +66,11 @@ export class TTController {
 	@Get('sessions')
 	async getActiveSessions() {
 		// Тимчасовий endpoint для діагностики сесій
-		return this.rtmService.getSessionsDebugInfo();
+		const status = this.rtmService.getConnectionStatus();
+		return {
+			connections: status,
+			timestamp: new Date().toISOString()
+		};
 	}
 
 	@Post('test-toast')
@@ -79,8 +84,8 @@ export class TTController {
 			content: { message: body.message || 'Test message' }
 		};
 
-		// Емітимо подію як RTM
-		this.rtmService.simulateRTMMessage(testData);
+		// Емітимо подію як RTM (тимчасово відключено)
+		// this.rtmService.simulateRTMMessage(testData);
 		
 		return { success: true, testData };
 	}

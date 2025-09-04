@@ -5,7 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import { OnEvent } from '@nestjs/event-emitter';
 import { TalkyTimesRTMService } from '../providers/talkytimes/rtm.service';
 
-@WebSocketGateway({ namespace: '/ws', cors: { origin: '*' } })
+@WebSocketGateway({ cors: { origin: '*' } })
 export class ChatsGateway implements OnModuleInit {
 	private readonly logger = new Logger(ChatsGateway.name);
 	private userSockets = new Map<number, Set<string>>(); // userId -> socketIds
@@ -141,7 +141,7 @@ export class ChatsGateway implements OnModuleInit {
 			const profileId = parseInt(data.dialogId.split('-')[0]);
 			if (!isNaN(profileId)) {
 				// Підписуємося на RTM події для цього профілю
-				this.rtmService.subscribeToUser(profileId);
+				this.rtmService.subscribeToUser(profileId.toString());
 			}
 
 			const room = `dlg:${data.dialogId}`;
@@ -174,9 +174,8 @@ export class ChatsGateway implements OnModuleInit {
 				// Якщо у користувача не залишилося активних сокетів
 				if (sockets.size === 0) {
 					this.userSockets.delete(userId);
-					// Відписуємося від RTM подій для цього користувача
-					this.rtmService.unsubscribeFromUser(userId);
-					this.logger.log(`👤 User ${userId} disconnected from RTM`);
+					// НЕ відписуємося від RTM - RTM працює з профілями, а не з операторами
+					this.logger.log(`👤 User ${userId} disconnected from WebSocket`);
 				}
 				break;
 			}
