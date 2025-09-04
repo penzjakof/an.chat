@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, Query, Logger } from '@nestjs/common';
 import { GalleryService } from './gallery.service';
-import type { GalleryRequest, GalleryResponse, VideoGalleryRequest, VideoGalleryResponse } from './gallery.service';
+import type { GalleryRequest, GalleryResponse, VideoGalleryRequest, VideoGalleryResponse, AudioGalleryRequest, AudioGalleryResponse } from './gallery.service';
 import { Public } from '../common/auth/public.decorator';
 
 @Controller('api/gallery')
@@ -329,6 +329,110 @@ export class GalleryController {
       return { success: true, data };
     } catch (error) {
       this.logger.error(`❌ Get video statuses error:`, error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * GET /api/gallery/:profileId/audios
+   * Отримує список аудіо профілю з пагінацією
+   */
+  @Get(':profileId/audios')
+  async getAudios(
+    @Param('profileId') profileId: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Query('statuses') statuses?: string
+  ): Promise<{ success: boolean; data?: AudioGalleryResponse; error?: string }> {
+    try {
+      const parsedLimit = limit ? parseInt(limit, 10) : 50;
+      const parsedStatuses = statuses ? statuses.split(',') : ['approved'];
+      
+      const data = await this.galleryService.getAudios(parseInt(profileId), {
+        cursor: cursor || '',
+        limit: parsedLimit,
+        statuses: parsedStatuses
+      });
+      
+      return { success: true, data };
+    } catch (error) {
+      this.logger.error(`❌ Get audios error:`, error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * POST /api/gallery/:profileId/audios
+   * Отримує список аудіо профілю з розширеними параметрами
+   */
+  @Post(':profileId/audios')
+  async getAudiosAdvanced(
+    @Param('profileId') profileId: string,
+    @Body() request: AudioGalleryRequest
+  ): Promise<{ success: boolean; data?: AudioGalleryResponse; error?: string }> {
+    try {
+      const data = await this.galleryService.getAudios(parseInt(profileId), request);
+      return { success: true, data };
+    } catch (error) {
+      this.logger.error(`❌ Get audios advanced error:`, error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * POST /api/gallery/send-audios
+   * Відправляє вибрані аудіо в чат
+   */
+  @Post('send-audios')
+  async sendAudios(
+    @Body() body: { idsGalleryAudios: number[]; idRegularUser: number; profileId: number }
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    // Валідація вхідних даних
+    if (!body.idsGalleryAudios || !Array.isArray(body.idsGalleryAudios) || body.idsGalleryAudios.length === 0) {
+      return {
+        success: false,
+        error: 'idsGalleryAudios is required and must be a non-empty array'
+      };
+    }
+
+    if (!body.idRegularUser || !body.profileId) {
+      return {
+        success: false,
+        error: 'idRegularUser and profileId are required'
+      };
+    }
+
+    try {
+      const result = await this.galleryService.sendAudiosToChat(body.idsGalleryAudios, body.idRegularUser, body.profileId);
+      return {
+        success: true,
+        data: result
+      };
+    } catch (error) {
+      this.logger.error(`❌ Send audios error:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * POST /api/gallery/audio-statuses
+   * Отримує статуси аудіо (accessed/sent/null)
+   */
+  @Post('audio-statuses')
+  async getAudioStatuses(
+    @Body() body: { idUser: number; idsAudios: number[]; profileId: number }
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!body.idUser || !body.idsAudios || !Array.isArray(body.idsAudios) || body.idsAudios.length === 0 || !body.profileId) {
+      return { success: false, error: 'idUser, idsAudios and profileId are required' };
+    }
+    try {
+      const data = await this.galleryService.getAudioStatuses(body.idUser, body.idsAudios, body.profileId);
+      return { success: true, data };
+    } catch (error) {
+      this.logger.error(`❌ Get audio statuses error:`, error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }

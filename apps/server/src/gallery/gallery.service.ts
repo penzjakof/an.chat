@@ -57,6 +57,34 @@ export interface VideoGalleryResponse {
   videos: Video[];
 }
 
+export interface AudioUrls {
+  mp3: string;
+  ogg: string;
+}
+
+export interface Audio {
+  id: number;
+  idUser: number;
+  status: string;
+  title: string;
+  duration: number;
+  dateCreated: string;
+  dateUpdated: string;
+  declineReasons: string[];
+  urls: AudioUrls;
+}
+
+export interface AudioGalleryResponse {
+  cursor: string;
+  items: Audio[];
+}
+
+export interface AudioGalleryRequest {
+  cursor?: string;
+  limit?: number;
+  statuses?: string[];
+}
+
 export interface GalleryRequest {
   cursor?: string;
   statuses?: string[];
@@ -424,6 +452,127 @@ export class GalleryService {
     if (!response.success) {
       this.logger.error(`❌ TalkyTimes get video statuses failed:`, response.error);
       throw new Error(`Failed to get video statuses: ${response.error}`);
+    }
+
+    return response.data;
+  }
+
+  /**
+   * Отримує список аудіо профілю з пагінацією
+   */
+  async getAudios(profileId: number, request: AudioGalleryRequest = {}): Promise<AudioGalleryResponse> {
+    this.logger.log(`🎵 Getting audios for profile ${profileId} with cursor: ${request.cursor || 'none'}`);
+
+    if (!this.talkyTimesProvider.makeRequest) {
+      throw new Error('makeRequest method is not available on TalkyTimes provider');
+    }
+
+    const response = await this.talkyTimesProvider.makeRequest({
+      method: 'POST',
+      url: '/platform/gallery/audio/list',
+      data: {
+        cursor: request.cursor || '',
+        limit: request.limit || 50,
+        statuses: request.statuses || ['approved']
+      },
+      profileId,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.success) {
+      this.logger.error(`❌ TalkyTimes get audios failed:`, response.error);
+      throw new Error(`Failed to get audios: ${response.error}`);
+    }
+
+    return response.data;
+  }
+
+  /**
+   * Отримує аудіо з пагінацією (wrapper метод)
+   */
+  async getAudiosWithPagination(profileId: number, cursor?: string, limit: number = 50): Promise<AudioGalleryResponse> {
+    return this.getAudios(profileId, {
+      cursor,
+      limit,
+      statuses: ['approved'],
+    });
+  }
+
+  /**
+   * Відправляє аудіо в чат
+   */
+  async sendAudiosToChat(idsGalleryAudios: number[], idRegularUser: number, profileId: number): Promise<any> {
+    this.logger.log(`🎵 Sending ${idsGalleryAudios.length} audios to chat for profile ${profileId}`);
+
+    if (!this.talkyTimesProvider.makeRequest) {
+      throw new Error('Provider does not support makeRequest method');
+    }
+
+    const results: any[] = [];
+    
+    // Відправляємо кожне аудіо окремим запитом
+    for (const idGalleryAudio of idsGalleryAudios) {
+      try {
+        const response = await this.talkyTimesProvider.makeRequest!({
+          method: 'POST',
+          url: '/platform/chat/send/gallery-audio',
+          data: {
+            idGalleryAudio,
+            idRegularUser
+          },
+          profileId,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (!response.success) {
+          this.logger.error(`❌ TalkyTimes send audio ${idGalleryAudio} failed:`, response.error);
+          throw new Error(`Failed to send audio ${idGalleryAudio}: ${response.error}`);
+        }
+
+        results.push(response.data);
+        this.logger.log(`✅ Audio ${idGalleryAudio} sent successfully, message ID: ${response.data?.idMessage}`);
+      } catch (error) {
+        this.logger.error(`❌ Error sending audio ${idGalleryAudio}:`, error);
+        throw error;
+      }
+    }
+
+    return { messages: results };
+  }
+
+  /**
+   * Отримує статуси аудіо (accessed/sent/null)
+   */
+  async getAudioStatuses(idUser: number, idsAudios: number[], profileId: number): Promise<any> {
+    this.logger.log(`🎵 Getting audio statuses for user ${idUser}, audios: ${idsAudios.length}, profile: ${profileId}`);
+
+    if (!this.talkyTimesProvider.makeRequest) {
+      throw new Error('makeRequest method is not available on TalkyTimes provider');
+    }
+
+    const response = await this.talkyTimesProvider.makeRequest({
+      method: 'POST',
+      url: '/platform/gallery/audio/connection/list',
+      data: {
+        idUser,
+        idsAudios
+      },
+      profileId,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.success) {
+      this.logger.error(`❌ TalkyTimes get audio statuses failed:`, response.error);
+      throw new Error(`Failed to get audio statuses: ${response.error}`);
     }
 
     return response.data;

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { apiGet, apiPost } from '@/lib/api';
+import { AudioPlayer } from './AudioPlayer';
 
 export interface PhotoTag {
   code: string;
@@ -54,6 +55,33 @@ export interface PhotoConnectionStatus {
 
 export interface VideoConnectionStatus {
   idVideo: number;
+  status: 'accessed' | 'sent' | null;
+}
+
+export interface AudioUrls {
+  mp3: string;
+  ogg: string;
+}
+
+export interface Audio {
+  id: number;
+  idUser: number;
+  status: string;
+  title: string;
+  duration: number;
+  dateCreated: string;
+  dateUpdated: string;
+  declineReasons: string[];
+  urls: AudioUrls;
+}
+
+export interface AudioGalleryResponse {
+  cursor: string;
+  items: Audio[];
+}
+
+export interface AudioConnectionStatus {
+  idAudio: number;
   status: 'accessed' | 'sent' | null;
 }
 
@@ -110,12 +138,16 @@ export function MediaGallery({
   const [videos, setVideos] = useState<Video[]>([]);
   const [selectedPhotos, setSelectedPhotos] = useState<Photo[]>([]);
   const [selectedVideos, setSelectedVideos] = useState<Video[]>([]);
+  const [audios, setAudios] = useState<Audio[]>([]);
+  const [selectedAudios, setSelectedAudios] = useState<Audio[]>([]);
   const [loading, setLoading] = useState(false);
   const [regularCursor, setRegularCursor] = useState('');
   const [temporaryCursor, setTemporaryCursor] = useState('');
   const [videoCursor, setVideoCursor] = useState('');
+  const [audioCursor, setAudioCursor] = useState('');
   const [hasMore, setHasMore] = useState(true);
   const [hasMoreVideos, setHasMoreVideos] = useState(true);
+  const [hasMoreAudios, setHasMoreAudios] = useState(true);
 
   const [photoType, setPhotoType] = useState<'regular' | 'special' | 'temporary'>('regular');
   const [activeTab, setActiveTab] = useState<'regular' | 'special' | 'temporary'>('regular');
@@ -125,10 +157,16 @@ export function MediaGallery({
   const [fullSizeVideo, setFullSizeVideo] = useState<Video | null>(null);
   const [photoStatuses, setPhotoStatuses] = useState<Map<number, 'accessed' | 'sent' | null>>(new Map());
   const [videoStatuses, setVideoStatuses] = useState<Map<number, 'accessed' | 'sent' | null>>(new Map());
+  const [audioStatuses, setAudioStatuses] = useState<Map<number, 'accessed' | 'sent' | null>>(new Map());
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'accessed' | 'sent'>('all');
   const [statusRequestedPhotos, setStatusRequestedPhotos] = useState<Set<number>>(new Set()); // Відстеження запитів статусів
   const [statusRequestedVideos, setStatusRequestedVideos] = useState<Set<number>>(new Set()); // Відстеження запитів статусів відео
+  const [statusRequestedAudios, setStatusRequestedAudios] = useState<Set<number>>(new Set()); // Відстеження запитів статусів аудіо
   const [temporaryPhotoIds, setTemporaryPhotoIds] = useState<Set<number>>(new Set()); // Відстеження temporary фото
+  
+  // Стан для аудіо плеєра
+  const [currentPlayingAudio, setCurrentPlayingAudio] = useState<Audio | null>(null);
+  const audioPlayersRef = useRef<Map<number, HTMLAudioElement>>(new Map());
   const [autoLoadAttempts, setAutoLoadAttempts] = useState(0); // Лічильник спроб автозавантаження
 
   // Кеш функції
@@ -718,6 +756,128 @@ export function MediaGallery({
     }
   }, [profileId, loading, videoCursor, videos, idRegularUser, context, loadVideoStatuses]);
 
+  // Завантаження аудіо з пагінацією
+  const loadAudios = useCallback(async (reset: boolean = false) => {
+    if (loading) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiGet(`/api/gallery/${profileId}/audios`, {
+        cursor: reset ? '' : audioCursor,
+        limit: '50'
+      });
+
+      const typedResponse = response as { success: boolean; data?: AudioGalleryResponse; error?: string };
+      if (typedResponse.success && typedResponse.data) {
+        const audioData = typedResponse.data;
+        
+        if (reset) {
+          setAudios(audioData.items);
+        } else {
+          setAudios(prev => {
+            const existingIds = new Set(prev.map(a => a.id));
+            const newAudios = audioData.items.filter(audio => !existingIds.has(audio.id));
+            return [...prev, ...newAudios].sort((a, b) => b.id - a.id);
+          });
+        }
+        
+        setAudioCursor(audioData.cursor);
+        setHasMoreAudios(audioData.items.length >= 50);
+        
+        // Завантажуємо статуси для аудіо якщо є idRegularUser
+        if (idRegularUser && context === 'chat') {
+          const audiosToLoad = reset ? audioData.items : audioData.items.filter(audio => {
+            const existingIds = new Set(audios.map(a => a.id));
+            return !existingIds.has(audio.id);
+          });
+          if (audiosToLoad.length > 0) {
+            loadAudioStatuses(audiosToLoad, idRegularUser);
+          }
+        }
+      } else {
+        setError('Помилка завантаження аудіо');
+      }
+    } catch (err) {
+      setError('Помилка завантаження аудіо');
+    } finally {
+      setLoading(false);
+    }
+  }, [profileId, loading, audioCursor, audios, idRegularUser, context]);
+
+  // Завантаження статусів аудіо з відстеженням (батчами по 100)
+  const loadAudioStatuses = useCallback(async (audios: Audio[], idUser: number) => {
+    if (audios.length === 0) return;
+
+    // Фільтруємо тільки ті аудіо, для яких ще не запитували статуси
+    const audiosToRequest = audios.filter(audio => !statusRequestedAudios.has(audio.id));
+    
+    if (audiosToRequest.length === 0) {
+      return;
+    }
+
+    // Розбиваємо на батчі по 100 аудіо
+    const batchSize = 100;
+    const batches = [];
+    for (let i = 0; i < audiosToRequest.length; i += batchSize) {
+      batches.push(audiosToRequest.slice(i, i + batchSize));
+    }
+
+    // Обробляємо кожен батч
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+
+      try {
+        const idsAudios = batch.map(a => a.id);
+        
+        // Відмічаємо що для цих аудіо запит відправлено
+        setStatusRequestedAudios(prev => {
+          const newSet = new Set(prev);
+          idsAudios.forEach(id => newSet.add(id));
+          return newSet;
+        });
+
+        const response = await apiPost('/api/gallery/audio-statuses', {
+          idUser,
+          idsAudios,
+          profileId: parseInt(profileId)
+        });
+
+        const typedResponse = response as { success: boolean; data?: { audios: AudioConnectionStatus[] }; error?: string };
+        if (typedResponse.success && typedResponse.data?.audios) {
+          setAudioStatuses(prev => {
+            const newStatusMap = new Map(prev);
+            typedResponse.data!.audios.forEach((audioStatus: AudioConnectionStatus) => {
+              newStatusMap.set(audioStatus.idAudio, audioStatus.status);
+            });
+            
+            return newStatusMap;
+          });
+        } else {
+          // У випадку помилки - видаляємо з списку запитаних, щоб спробувати знову
+          setStatusRequestedAudios(prev => {
+            const newSet = new Set(prev);
+            batch.forEach(audio => newSet.delete(audio.id));
+            return newSet;
+          });
+        }
+      } catch (error) {
+        // У випадку помилки - видаляємо з списку запитаних, щоб спробувати знову
+        setStatusRequestedAudios(prev => {
+          const newSet = new Set(prev);
+          batch.forEach(audio => newSet.delete(audio.id));
+          return newSet;
+        });
+      }
+
+      // Невелика затримка між батчами щоб не перевантажити API
+      if (batchIndex < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+  }, [profileId, statusRequestedAudios]);
+
   // Завантаження перших 500 фото з показом одразу
   const loadInitialPhotos = useCallback(async () => {
     if (loading) return;
@@ -1064,9 +1224,12 @@ export function MediaGallery({
       } else if (mediaType === 'video' && hasMoreVideos) {
         console.log('🔄 Scroll threshold reached! Loading more videos...');
         loadVideos(false);
+      } else if (mediaType === 'audio' && hasMoreAudios) {
+        console.log('🔄 Scroll threshold reached! Loading more audios...');
+        loadAudios(false);
       }
     }
-  }, [loading, hasMore, hasMoreVideos, mediaType, loadMorePhotos, loadVideos]);
+  }, [loading, hasMore, hasMoreVideos, hasMoreAudios, mediaType, loadMorePhotos, loadVideos, loadAudios]);
 
   // Додаємо обробник скролу
   useEffect(() => {
@@ -1116,6 +1279,36 @@ export function MediaGallery({
     return filterVideosByStatus(videos, statusFilter);
   }, [videos, statusFilter, filterVideosByStatus]);
 
+  // Функція фільтрації аудіо за статусом
+  const filterAudiosByStatus = useCallback((
+    audios: Audio[], 
+    statusFilter: 'all' | 'available' | 'accessed' | 'sent'
+  ): Audio[] => {
+    // Фільтрація за статусом
+    if (statusFilter !== 'all') {
+      return audios.filter(audio => {
+        const status = audioStatuses.get(audio.id);
+        switch (statusFilter) {
+          case 'available':
+            return status === null; // Тільки аудіо без статусу (не переглянуті)
+          case 'accessed':
+            return status === 'accessed'; // Тільки переглянуті
+          case 'sent':
+            return status === 'sent'; // Тільки надіслані
+          default:
+            return true;
+        }
+      });
+    }
+
+    return audios;
+  }, [audioStatuses]);
+
+  // Мемоізований список відфільтрованих аудіо
+  const filteredAudios = useMemo(() => {
+    return filterAudiosByStatus(audios, statusFilter);
+  }, [audios, statusFilter, filterAudiosByStatus]);
+
   // Видаляємо checkAndLoadMorePhotos щоб уникнути циклічних залежностей
 
   // Завантажуємо медіа при відкритті галереї або зміні типу
@@ -1145,6 +1338,16 @@ export function MediaGallery({
         setError(null);
         // Завантажуємо відео
         loadVideos(true);
+      } else if (mediaType === 'audio') {
+        setAudios([]);
+        setAudioCursor('');
+        setHasMoreAudios(true);
+        setSelectedAudios([]);
+        setAudioStatuses(new Map()); // Очищуємо статуси аудіо
+        setStatusRequestedAudios(new Set()); // Очищуємо відстеження запитів статусів аудіо
+        setError(null);
+        // Завантажуємо аудіо
+        loadAudios(true);
       }
     } else {
       // Очищуємо стан при закритті
@@ -1265,6 +1468,80 @@ export function MediaGallery({
     }
   };
 
+  // Відправка вибраних аудіо
+  const handleSendAudios = async () => {
+    if (selectedAudios.length === 0) return;
+
+    // Якщо є idRegularUser, відправляємо через API
+    if (idRegularUser && context === 'chat') {
+      setLoading(true);
+      try {
+        const response = await apiPost('/api/gallery/send-audios', {
+          idsGalleryAudios: selectedAudios.map(a => a.id),
+          idRegularUser,
+          profileId: parseInt(profileId)
+        });
+
+        const typedResponse = response as { success: boolean; data?: any; error?: string };
+        if (typedResponse.success) {
+          onClose();
+          setSelectedAudios([]);
+        } else {
+          setError('Помилка відправки аудіо');
+        }
+      } catch {
+        setError('Помилка відправки аудіо');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Для інших контекстів поки що не підтримуємо
+      setError('Відправка аудіо підтримується тільки в чаті');
+    }
+  };
+
+  // Вибір/скасування вибору аудіо
+  const handleAudioSelect = (audio: Audio) => {
+    setSelectedAudios(prev => {
+      const isSelected = prev.some(a => a.id === audio.id);
+      if (isSelected) {
+        return prev.filter(a => a.id !== audio.id);
+      } else if (prev.length < maxSelection) {
+        return [...prev, audio];
+      }
+      return prev;
+    });
+  };
+
+  // Функції для аудіо плеєра
+  const handleAudioPlay = (audio: Audio) => {
+    // Зупиняємо попередній аудіо, якщо він відтворюється
+    if (currentPlayingAudio && currentPlayingAudio.id !== audio.id) {
+      const prevAudioElement = audioPlayersRef.current.get(currentPlayingAudio.id);
+      if (prevAudioElement && !prevAudioElement.paused) {
+        prevAudioElement.pause();
+      }
+    }
+    setCurrentPlayingAudio(audio);
+  };
+
+  const handleAudioPause = () => {
+    // Плеєр сам керує паузою, але можемо додати логіку якщо потрібно
+  };
+
+  const handleAudioEnded = () => {
+    setCurrentPlayingAudio(null);
+  };
+
+  // Реєстрація аудіо елементів
+  const registerAudioElement = (audioId: number, element: HTMLAudioElement) => {
+    audioPlayersRef.current.set(audioId, element);
+  };
+
+  const unregisterAudioElement = (audioId: number) => {
+    audioPlayersRef.current.delete(audioId);
+  };
+
   // Мемоізований Set для швидкої перевірки вибраних фото
   const selectedPhotoIds = useMemo(() => {
     return new Set(selectedPhotos.map(p => p.idPhoto));
@@ -1301,6 +1578,10 @@ export function MediaGallery({
     return selectedVideoIds.has(video.idVideo);
   }, [selectedVideoIds]);
 
+  // Мемоізована перевірка чи аудіо вибране
+  const isAudioSelected = useCallback((audio: Audio) => {
+    return selectedAudios.some(a => a.id === audio.id);
+  }, [selectedAudios]);
 
 
   if (!isOpen) return null;
@@ -1832,26 +2113,214 @@ export function MediaGallery({
               )}
             </div>
           ) : (
-            /* Audio Grid */
-            <div className="flex-1 p-3 flex items-center justify-center">
-              <div className="flex flex-col items-center justify-center text-gray-500">
-                <svg className="w-16 h-16 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                </svg>
-                <p className="text-lg font-medium mb-2">Аудіо поки недоступні</p>
-                <p className="text-sm text-center">Функціональність аудіо буде додана пізніше</p>
+            /* Audio List */
+            <div className="flex-1 p-3 flex flex-col min-h-0">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-medium">Аудіо</h3>
+              </div>
+              
+              {/* Status filters for audios */}
+              {context === 'chat' && idRegularUser && (
+                <div className="flex space-x-1 bg-gray-100 rounded-lg p-1 mb-3">
+                  <button
+                    onClick={() => setStatusFilter('all')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                      statusFilter === 'all'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                    <span>Усі</span>
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('available')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                      statusFilter === 'available'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Доступні</span>
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('accessed')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                      statusFilter === 'accessed'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span>Переглянуті</span>
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('sent')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                      statusFilter === 'sent'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    <span>Відправлені</span>
+                  </button>
+                </div>
+              )}
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <p className="text-red-600">{error}</p>
+                </div>
+              )}
+
+              {/* Audios List */}
+              <div 
+                ref={scrollContainerRef}
+                className="overflow-y-auto flex-1 p-2"
+              >
+                <div className="space-y-2">
+                  {filteredAudios.map((audio) => (
+                    <div
+                      key={audio.id}
+                      className={`group relative p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                        isAudioSelected(audio)
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                      onClick={() => handleAudioSelect(audio)}
+                    >
+                      <div className="space-y-3">
+                        {/* Header with icon, title and date */}
+                        <div className="flex items-center space-x-3">
+                          {/* Audio icon */}
+                          <div className="flex-shrink-0">
+                            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                            </svg>
+                          </div>
+
+                          {/* Audio info */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {audio.title}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(audio.dateCreated).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Audio Player */}
+                        <div 
+                          className="w-full"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <AudioPlayer
+                            src={audio.urls.mp3}
+                            title={audio.title}
+                            duration={audio.duration}
+                            audioId={audio.id}
+                            onPlay={() => handleAudioPlay(audio)}
+                            onPause={handleAudioPause}
+                            onEnded={handleAudioEnded}
+                            onRegister={registerAudioElement}
+                            onUnregister={unregisterAudioElement}
+                          />
+                        </div>
+
+                        {/* Audio status indicator */}
+                        {(() => {
+                          const status = audioStatuses.get(audio.id);
+                          if (!status) return null;
+                          
+                          return (
+                            <div className={`absolute top-2 left-2 w-4 h-4 rounded-full flex items-center justify-center ${
+                              status === 'accessed' 
+                                ? 'bg-green-500' 
+                                : status === 'sent' 
+                                ? 'bg-yellow-500' 
+                                : 'bg-black bg-opacity-60'
+                            }`}>
+                              {status === 'accessed' ? (
+                                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                              ) : status === 'sent' ? (
+                                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Selection indicator */}
+                        {isAudioSelected(audio) && (
+                          <div className="absolute top-2 right-2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Empty state for audios */}
+                {filteredAudios.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                    {(loading || hasMoreAudios) ? (
+                      <>
+                        <svg className="w-12 h-12 mb-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                        </svg>
+                        <p className="text-lg font-medium mb-2">Завантаження аудіо...</p>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-12 h-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                        </svg>
+                        <p className="text-lg font-medium mb-2">Немає аудіо</p>
+                        <p className="text-sm text-center">Аудіо файли не знайдені або не відповідають фільтру</p>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Loading indicator */}
+                {!loading && !hasMoreAudios && audios.length > 0 && (
+                  <div className="text-center py-4 text-gray-500 text-sm">
+                    Всі аудіо завантажені
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer - show for photos and videos */}
-        {(mediaType === 'photo' || mediaType === 'video') && (
+        {/* Footer - show for photos, videos and audios */}
+        {(mediaType === 'photo' || mediaType === 'video' || mediaType === 'audio') && (
           <div className="border-t p-3 flex items-center justify-between">
             <div className="text-sm text-gray-500">
               {mediaType === 'photo' 
                 ? `${selectedPhotos.length} of ${maxSelection} selected`
-                : `${selectedVideos.length} of ${Math.min(maxSelection, filteredVideos.length)} selected`
+                : mediaType === 'video'
+                ? `${selectedVideos.length} of ${Math.min(maxSelection, filteredVideos.length)} selected`
+                : `${selectedAudios.length} of ${Math.min(maxSelection, filteredAudios.length)} selected`
               }
             </div>
             <div className="flex space-x-2">
@@ -1862,10 +2331,22 @@ export function MediaGallery({
                 Cancel
               </button>
               <button
-                onClick={mediaType === 'photo' ? handleSendPhotos : handleSendVideos}
-                disabled={(mediaType === 'photo' ? selectedPhotos.length === 0 : selectedVideos.length === 0) || loading}
+                onClick={
+                  mediaType === 'photo' 
+                    ? handleSendPhotos 
+                    : mediaType === 'video' 
+                    ? handleSendVideos 
+                    : handleSendAudios
+                }
+                disabled={
+                  (mediaType === 'photo' ? selectedPhotos.length === 0 
+                   : mediaType === 'video' ? selectedVideos.length === 0 
+                   : selectedAudios.length === 0) || loading
+                }
                 className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
-                  ((mediaType === 'photo' ? selectedPhotos.length > 0 : selectedVideos.length > 0) && !loading)
+                  ((mediaType === 'photo' ? selectedPhotos.length > 0 
+                    : mediaType === 'video' ? selectedVideos.length > 0 
+                    : selectedAudios.length > 0) && !loading)
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
