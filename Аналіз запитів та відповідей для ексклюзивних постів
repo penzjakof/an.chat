@@ -1,0 +1,283 @@
+
+Запити та відповіді з провілю А для діалогів в яких є можливість ексклюзивних постів:
+curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=fe468d9f4f18440fb0e39b79b1c753b6,sentry-sampled=false,sentry-sample_rand=0.4795174945380074,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=8c13911a-9578-4fc8-905a-5abbe3edbacf; _hjSessionUser_2813883=eyJpZCI6IjZlYWQ2MDE4LTFkNmItNWMxOC04MGEyLThiNWZiMmJiYWMzYyIsImNyZWF0ZWQiOjE3NTM4OTI2NzkzNDAsImV4aXN0aW5nIjp0cnVlfQ==; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njg4ODkxNiwiZXhwIjoxNzU5NDgwOTE2LCJzdWIiOjcxNjI0Mzd9.HXGAkda164mzebKGtCWXV8cjNav71VdeTHQqf0kn8Nk; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A7162437%2C%22refreshToken%22%3A%222d816c7b51deb0d8048bb4b61c621be37c94d5c1%22%7D; _hjSession_2813883=eyJpZCI6IjRmMDg2OGI0LTE3NGYtNGQ4Yy04YzY1LWFmNzMwZGE1OGNhMiIsImMiOjE3NTY5ODQ4MDc1MTIsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MH0=; _csrf=d5HMpvO62Wr3oLZoK6vsevvEMXgjzkS2' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/7162437_123076707' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: fe468d9f4f18440fb0e39b79b1c753b6-a9a1f076ccbe154b-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008³\u0082ò8'
+
+data:application/grpc-web+proto;base64,AAAAAFIIARIGZXJvdGljEgdzcGVjaWFsEgxzcGVjaWFsX3BsdXMSB2xpbWl0ZWQaBmVyb3RpYxoHc3BlY2lhbBoMc3BlY2lhbF9wbHVzGgdsaW1pdGVkgAAAAA9ncnBjLXN0YXR1czowDQo=
+
+curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=bf58cff0546148ef83180e74ddc8e558,sentry-sampled=false,sentry-sample_rand=0.18724526982618783,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=8c13911a-9578-4fc8-905a-5abbe3edbacf; _hjSessionUser_2813883=eyJpZCI6IjZlYWQ2MDE4LTFkNmItNWMxOC04MGEyLThiNWZiMmJiYWMzYyIsImNyZWF0ZWQiOjE3NTM4OTI2NzkzNDAsImV4aXN0aW5nIjp0cnVlfQ==; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njg4ODkxNiwiZXhwIjoxNzU5NDgwOTE2LCJzdWIiOjcxNjI0Mzd9.HXGAkda164mzebKGtCWXV8cjNav71VdeTHQqf0kn8Nk; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A7162437%2C%22refreshToken%22%3A%222d816c7b51deb0d8048bb4b61c621be37c94d5c1%22%7D; _hjSession_2813883=eyJpZCI6IjRmMDg2OGI0LTE3NGYtNGQ4Yy04YzY1LWFmNzMwZGE1OGNhMiIsImMiOjE3NTY5ODQ4MDc1MTIsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MH0=; _csrf=6cB1UbtXJRjhX1n48e-x3x9yrP9V_2A5' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/7162437_119308595' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: bf58cff0546148ef83180e74ddc8e558-a6b65a21a34bf323-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008¯\u0091ï5'
+data:application/grpc-web+proto;base64,AAAAAG4IARIGZXJvdGljEgdzcGVjaWFsEgxzcGVjaWFsX3BsdXMSB2xpbWl0ZWQaBmVyb3RpYxoHc3BlY2lhbBoMc3BlY2lhbF9wbHVzGgdsaW1pdGVkIgxzcGVjaWFsX3BsdXMqDHNwZWNpYWxfcGx1c4AAAAAPZ3JwYy1zdGF0dXM6MA0K
+
+curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=f9d818b0163246029be9a9caf2b0e3e4,sentry-sampled=false,sentry-sample_rand=0.22290627257307938,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=8c13911a-9578-4fc8-905a-5abbe3edbacf; _hjSessionUser_2813883=eyJpZCI6IjZlYWQ2MDE4LTFkNmItNWMxOC04MGEyLThiNWZiMmJiYWMzYyIsImNyZWF0ZWQiOjE3NTM4OTI2NzkzNDAsImV4aXN0aW5nIjp0cnVlfQ==; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njg4ODkxNiwiZXhwIjoxNzU5NDgwOTE2LCJzdWIiOjcxNjI0Mzd9.HXGAkda164mzebKGtCWXV8cjNav71VdeTHQqf0kn8Nk; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A7162437%2C%22refreshToken%22%3A%222d816c7b51deb0d8048bb4b61c621be37c94d5c1%22%7D; _hjSession_2813883=eyJpZCI6IjRmMDg2OGI0LTE3NGYtNGQ4Yy04YzY1LWFmNzMwZGE1OGNhMiIsImMiOjE3NTY5ODQ4MDc1MTIsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MH0=; skip_online=1; _csrf=7F6lRSmCQ13H0jnQheLLla0R81kpsnLx' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/7162437_126599860' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: f9d818b0163246029be9a9caf2b0e3e4-8c6f60e83451bb1d-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008ã\u0080Ø:'
+data:application/grpc-web+proto;base64,AAAAAG4IARIGZXJvdGljEgdzcGVjaWFsEgxzcGVjaWFsX3BsdXMSB2xpbWl0ZWQaBmVyb3RpYxoHc3BlY2lhbBoMc3BlY2lhbF9wbHVzGgdsaW1pdGVkIgxzcGVjaWFsX3BsdXMqDHNwZWNpYWxfcGx1c4AAAAAPZ3JwYy1zdGF0dXM6MA0K
+
+
+Запити та відповіді з провілю А для діалогів в яких немає можливості ексклюзивних постів:
+curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=3f5e86197ab74a5c9556c1fe27b745a6,sentry-sampled=false,sentry-sample_rand=0.31841900453635374,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=8c13911a-9578-4fc8-905a-5abbe3edbacf; _hjSessionUser_2813883=eyJpZCI6IjZlYWQ2MDE4LTFkNmItNWMxOC04MGEyLThiNWZiMmJiYWMzYyIsImNyZWF0ZWQiOjE3NTM4OTI2NzkzNDAsImV4aXN0aW5nIjp0cnVlfQ==; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njg4ODkxNiwiZXhwIjoxNzU5NDgwOTE2LCJzdWIiOjcxNjI0Mzd9.HXGAkda164mzebKGtCWXV8cjNav71VdeTHQqf0kn8Nk; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A7162437%2C%22refreshToken%22%3A%222d816c7b51deb0d8048bb4b61c621be37c94d5c1%22%7D; _hjSession_2813883=eyJpZCI6IjRmMDg2OGI0LTE3NGYtNGQ4Yy04YzY1LWFmNzMwZGE1OGNhMiIsImMiOjE3NTY5ODQ4MDc1MTIsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MH0=; skip_online=1; _csrf=EhZc_tJUiJOffPZ9Do4yEdNG6PJSSIrH' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/7162437_123076707' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: 3f5e86197ab74a5c9556c1fe27b745a6-967e0d694ab89bda-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008\u0082ó\u0094;'
+
+  data:application/grpc-web+proto;base64,AAAAAGwSBmVyb3RpYxIHc3BlY2lhbBIMc3BlY2lhbF9wbHVzEgdsaW1pdGVkGgZlcm90aWMaB3NwZWNpYWwaDHNwZWNpYWxfcGx1cxoHbGltaXRlZCIMc3BlY2lhbF9wbHVzKgxzcGVjaWFsX3BsdXOAAAAAD2dycGMtc3RhdHVzOjANCg==
+
+
+  curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=3d368702409845e7b289892e3e076928,sentry-sampled=false,sentry-sample_rand=0.4537453102746717,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=8c13911a-9578-4fc8-905a-5abbe3edbacf; _hjSessionUser_2813883=eyJpZCI6IjZlYWQ2MDE4LTFkNmItNWMxOC04MGEyLThiNWZiMmJiYWMzYyIsImNyZWF0ZWQiOjE3NTM4OTI2NzkzNDAsImV4aXN0aW5nIjp0cnVlfQ==; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njg4ODkxNiwiZXhwIjoxNzU5NDgwOTE2LCJzdWIiOjcxNjI0Mzd9.HXGAkda164mzebKGtCWXV8cjNav71VdeTHQqf0kn8Nk; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A7162437%2C%22refreshToken%22%3A%222d816c7b51deb0d8048bb4b61c621be37c94d5c1%22%7D; _hjSession_2813883=eyJpZCI6IjRmMDg2OGI0LTE3NGYtNGQ4Yy04YzY1LWFmNzMwZGE1OGNhMiIsImMiOjE3NTY5ODQ4MDc1MTIsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MH0=; _csrf=v4HdljhFeYIIjWHZshjGJLbdFUylip9y' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/7162437_124074370' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: 3d368702409845e7b289892e3e076928-800ab132b8f915a6-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008ö\u009d¾.'
+
+  data:application/grpc-web+proto;base64,AAAAAGwSBmVyb3RpYxIHc3BlY2lhbBIMc3BlY2lhbF9wbHVzEgdsaW1pdGVkGgZlcm90aWMaB3NwZWNpYWwaDHNwZWNpYWxfcGx1cxoHbGltaXRlZCIMc3BlY2lhbF9wbHVzKgxzcGVjaWFsX3BsdXOAAAAAD2dycGMtc3RhdHVzOjANCg==
+
+  curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=06301153c22d4aedba8e3ce3f0a5e24e,sentry-sampled=false,sentry-sample_rand=0.8250988980738271,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=8c13911a-9578-4fc8-905a-5abbe3edbacf; _hjSessionUser_2813883=eyJpZCI6IjZlYWQ2MDE4LTFkNmItNWMxOC04MGEyLThiNWZiMmJiYWMzYyIsImNyZWF0ZWQiOjE3NTM4OTI2NzkzNDAsImV4aXN0aW5nIjp0cnVlfQ==; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njg4ODkxNiwiZXhwIjoxNzU5NDgwOTE2LCJzdWIiOjcxNjI0Mzd9.HXGAkda164mzebKGtCWXV8cjNav71VdeTHQqf0kn8Nk; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A7162437%2C%22refreshToken%22%3A%222d816c7b51deb0d8048bb4b61c621be37c94d5c1%22%7D; _hjSession_2813883=eyJpZCI6IjRmMDg2OGI0LTE3NGYtNGQ4Yy04YzY1LWFmNzMwZGE1OGNhMiIsImMiOjE3NTY5ODQ4MDc1MTIsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MH0=; skip_online=1; _csrf=CF_1UKgXmrvXcUe8QrnDPatmplrP64JE' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/7162437_97488630' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: 06301153c22d4aedba8e3ce3f0a5e24e-85b2d5efb9e98ccc-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008³ÐÊ-'
+
+  data:application/grpc-web+proto;base64,AAAAAGwSBmVyb3RpYxIHc3BlY2lhbBIMc3BlY2lhbF9wbHVzEgdsaW1pdGVkGgZlcm90aWMaB3NwZWNpYWwaDHNwZWNpYWxfcGx1cxoHbGltaXRlZCIMc3BlY2lhbF9wbHVzKgxzcGVjaWFsX3BsdXOAAAAAD2dycGMtc3RhdHVzOjANCg==
+
+
+Запити та відповіді з провілю Б для діалогів в яких є можливість ексклюзивних постів:
+
+curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=04d8974e75964197b3f5dc0c9b859d95,sentry-sampled=false,sentry-sample_rand=0.5039896593885945,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=a4ab0ea0-d7c3-476f-b2fc-13afb2083495; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njk4NzgwMiwiZXhwIjoxNzU5NTc5ODAyLCJzdWIiOjEyNDA2OTUyMX0.AfkDNXkhRpXfipQvO9BmicDG42Tlq991a9HsNzQZ3i8; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A124069521%2C%22refreshToken%22%3A%222d91717b4842077f73626255fd7f56a1b038be80%22%7D; _hjSessionUser_2813883=eyJpZCI6ImUwMzA1ZGU5LWE1NTktNTFjMC05NGQ5LWNjZDI4NmNlNjM4MyIsImNyZWF0ZWQiOjE3NTY5ODc4MDM3OTksImV4aXN0aW5nIjpmYWxzZX0=; _hjSession_2813883=eyJpZCI6ImJjMDI4Y2ZjLWMyMWYtNDFlOS05OGM2LTgwYjU3NjA0NmI2OSIsImMiOjE3NTY5ODc4MDM3OTksInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjoxLCJzcCI6MH0=; _csrf=Sy-2qf7UcL11QvzH4H_dm22kOhkRrVpp' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/114876057_124069521' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: 04d8974e75964197b3f5dc0c9b859d95-a21cc7459b651593-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008\u009cð¶8'
+
+  data:application/grpc-web+proto;base64,AAAAAG4IARIGZXJvdGljEgdzcGVjaWFsEgxzcGVjaWFsX3BsdXMSB2xpbWl0ZWQaBmVyb3RpYxoHc3BlY2lhbBoMc3BlY2lhbF9wbHVzGgdsaW1pdGVkIgxzcGVjaWFsX3BsdXMqDHNwZWNpYWxfcGx1c4AAAAAPZ3JwYy1zdGF0dXM6MA0K
+
+  curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=1d39f373b4ff4070bf66ecfebcaffb43,sentry-sampled=false,sentry-sample_rand=0.8428431222038197,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=a4ab0ea0-d7c3-476f-b2fc-13afb2083495; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njk4NzgwMiwiZXhwIjoxNzU5NTc5ODAyLCJzdWIiOjEyNDA2OTUyMX0.AfkDNXkhRpXfipQvO9BmicDG42Tlq991a9HsNzQZ3i8; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A124069521%2C%22refreshToken%22%3A%222d91717b4842077f73626255fd7f56a1b038be80%22%7D; _hjSessionUser_2813883=eyJpZCI6ImUwMzA1ZGU5LWE1NTktNTFjMC05NGQ5LWNjZDI4NmNlNjM4MyIsImNyZWF0ZWQiOjE3NTY5ODc4MDM3OTksImV4aXN0aW5nIjpmYWxzZX0=; _hjSession_2813883=eyJpZCI6ImJjMDI4Y2ZjLWMyMWYtNDFlOS05OGM2LTgwYjU3NjA0NmI2OSIsImMiOjE3NTY5ODc4MDM3OTksInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjoxLCJzcCI6MH0=; _csrf=7KKATH7T_wRMW3wcrXFnazZQSV327raU' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/118339612_124069521' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: 1d39f373b4ff4070bf66ecfebcaffb43-aee79eeb35cb9363-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008ð\u009cÃ1'
+
+  data:application/grpc-web+proto;base64,AAAAAG4IARIGZXJvdGljEgdzcGVjaWFsEgxzcGVjaWFsX3BsdXMSB2xpbWl0ZWQaBmVyb3RpYxoHc3BlY2lhbBoMc3BlY2lhbF9wbHVzGgdsaW1pdGVkIgxzcGVjaWFsX3BsdXMqDHNwZWNpYWxfcGx1c4AAAAAPZ3JwYy1zdGF0dXM6MA0K
+
+  curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=a07dce34647a4c4faff9e158f3234b78,sentry-sampled=false,sentry-sample_rand=0.7374945179689981,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=a4ab0ea0-d7c3-476f-b2fc-13afb2083495; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njk4NzgwMiwiZXhwIjoxNzU5NTc5ODAyLCJzdWIiOjEyNDA2OTUyMX0.AfkDNXkhRpXfipQvO9BmicDG42Tlq991a9HsNzQZ3i8; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A124069521%2C%22refreshToken%22%3A%222d91717b4842077f73626255fd7f56a1b038be80%22%7D; _hjSessionUser_2813883=eyJpZCI6ImUwMzA1ZGU5LWE1NTktNTFjMC05NGQ5LWNjZDI4NmNlNjM4MyIsImNyZWF0ZWQiOjE3NTY5ODc4MDM3OTksImV4aXN0aW5nIjpmYWxzZX0=; _hjSession_2813883=eyJpZCI6ImJjMDI4Y2ZjLWMyMWYtNDFlOS05OGM2LTgwYjU3NjA0NmI2OSIsImMiOjE3NTY5ODc4MDM3OTksInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjoxLCJzcCI6MH0=; _csrf=qoJewtU4fjkEgJMqOIY8UC6RThpmaZfe' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/103861872_124069521' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: a07dce34647a4c4faff9e158f3234b78-a2e623b384bbb6c6-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008·µ·;'
+
+  data:application/grpc-web+proto;base64,AAAAAG4IARIGZXJvdGljEgdzcGVjaWFsEgxzcGVjaWFsX3BsdXMSB2xpbWl0ZWQaBmVyb3RpYxoHc3BlY2lhbBoMc3BlY2lhbF9wbHVzGgdsaW1pdGVkIgxzcGVjaWFsX3BsdXMqDHNwZWNpYWxfcGx1c4AAAAAPZ3JwYy1zdGF0dXM6MA0K
+
+  Запити та відповіді з провілю Б для діалогів в яких немає можливості ексклюзивних постів:
+
+  curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=c4bdebd69e6f420f9f068bc165b085f0,sentry-sampled=false,sentry-sample_rand=0.6915538520818432,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=a4ab0ea0-d7c3-476f-b2fc-13afb2083495; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njk4NzgwMiwiZXhwIjoxNzU5NTc5ODAyLCJzdWIiOjEyNDA2OTUyMX0.AfkDNXkhRpXfipQvO9BmicDG42Tlq991a9HsNzQZ3i8; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A124069521%2C%22refreshToken%22%3A%222d91717b4842077f73626255fd7f56a1b038be80%22%7D; _hjSessionUser_2813883=eyJpZCI6ImUwMzA1ZGU5LWE1NTktNTFjMC05NGQ5LWNjZDI4NmNlNjM4MyIsImNyZWF0ZWQiOjE3NTY5ODc4MDM3OTksImV4aXN0aW5nIjpmYWxzZX0=; _hjSession_2813883=eyJpZCI6ImJjMDI4Y2ZjLWMyMWYtNDFlOS05OGM2LTgwYjU3NjA0NmI2OSIsImMiOjE3NTY5ODc4MDM3OTksInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjoxLCJzcCI6MH0=; _csrf=DknRPEE1JdZ3BeGkiWBbp33mkNVLCcDq' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/124069521_124639927' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: c4bdebd69e6f420f9f068bc165b085f0-bc8a5956e403a014-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008âªÝ1'
+
+  data:application/grpc-web+proto;base64,AAAAAIYSBmVyb3RpYxIHc3BlY2lhbBIMc3BlY2lhbF9wbHVzEgdsaW1pdGVkGgZlcm90aWMaB3NwZWNpYWwaDHNwZWNpYWxfcGx1cxoHbGltaXRlZCIHc3BlY2lhbCIMc3BlY2lhbF9wbHVzKgZlcm90aWMqB3NwZWNpYWwqDHNwZWNpYWxfcGx1c4AAAAAPZ3JwYy1zdGF0dXM6MA0K
+
+  curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=1ef02700763c43f4a71b26665e61a940,sentry-sampled=false,sentry-sample_rand=0.5733476064267325,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=a4ab0ea0-d7c3-476f-b2fc-13afb2083495; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njk4NzgwMiwiZXhwIjoxNzU5NTc5ODAyLCJzdWIiOjEyNDA2OTUyMX0.AfkDNXkhRpXfipQvO9BmicDG42Tlq991a9HsNzQZ3i8; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A124069521%2C%22refreshToken%22%3A%222d91717b4842077f73626255fd7f56a1b038be80%22%7D; _hjSessionUser_2813883=eyJpZCI6ImUwMzA1ZGU5LWE1NTktNTFjMC05NGQ5LWNjZDI4NmNlNjM4MyIsImNyZWF0ZWQiOjE3NTY5ODc4MDM3OTksImV4aXN0aW5nIjpmYWxzZX0=; _hjSession_2813883=eyJpZCI6ImJjMDI4Y2ZjLWMyMWYtNDFlOS05OGM2LTgwYjU3NjA0NmI2OSIsImMiOjE3NTY5ODc4MDM3OTksInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjoxLCJzcCI6MH0=; _csrf=zgEnQ5eAX1X_oWBSQS-PdcHG8KEWFUkL' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/104289634_124069521' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: 1ef02700763c43f4a71b26665e61a940-983e4a7e792059d0-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008\u0087Èß9'
+
+  data:application/grpc-web+proto;base64,AAAAAGwSBmVyb3RpYxIHc3BlY2lhbBIMc3BlY2lhbF9wbHVzEgdsaW1pdGVkGgZlcm90aWMaB3NwZWNpYWwaDHNwZWNpYWxfcGx1cxoHbGltaXRlZCIMc3BlY2lhbF9wbHVzKgxzcGVjaWFsX3BsdXOAAAAAD2dycGMtc3RhdHVzOjANCg==
+
+  curl 'https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions' \
+  -H 'accept: */*' \
+  -H 'accept-language: en-US,en;q=0.9' \
+  -H 'baggage: sentry-environment=PROD,sentry-release=PROD%3A69142-0e00,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=0fcfa0eebaf445ada88c97d563e5a522,sentry-sampled=false,sentry-sample_rand=0.8530261663798744,sentry-sample_rate=0.0001' \
+  -H 'content-type: application/grpc-web+proto' \
+  -b 'cc_cookie=%7B%22required%22%3A1%2C%22marketing%22%3A0%7D; sm_anonymous_id=a4ab0ea0-d7c3-476f-b2fc-13afb2083495; tld-token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciIsImlzcyI6ImRlZiIsInZlciI6IjEuMSIsImlhdCI6MTc1Njk4NzgwMiwiZXhwIjoxNzU5NTc5ODAyLCJzdWIiOjEyNDA2OTUyMX0.AfkDNXkhRpXfipQvO9BmicDG42Tlq991a9HsNzQZ3i8; tu_auth=%7B%22result%22%3Atrue%2C%22idUser%22%3A124069521%2C%22refreshToken%22%3A%222d91717b4842077f73626255fd7f56a1b038be80%22%7D; _hjSessionUser_2813883=eyJpZCI6ImUwMzA1ZGU5LWE1NTktNTFjMC05NGQ5LWNjZDI4NmNlNjM4MyIsImNyZWF0ZWQiOjE3NTY5ODc4MDM3OTksImV4aXN0aW5nIjpmYWxzZX0=; _hjSession_2813883=eyJpZCI6ImJjMDI4Y2ZjLWMyMWYtNDFlOS05OGM2LTgwYjU3NjA0NmI2OSIsImMiOjE3NTY5ODc4MDM3OTksInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjoxLCJzcCI6MH0=; _csrf=tTNp_j66NX8xJIsqF29ObU8OmP9xG7DW' \
+  -H 'origin: https://talkytimes.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://talkytimes.com/chat/121103367_124069521' \
+  -H 'sec-ch-ua: "Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'sentry-trace: 0fcfa0eebaf445ada88c97d563e5a522-9615a8156fdd792e-0' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  -H 'x-grpc-web: 1' \
+  -H 'x-user-agent: connect-es/2.0.2' \
+  --data-raw $'\u0000\u0000\u0000\u0000\u0005\u0008\u008c\u009aî:'
+
+  data:application/grpc-web+proto;base64,AAAAAGwSBmVyb3RpYxIHc3BlY2lhbBIMc3BlY2lhbF9wbHVzEgdsaW1pdGVkGgZlcm90aWMaB3NwZWNpYWwaDHNwZWNpYWxfcGx1cxoHbGltaXRlZCIMc3BlY2lhbF9wbHVzKgxzcGVjaWFsX3BsdXOAAAAAD2dycGMtc3RhdHVzOjANCg==

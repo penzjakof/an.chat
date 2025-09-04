@@ -30,4 +30,5 @@ export interface SiteProvider {
 	makeRequest?(options: { method: 'GET' | 'POST' | 'PUT' | 'DELETE'; url: string; data?: any; profileId: number; headers?: Record<string, string> }): Promise<{ success: boolean; data?: any; error?: string }>;
 	searchDialogByPair?(profileId: string, clientId: number): Promise<{ success: boolean; dialog?: any; error?: string }>;
 	fetchRestrictions?(profileId: string, clientId: number): Promise<{ success: boolean; lettersLeft?: number; error?: string }>;
+	getTtRestrictions?(ctx: ProviderRequestContext, profileId: number, idInterlocutor: number): Promise<{ success: boolean; hasExclusivePosts?: boolean; categories?: string[]; categoryCounts?: Record<string, number>; tier?: 'special' | 'specialplus'; error?: string }>;
 }

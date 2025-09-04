@@ -127,4 +127,12 @@ export class ChatsController {
 
 		return this.chats.sendSticker(req.auth!, body as { idProfile: number; idRegularUser: number; stickerId: number; stickerUrl: string });
 	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Throttle({ default: { limit: 30, ttl: 60000 } }) // 30 запитів за хвилину
+	@Post('tt-restrictions')
+	async getTtRestrictions(@Req() req: Request, @Body() body: { profileId: number; idInterlocutor: number }) {
+		console.log('⚡ ChatsController.getTtRestrictions called:', body);
+		return this.chats.getTtRestrictions(req.auth!, body.profileId, body.idInterlocutor);
+	}
 }

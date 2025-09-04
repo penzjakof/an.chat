@@ -10,6 +10,7 @@ import { MediaGallery, Photo } from '@/components/MediaGallery';
 import LottieErrorBoundary from '@/components/LottieErrorBoundary';
 import EmailHistory from '@/components/EmailHistory';
 import { useResourceManager, cleanupLottieAnimations } from '@/utils/memoryCleanup';
+import { checkDialogRestrictions, logRestrictionsCheck } from '@/utils/grpcUtils';
 
 // Типи для Lottie
 declare global {
@@ -151,6 +152,11 @@ export default function DialogPage() {
 	const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
 	const [giftMessage, setGiftMessage] = useState('');
 	const [isSendingGift, setIsSendingGift] = useState(false);
+
+	// Стан для TalkTimes exclusive posts
+	const [hasExclusivePosts, setHasExclusivePosts] = useState(false);
+	const [ttCategories, setTtCategories] = useState<string[]>([]);
+	const [ttTier, setTtTier] = useState<'special' | 'specialplus' | undefined>(undefined);
 
 	// Ініціалізуємо глобальну змінну для Lottie інстансів
 	useEffect(() => {
@@ -558,11 +564,33 @@ export default function DialogPage() {
 				console.warn('Invalid lettersLeft response:', response);
 				setLettersLeft(0);
 			}
+
+			// 🎪 Перевіряємо TalkTimes restrictions для exclusive posts
+			if (idRegularUser && idProfile) {
+				const ttResult = await checkDialogRestrictions(idProfile, idRegularUser);
+				logRestrictionsCheck(idRegularUser, ttResult);
+				
+				if (ttResult.success) {
+					setHasExclusivePosts(ttResult.hasExclusivePosts);
+					setTtCategories(ttResult.categories);
+					setTtTier(ttResult.tier);
+				} else {
+					// Fallback при помилці
+					setHasExclusivePosts(false);
+					setTtCategories([]);
+					setTtTier(undefined);
+				}
+			}
+
 		} catch (error) {
 			console.error('Failed to load restrictions:', error);
-			// Встановлюємо fallback значення для обох лічильників
+			// Встановлюємо fallback значення для обох лічільників
 			if (messagesLeft === null) setMessagesLeft(0);
 			setLettersLeft(0);
+			// Також скидаємо TT стани при помилці
+			setHasExclusivePosts(false);
+			setTtCategories([]);
+			setTtTier(undefined);
 		} finally {
 			setIsLoadingRestrictions(false);
 		}
@@ -1563,6 +1591,19 @@ export default function DialogPage() {
 								</span>
 							)}
 						</button>
+					)}
+
+					{/* Іконка молнії для exclusive posts */}
+					{hasExclusivePosts && (
+						<div
+							className={`flex-shrink-0 p-2 rounded-lg transition-colors relative ${ttTier === 'specialplus' ? 'text-red-600 hover:text-red-700' : 'text-yellow-500 hover:text-yellow-600'}`}
+							title={`${ttTier === 'specialplus' ? '⚡ SpecialPlus' : '⚡ Special'} — Категорії: ${ttCategories.join(', ')}`}
+						>
+							<svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+								<path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+							</svg>
+							<div className={`absolute inset-0 rounded-lg opacity-20 animate-pulse ${ttTier === 'specialplus' ? 'bg-red-500' : 'bg-yellow-400'}`}></div>
+						</div>
 					)}
 
 					<input 

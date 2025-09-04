@@ -253,6 +253,90 @@ POST /api/gallery/audio-statuses
 - `/platform/gallery/audio/list` - отримання аудіо
 - `/platform/gallery/audio/connection/list` - статуси аудіо
 
+#### ⚡ TalkTimes Exclusive Posts Detection - ДОДАНО 05.01.2025
+
+**🎪 Автоматична перевірка можливості відправки exclusive posts:**
+
+При відкритті діалогу система автоматично перевіряє чи підтримує TalkTimes exclusive posts для цього користувача через gRPC-Web API.
+
+**🔧 Технічна реалізація:**
+```typescript
+// Запит до TalkTimes GetRestrictions API
+const response = await fetch('https://talkytimes.com/platform/core.api.platform.chat.DialogService/GetRestrictions', {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/grpc-web+proto',
+    'x-grpc-web': '1'
+  },
+  body: createGetRestrictionsBody(dialogId) // protobuf з dialog ID
+});
+```
+
+**📋 Структура protobuf запиту:**
+```
+gRPC заголовок: [00 00 00 00 05]  // 5 байт payload
+Protobuf поле:  [08] + varint(dialogId)  // тег 1 + ID діалогу
+```
+
+**🎯 Парсинг відповіді:**
+- **Тег 0x08 (varint)**: прапорець exclusive posts (1 = увімкнено, 0 = вимкнено)
+- **Теги 0x12, 0x1a, 0x22, 0x2a (string)**: категорії контенту (erotic, special, special_plus, limited)
+
+**🖥️ UI індикація:**
+- **⚡ Іконка молнії** з'являється поруч з кнопками атачментів при hasExclusivePosts = true
+- **Пульсуючий ефект** для привернення уваги
+- **Tooltip** показує доступні категорії
+
+**🏷️ Tier класифікація (special / specialplus):**
+- Після парсингу відповіді бекенд визначає tier за ознакою "розширених тегів" у protobuf:
+  - `specialplus` — коли у відповіді НЕМає розширених тегів 0x22/0x2a
+  - `special` — коли у відповіді Є розширені теги 0x22/0x2a
+- Дублікати назв категорій (`erotic`, `special`, `special_plus`, `limited`) можливі і не впливають на tier.
+- Бекенд також повертає `categoryCounts` (підрахунок входжень) — лише для діагностики.
+
+**🔌 Backend-проксі та відповідь:**
+- Ендпоінт: `POST /api/chats/tt-restrictions`
+  - Body: `{ profileId: number, idInterlocutor: number }`
+  - Відповідь:
+    ```json
+    {
+      "success": true,
+      "hasExclusivePosts": true,
+      "categories": ["erotic","special","special_plus","limited"],
+      "categoryCounts": {"erotic":2,"special":2,"special_plus":2,"limited":2},
+      "tier": "special" | "specialplus"
+    }
+    ```
+- Провайдер `TalkyTimesProvider` формує коректне gRPC тіло (varint idInterlocutor) та `referer` у форматі `https://talkytimes.com/chat/<profileId>_<idInterlocutor>` з cookies активної сесії.
+- Парсер відповіді:
+  - прапорець ексклюзивів: тег `0x08` = 1
+  - категорії: теги `0x12`, `0x1a`, `0x22`, `0x2a`
+  - `hasExtendedTags`: істина якщо зустрічались `0x22`/`0x2a` (використовується для tier)
+
+**🎨 Поведінка UI за tier:**
+- `specialplus` → червона блискавка (attention), tooltip з категоріями
+- `special` → жовта блискавка, tooltip з категоріями
+
+**🧩 Фронтенд інтеграція:**
+- `apps/web/src/utils/grpcUtils.ts` — `checkDialogRestrictions(profileId, idInterlocutor)` викликає бекенд-проксі та повертає `hasExclusivePosts`, `categories`, `tier`.
+- `apps/web/src/app/chats/[dialogId]/page.tsx` — відмальовує блискавку; колір залежить від `tier`.
+
+**📊 Консольні повідомлення:**
+```javascript
+✅ [12:34:56] TalkTimes Restrictions Check SUCCESS for dialog 125359701:
+   🎪 Exclusive Posts: ⚡ ENABLED
+   📋 Categories: [erotic, special, special_plus, limited]
+   🎯 This dialog supports EXCLUSIVE POSTS! Lightning icon will be shown.
+```
+
+**🛠️ Файли:**
+- `apps/server/src/providers/talkytimes/talkytimes.provider.ts` — gRPC запит, парсер та tier
+- `apps/server/src/chats/chats.controller.ts` — ендпоінт `/api/chats/tt-restrictions`
+- `apps/server/src/chats/chats.service.ts` — валідація профіля та делегація у провайдер
+- `apps/server/src/providers/site-provider.interface.ts` — контракт із `tier`/`categoryCounts`
+- `apps/web/src/utils/grpcUtils.ts` — фронтенд-клієнт до бекенд-проксі
+- `apps/web/src/app/chats/[dialogId]/page.tsx` — інтеграція у UI
+
 #### 🔄 RTM (Real-Time Messaging) - ОНОВЛЕНО 04.09.2025
 
 **🚀 Нова архітектура RTM (множинні підключення):**

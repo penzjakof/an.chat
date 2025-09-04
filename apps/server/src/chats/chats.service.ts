@@ -473,4 +473,43 @@ export class ChatsService {
 			throw error;
 		}
 	}
+
+	/**
+	 * Отримує TalkTimes restrictions через gRPC API для перевірки exclusive posts
+	 */
+	async getTtRestrictions(auth: RequestAuthContext, profileIdInput: number, idInterlocutor: number) {
+		try {
+			console.log('⚡ ChatsService.getTtRestrictions called for:', { profileId: profileIdInput, idInterlocutor });
+
+			// Отримуємо доступні профілі
+			const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
+			if (accessibleProfiles.length === 0) {
+				throw new ForbiddenException('No accessible profiles found');
+			}
+
+			// Вибираємо потрібний профіль за profileId
+			const targetProfile = accessibleProfiles.find(p => parseInt(p.profileId) === profileIdInput) || accessibleProfiles[0];
+			const profileId = parseInt(targetProfile.profileId);
+
+			console.log('⚡ Using profile for TT restrictions:', {
+				profileId,
+				idInterlocutor,
+				displayName: targetProfile.displayName
+			});
+
+			// Викликаємо метод провайдера для gRPC запиту
+			if (!this.provider.getTtRestrictions) {
+				throw new Error('getTtRestrictions method not supported by provider');
+			}
+			
+			const result = await this.provider.getTtRestrictions(this.toCtx(auth), profileId, idInterlocutor);
+			
+			console.log('⚡ TT restrictions result:', result);
+			return result;
+
+		} catch (error) {
+			console.error(`💥 ПОМИЛКА в ChatsService.getTtRestrictions:`, error);
+			throw error;
+		}
+	}
 }

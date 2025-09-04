@@ -1820,4 +1820,219 @@ export class TalkyTimesProvider implements SiteProvider {
 			return { success: false, error: error.message || 'Unknown error' };
 		}
 	}
+
+	/**
+	 * Отримує TalkTimes restrictions через gRPC API для перевірки exclusive posts
+	 */
+	async getTtRestrictions(ctx: ProviderRequestContext, profileId: number, idInterlocutor: number): Promise<{ success: boolean; hasExclusivePosts?: boolean; categories?: string[]; categoryCounts?: Record<string, number>; tier?: 'special' | 'specialplus'; error?: string }> {
+		try {
+			console.log('⚡ TalkyTimes.getTtRestrictions: profileId=', profileId, 'idInterlocutor=', idInterlocutor, 'isMock=', this.isMock());
+
+			if (this.isMock()) {
+				// Mock відповідь для тестування
+				return {
+					success: true,
+					hasExclusivePosts: true,
+					categories: ['erotic', 'special', 'special_plus', 'limited']
+				};
+			}
+
+			// Отримуємо сесію для профілю
+			const session = await this.sessionService.getSession(profileId.toString());
+			if (!session) {
+				throw new Error(`No session found for profile ${profileId}`);
+			}
+
+			console.log(`✅ Session found for profile ${profileId}, expires at ${session.expiresAt}`);
+
+			// Створюємо protobuf body (varint == idInterlocutor)
+			const body = this.createGetRestrictionsBody(idInterlocutor);
+
+			const url = `${this.baseUrl}/platform/core.api.platform.chat.DialogService/GetRestrictions`;
+			const referer = `${this.baseUrl}/chat/${profileId}_${idInterlocutor}`;
+
+			console.log('🚀 TalkyTimes get restrictions request for profile', profileId, ':', {
+				profileId: profileId.toString(),
+				idInterlocutor,
+				url,
+				referer
+			});
+
+			const headers = {
+				'accept': '*/*',
+				'accept-language': 'en-US,en;q=0.9',
+				'content-type': 'application/grpc-web+proto',
+				'x-grpc-web': '1',
+				'x-user-agent': 'connect-es/2.0.2',
+				'cookie': session.cookies,
+				'referer': referer
+			};
+
+			console.log('📤 Request body length:', body.length, 'bytes');
+			console.log('📋 Full headers:', headers);
+
+			const response = await this.fetchWithConnectionPool(url, {
+				method: 'POST',
+				headers,
+				body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+				timeoutMs: 15000,
+				maxRetries: 2
+			});
+
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
+
+			const responseBuffer = await response.arrayBuffer();
+			const parsed = this.parseGetRestrictionsResponse(new Uint8Array(responseBuffer));
+
+			// Підраховуємо кратність категорій для класифікації рівня
+			const counts: Record<string, number> = {};
+			for (const c of (parsed as any).allCategories || parsed.categories) {
+				counts[c] = (counts[c] || 0) + 1;
+			}
+			// Логіка рівня на вимогу:
+			// якщо присутні розширені теги (0x22/0x2a) → special, інакше → specialplus
+			let tier: 'special' | 'specialplus' | undefined = undefined;
+			if (parsed.hasExclusivePosts) {
+				tier = (parsed as any).hasExtendedTags ? 'special' : 'specialplus';
+			}
+
+			console.log('📥 TalkyTimes get restrictions response for profile', profileId, ':', {
+				hasExclusivePosts: parsed.hasExclusivePosts,
+				categories: parsed.categories
+			});
+
+			return {
+				success: true,
+				hasExclusivePosts: parsed.hasExclusivePosts,
+				categories: parsed.categories,
+				categoryCounts: counts,
+				tier
+			};
+
+		} catch (error: any) {
+			console.error('⚡ TalkyTimes getTtRestrictions error:', error);
+			return { 
+				success: false, 
+				error: error.message || 'Unknown error',
+				hasExclusivePosts: false,
+				categories: []
+			};
+		}
+	}
+
+	/**
+	 * Створює gRPC-Web body для GetRestrictions запиту
+	 */
+	private createGetRestrictionsBody(dialogId: number): Uint8Array {
+		const varintBytes = this.encodeVarint(dialogId);
+		const payload = new Uint8Array(1 + varintBytes.length);
+		
+		// Protobuf тег 0x08 (field 1, varint)
+		payload[0] = 0x08;
+		payload.set(varintBytes, 1);
+		
+		// gRPC заголовок (5 байт: 4 байти нулів + розмір payload)
+		const result = new Uint8Array(5 + payload.length);
+		result[4] = payload.length; // Розмір payload
+		result.set(payload, 5);
+		
+		return result;
+	}
+
+	/**
+	 * Кодує число у varint формат (protobuf)
+	 */
+	private encodeVarint(value: number): Uint8Array {
+		const bytes: number[] = [];
+		
+		while (value >= 0x80) {
+			bytes.push((value & 0xFF) | 0x80);
+			value >>>= 7;
+		}
+		bytes.push(value & 0xFF);
+		
+		return new Uint8Array(bytes);
+	}
+
+	/**
+	 * Парсить відповідь від GetRestrictions API
+	 */
+	private parseGetRestrictionsResponse(bytes: Uint8Array): { hasExclusivePosts: boolean; categories: string[]; allCategories: string[]; hasExtendedTags: boolean } {
+		// Пропускаємо gRPC заголовок (перші 5 байт)
+		let offset = 5;
+		
+		const result = {
+			hasExclusivePosts: false,
+			categories: [] as string[],
+			allCategories: [] as string[],
+			hasExtendedTags: false
+		};
+		
+		// Парсимо protobuf поля
+		while (offset < bytes.length - 20) { // Залишаємо місце для grpc-status
+			if (offset >= bytes.length) break;
+			
+			const tag = bytes[offset];
+			
+			if (tag === 0x08) {
+				// VARINT поле - прапорець exclusive posts
+				const { value } = this.decodeVarint(bytes, offset + 1);
+				result.hasExclusivePosts = value === 1;
+				offset += 2; // Тег + 1 байт для простого varint
+				
+			} else if (tag === 0x12 || tag === 0x1a || tag === 0x22 || tag === 0x2a) {
+				// Визначаємо чи зустрічались розширені теги 0x22/0x2a
+				if (tag === 0x22 || tag === 0x2a) {
+					result.hasExtendedTags = true;
+				}
+				// STRING поля - категорії
+				if (offset + 1 >= bytes.length) break;
+				
+				const length = bytes[offset + 1];
+				if (offset + 2 + length > bytes.length) break;
+				
+				const categoryBytes = bytes.slice(offset + 2, offset + 2 + length);
+				const category = new TextDecoder().decode(categoryBytes);
+				if (category) {
+					result.allCategories.push(category);
+					if (!result.categories.includes(category)) {
+						result.categories.push(category);
+					}
+				}
+				
+				offset += 2 + length;
+				
+			} else {
+				offset++;
+			}
+		}
+		
+		return result;
+	}
+
+	/**
+	 * Декодує varint з байтового масиву
+	 */
+	private decodeVarint(bytes: Uint8Array, offset = 0): { value: number; bytesRead: number } {
+		let value = 0;
+		let shift = 0;
+		let bytesRead = 0;
+		
+		for (let i = offset; i < bytes.length; i++) {
+			const byte = bytes[i];
+			bytesRead++;
+			
+			value |= (byte & 0x7F) << shift;
+			
+			if ((byte & 0x80) === 0) {
+				break;
+			}
+			
+			shift += 7;
+		}
+		
+		return { value, bytesRead };
+	}
 }

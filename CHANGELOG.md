@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.2.1] - 2025-09-04
+
+### ⚡ TalkyTimes Exclusive Posts Detection (tier + UI)
+
+#### ✨ Нове
+- Додано бекенд-проксі `POST /api/chats/tt-restrictions` для gRPC-Web виклику TT GetRestrictions
+- Парсер відповіді з визначенням `hasExclusivePosts`, категорій і підрахунку `categoryCounts`
+- Визначення `tier`:
+  - `specialplus` — коли немає розширених тегів 0x22/0x2a у protobuf
+  - `special` — коли є розширені теги 0x22/0x2a
+- Фронтенд відображає блискавку: червона для `specialplus`, жовта для `special` (tooltip з категоріями)
+
+#### 🔧 Backend
+- `apps/server/src/providers/talkytimes/talkytimes.provider.ts` — створення protobuf тіла, парсинг, tier, categoryCounts
+- `apps/server/src/providers/site-provider.interface.ts` — контракт розширено (`tier`, `categoryCounts`)
+- `apps/server/src/chats/chats.service.ts`, `chats.controller.ts` — ендпоінт `/api/chats/tt-restrictions`
+
+#### 🎨 Frontend
+- `apps/web/src/utils/grpcUtils.ts` — клієнт до бекенду, повертає `tier`
+- `apps/web/src/app/chats/[dialogId]/page.tsx` — індикатор блискавки з кольором за `tier`
+
+#### 🐛 Виправлення
+- Неправильне формування referer/тіла для gRPC — виправлено
+- Некоректна типізація body (Uint8Array → ArrayBuffer) — виправлено
+- CORS: перенесено виклик з фронта на бекенд-проксі
+
+---
+
 ## [1.2.0] - 2025-01-04
 
 ### 🎵 Аудіо Галерея з Повноцінним Плеєром
