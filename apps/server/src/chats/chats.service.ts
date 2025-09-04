@@ -512,4 +512,29 @@ export class ChatsService {
 			throw error;
 		}
 	}
+
+	async sendExclusivePost(auth: RequestAuthContext, body: { profileId: number; idRegularUser: number; idsGalleryPhotos: number[]; idsGalleryVideos: number[]; text: string }) {
+		try {
+			const { profileId, idRegularUser, idsGalleryPhotos = [], idsGalleryVideos = [], text = '' } = body;
+			console.log('📝 ChatsService.sendExclusivePost:', { profileId, idRegularUser, photos: idsGalleryPhotos.length, videos: idsGalleryVideos.length, textLen: text.length });
+
+			// Перевіряємо доступ до профілю
+			const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
+			const targetProfile = accessibleProfiles.find(p => parseInt(p.profileId) === profileId);
+			if (!targetProfile) {
+				throw new ForbiddenException(`Access denied to profile ${profileId}`);
+			}
+
+			if (!this.provider.sendExclusivePost) {
+				throw new Error('sendExclusivePost not supported by provider');
+			}
+
+			const result = await this.provider.sendExclusivePost(profileId, idRegularUser, { idsGalleryPhotos, idsGalleryVideos, text });
+			console.log('✅ ChatsService.sendExclusivePost result:', result);
+			return result;
+		} catch (error) {
+			console.error('💥 ПОМИЛКА в ChatsService.sendExclusivePost:', error);
+			throw error;
+		}
+	}
 }

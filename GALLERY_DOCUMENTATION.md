@@ -8,7 +8,7 @@ MediaGallery - це повнофункціональний компонент д
 ### ✨ Ключові можливості
 - 📱 Адаптивна сітка 5x∞ з lazy loading
 - 🔥 Візуальні індикатори для special фото (fire іконка)
-- 🎯 Три типи контенту: Regular, Special, Temporary
+- 🎯 Типи контенту: Regular, Special, Special+, Temporary
 - 🚀 Автоматичне довантаження при недостатній кількості (< 15)
 - 📜 Завантаження через скрол без кнопок
 - 📤 Відправка фото безпосередньо в чат
@@ -162,6 +162,32 @@ import { MediaGallery } from '@/components/MediaGallery';
   idRegularUser={idRegularUser}
 />
 ```
+
+### Режим прикріплення до Exclusive Post (attach)
+```tsx
+<MediaGallery
+  profileId={profileId.toString()}
+  isOpen={isAttachGalleryOpen}
+  onClose={() => setIsAttachGalleryOpen(false)}
+  onPhotoSelect={() => { /* не використовується в attach */ }}
+  maxSelection={6}
+  context="chat"
+  idRegularUser={idRegularUser}
+  mode="attach"
+  actionLabel="Прикріпити"
+  allowAudio={false}
+  allowedPhotoTabs={tier === 'specialplus' ? ['special','special_plus'] : ['special']}
+  isSpecialPlusAllowed={tier === 'specialplus'}
+  onAttach={({ photos, videos }) => {
+    // зберегти вибір та закрити модалку
+  }}
+/> 
+```
+
+Особливості attach:
+- Початкова вкладка — перша дозволена (у більшості випадків `special`).
+- Фото з тегами `special`/`special_plus` відображаються кольоровими (без grayscale).
+- Мітки вкладок: `Special` з іконкою вогню; `Special+` з іконкою вогню та маленьким "+" ліворуч від назви.
 
 ## Props
 

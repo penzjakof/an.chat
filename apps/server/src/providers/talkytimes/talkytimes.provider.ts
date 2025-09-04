@@ -1455,6 +1455,52 @@ export class TalkyTimesProvider implements SiteProvider {
 		}
 	}
 
+	/**
+	 * Відправляє ексклюзивний пост (новий тип повідомлення на сторони TT)
+	 */
+	async sendExclusivePost(profileId: number, idRegularUser: number, payload: { idsGalleryPhotos: number[]; idsGalleryVideos: number[]; text: string }): Promise<{ success: boolean; data?: any; error?: string }> {
+		try {
+			if (this.isMock()) {
+				return { success: true, data: { idMessage: `mock-exclusive-${Date.now()}` } };
+			}
+
+			const session = await this.sessionService.getSession(profileId.toString());
+			if (!session) {
+				return { success: false, error: `No active session for profile ${profileId}` };
+			}
+
+			const url = 'https://talkytimes.com/platform/chat/send/new-post';
+			const headers = this.sessionService.getRequestHeaders(session);
+			// Формуємо коректний referer як у прикладі
+			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${idRegularUser}/posts`;
+
+			const body = {
+				idRegularUser,
+				idsGalleryPhotos: payload.idsGalleryPhotos || [],
+				idsGalleryVideos: payload.idsGalleryVideos || [],
+				text: payload.text || ''
+			};
+
+			const res = await this.fetchWithConnectionPool(url, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(body),
+				timeoutMs: 20000,
+				maxRetries: 1
+			});
+
+			if (!res.ok) {
+				const errorText = await res.text();
+				return { success: false, error: `HTTP ${res.status}: ${errorText}` };
+			}
+
+			const data = await res.json();
+			return { success: true, data };
+		} catch (error: any) {
+			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
+
 	async getVirtualGiftList(profileId: string, clientId: number, cursor: string = '', limit: number = 30): Promise<{ success: boolean; data?: { cursor: string; items: any[] }; error?: string }> {
 		console.log(`🎁 TalkyTimes.getVirtualGiftList: profileId=${profileId}, clientId=${clientId}, cursor=${cursor}, limit=${limit}, isMock=${this.isMock()}`);
 

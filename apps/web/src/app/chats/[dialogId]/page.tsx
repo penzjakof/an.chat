@@ -128,7 +128,8 @@ export default function DialogPage() {
 	const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const canLoadMore = useRef<boolean>(true);
-	const [isMediaGalleryOpen, setIsMediaGalleryOpen] = useState(false);
+	const [isChatGalleryOpen, setIsChatGalleryOpen] = useState(false);
+	const [isAttachGalleryOpen, setIsAttachGalleryOpen] = useState(false);
 	const [isStickerModalOpen, setIsStickerModalOpen] = useState(false);
 	const [isEmailHistoryOpen, setIsEmailHistoryOpen] = useState(false);
 	const [stickerCategories, setStickerCategories] = useState<StickerCategory[]>([]);
@@ -157,6 +158,14 @@ export default function DialogPage() {
 	const [hasExclusivePosts, setHasExclusivePosts] = useState(false);
 	const [ttCategories, setTtCategories] = useState<string[]>([]);
 	const [ttTier, setTtTier] = useState<'special' | 'specialplus' | undefined>(undefined);
+	// Модалка для ексклюзивного посту
+	const [isExclusiveModalOpen, setIsExclusiveModalOpen] = useState(false);
+	const [exclusiveText, setExclusiveText] = useState('');
+	const minExclusiveLength = 100;
+	const [attachedPhotos, setAttachedPhotos] = useState<number[]>([]);
+	const [attachedVideos, setAttachedVideos] = useState<number[]>([]);
+	const [attachedPhotoPreviews, setAttachedPhotoPreviews] = useState<Array<{ idPhoto: number; url: string }>>([]);
+	const [attachedVideoPreviews, setAttachedVideoPreviews] = useState<Array<{ idVideo: number; url: string }>>([]);
 
 	// Ініціалізуємо глобальну змінну для Lottie інстансів
 	useEffect(() => {
@@ -1076,7 +1085,7 @@ export default function DialogPage() {
 			console.error('Error sending photos:', error);
 		}
 
-		setIsMediaGalleryOpen(false);
+		setIsChatGalleryOpen(false);
 	};
 
 	// Обробка вибору подарунку
@@ -1540,7 +1549,7 @@ export default function DialogPage() {
 				<div className="flex gap-2 items-center">
 					{/* Кнопка атачменту */}
 					<button
-						onClick={() => setIsMediaGalleryOpen(true)}
+						onClick={() => setIsChatGalleryOpen(true)}
 						className="flex-shrink-0 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
 						title="Прикріпити медіа"
 					>
@@ -1595,7 +1604,8 @@ export default function DialogPage() {
 
 					{/* Іконка молнії для exclusive posts */}
 					{hasExclusivePosts && (
-						<div
+						<button
+							onClick={() => setIsExclusiveModalOpen(true)}
 							className={`flex-shrink-0 p-2 rounded-lg transition-colors relative ${ttTier === 'specialplus' ? 'text-red-600 hover:text-red-700' : 'text-yellow-500 hover:text-yellow-600'}`}
 							title={`${ttTier === 'specialplus' ? '⚡ SpecialPlus' : '⚡ Special'} — Категорії: ${ttCategories.join(', ')}`}
 						>
@@ -1603,7 +1613,10 @@ export default function DialogPage() {
 								<path d="M13 10V3L4 14h7v7l9-11h-7z"/>
 							</svg>
 							<div className={`absolute inset-0 rounded-lg opacity-20 animate-pulse ${ttTier === 'specialplus' ? 'bg-red-500' : 'bg-yellow-400'}`}></div>
-						</div>
+							{ttTier === 'specialplus' && (
+								<div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white text-red-600 flex items-center justify-center text-[10px] font-extrabold leading-none">+</div>
+							)}
+						</button>
 					)}
 
 					<input 
@@ -1623,14 +1636,40 @@ export default function DialogPage() {
 			</div>
 
 			{/* Медіа галерея */}
+			{/* Галерея для звичайного чату */}
 			<MediaGallery
 				profileId={idProfile.toString()}
-				isOpen={isMediaGalleryOpen}
-				onClose={() => setIsMediaGalleryOpen(false)}
+				isOpen={isChatGalleryOpen}
+				onClose={() => setIsChatGalleryOpen(false)}
 				onPhotoSelect={handlePhotoSelect}
 				maxSelection={6}
 				context="chat"
 				idRegularUser={idRegularUser}
+				mode="send"
+				allowAudio={true}
+			/>
+
+			{/* Галерея для прикріплення в ексклюзивному пості */}
+			<MediaGallery
+				profileId={idProfile.toString()}
+				isOpen={isAttachGalleryOpen}
+				onClose={() => setIsAttachGalleryOpen(false)}
+				onPhotoSelect={() => {}}
+				maxSelection={6}
+				context="chat"
+				idRegularUser={idRegularUser}
+				mode="attach"
+				actionLabel="Прикріпити"
+				allowAudio={false}
+				allowedPhotoTabs={ttTier === 'specialplus' ? ['special','special_plus'] : ['special']}
+				isSpecialPlusAllowed={ttTier === 'specialplus'}
+				onAttach={({ photos, videos }) => {
+					setAttachedPhotos(photos.map(p => p.idPhoto));
+					setAttachedVideos(videos.map(v => v.idVideo));
+					setAttachedPhotoPreviews(photos.map(p => ({ idPhoto: p.idPhoto, url: p.urls.urlPreview })));
+					setAttachedVideoPreviews(videos.map(v => ({ idVideo: v.idVideo, url: v.urls.urlThumbnail })));
+					setIsAttachGalleryOpen(false);
+				}}
 			/>
 
 			{/* Історія листування */}
@@ -1641,6 +1680,117 @@ export default function DialogPage() {
 				clientId={idRegularUser.toString()}
 				correspondenceId={dialogId}
 			/>
+
+			{/* Модальне вікно ексклюзивного посту */}
+			{isExclusiveModalOpen && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
+					<div className="bg-white rounded-lg w-full max-w-2xl p-4 space-y-4">
+						<div className="flex items-center justify-between">
+							<h3 className="text-lg font-semibold">Ексклюзивний пост</h3>
+							<button onClick={() => setIsExclusiveModalOpen(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+						</div>
+						<div>
+							<label className="block text-sm text-gray-600 mb-1">Текст (мінімум {minExclusiveLength} символів)</label>
+							<textarea
+								value={exclusiveText}
+								onChange={(e) => setExclusiveText(e.target.value)}
+								rows={4}
+								className="w-full border rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+								placeholder="Введіть текст посту..."
+							/>
+							<div className={`${exclusiveText.length < minExclusiveLength ? 'text-red-600' : 'text-gray-500'} text-sm mt-1`}>
+								Залишилось: {Math.max(0, minExclusiveLength - exclusiveText.length)}
+							</div>
+						</div>
+						<div className="space-y-2">
+							<div className="flex items-center justify-between">
+								<span className="text-sm text-gray-600">Прикріплені медіа</span>
+								<button
+									onClick={() => setIsAttachGalleryOpen(true)}
+									className="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-sm"
+								>
+									Додати з галереї
+								</button>
+							</div>
+							<div className="flex flex-wrap gap-2">
+								{attachedPhotoPreviews.map(p => (
+									<div key={`p-${p.idPhoto}`} className="relative w-16 h-16 rounded-md overflow-hidden border border-gray-200">
+										<img src={p.url} alt={`Фото ${p.idPhoto}`} className="w-full h-full object-cover" />
+										<button
+											onClick={() => {
+												setAttachedPhotos(prev => prev.filter(id => id !== p.idPhoto));
+												setAttachedPhotoPreviews(prev => prev.filter(x => x.idPhoto !== p.idPhoto));
+											}}
+											className="absolute -top-1 -right-1 bg-white/90 border border-gray-300 rounded-full w-5 h-5 text-[10px] flex items-center justify-center shadow"
+											title="Прибрати фото"
+										>
+											✕
+										</button>
+									</div>
+								))}
+								{attachedVideoPreviews.map(v => (
+									<div key={`v-${v.idVideo}`} className="relative w-16 h-16 rounded-md overflow-hidden border border-gray-200">
+										<img src={v.url} alt={`Відео ${v.idVideo}`} className="w-full h-full object-cover" />
+										<span className="absolute bottom-0 right-0 m-0.5 text-[10px] px-1 py-0.5 rounded bg-black/60 text-white">▶</span>
+										<button
+											onClick={() => {
+												setAttachedVideos(prev => prev.filter(id => id !== v.idVideo));
+												setAttachedVideoPreviews(prev => prev.filter(x => x.idVideo !== v.idVideo));
+											}}
+											className="absolute -top-1 -right-1 bg-white/90 border border-gray-300 rounded-full w-5 h-5 text-[10px] flex items-center justify-center shadow"
+											title="Прибрати відео"
+										>
+											✕
+										</button>
+									</div>
+								))}
+								{attachedPhotos.length === 0 && attachedVideos.length === 0 && (
+									<div className="text-sm text-gray-400">Нічого не прикріплено</div>
+								)}
+							</div>
+						</div>
+						<div className="flex items-center justify-between pt-2 border-t">
+							<div className="text-xs text-gray-500">
+								Правила: максимум 1 відео або 1 відео + будь-яка кількість фото, або ≥4 фото без відео. Special+ фото дозволені лише для tier=SpecialPlus.
+							</div>
+							<div className="space-x-2">
+								<button onClick={() => setIsExclusiveModalOpen(false)} className="px-4 py-2 rounded-md bg-gray-100 hover:bg-gray-200">Скасувати</button>
+								<button
+									onClick={async () => {
+										if (exclusiveText.length < minExclusiveLength) return;
+										const hasVideo = attachedVideos.length > 0;
+										if (hasVideo) {
+											if (attachedVideos.length > 1) return;
+										} else {
+											if (attachedPhotos.length > 0 && attachedPhotos.length < 4) return;
+										}
+										try {
+											const res = await apiPost<{ success: boolean; error?: string }>(
+												'/api/chats/tt-send-post',
+												{ profileId: idProfile, idRegularUser, idsGalleryPhotos: attachedPhotos, idsGalleryVideos: attachedVideos, text: exclusiveText }
+											);
+											if (res.success) {
+												setIsExclusiveModalOpen(false);
+												setExclusiveText('');
+												setAttachedPhotos([]);
+												setAttachedVideos([]);
+											}
+										} catch {}
+									}}
+									disabled={
+										exclusiveText.length < minExclusiveLength ||
+										(attachedVideos.length === 0 && (attachedPhotos.length === 0 || attachedPhotos.length < 4)) ||
+										(attachedVideos.length > 1)
+									}
+									className="px-4 py-2 rounded-md bg-purple-600 text-white disabled:bg-gray-300"
+								>
+									Відправити
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
 
 			{/* Модальне вікно стікерів */}
 			{isStickerModalOpen && (

@@ -115,6 +115,13 @@ interface MediaGalleryProps {
   maxSelection?: number;
   context?: 'chat' | 'profile' | 'other'; // Контекст відкриття галереї
   idRegularUser?: number; // ID користувача для відправки фото в чат
+  // Розширення для режиму прикріплення (без відправки на бек)
+  mode?: 'send' | 'attach';
+  actionLabel?: string; // Текст на кнопці дії
+  allowAudio?: boolean; // Прикріплення не показує аудіо
+  allowedPhotoTabs?: Array<'regular' | 'special' | 'special_plus' | 'temporary'>; // Які вкладки фото показувати
+  isSpecialPlusAllowed?: boolean; // Керування доступом до special_plus
+  onAttach?: (payload: { photos: Photo[]; videos: Video[] }) => void; // Колбек для режиму attach
 }
 
 export function MediaGallery({ 
@@ -124,7 +131,13 @@ export function MediaGallery({
   onPhotoSelect, 
   maxSelection = 6,
   context = 'other',
-  idRegularUser
+  idRegularUser,
+  mode = 'send',
+  actionLabel,
+  allowAudio = true,
+  allowedPhotoTabs,
+  isSpecialPlusAllowed = true,
+  onAttach
 }: MediaGalleryProps) {
   // Валідація props
   if (!profileId || isNaN(parseInt(profileId))) {
@@ -149,8 +162,8 @@ export function MediaGallery({
   const [hasMoreVideos, setHasMoreVideos] = useState(true);
   const [hasMoreAudios, setHasMoreAudios] = useState(true);
 
-  const [photoType, setPhotoType] = useState<'regular' | 'special' | 'temporary'>('regular');
-  const [activeTab, setActiveTab] = useState<'regular' | 'special' | 'temporary'>('regular');
+  const [photoType, setPhotoType] = useState<'regular' | 'special' | 'special_plus' | 'temporary'>(mode === 'attach' ? 'special' : 'regular');
+  const [activeTab, setActiveTab] = useState<'regular' | 'special' | 'special_plus' | 'temporary'>(mode === 'attach' ? 'special' : 'regular');
   const [mediaType, setMediaType] = useState<'photo' | 'video' | 'audio'>('photo');
   
   const [fullSizePhoto, setFullSizePhoto] = useState<Photo | null>(null);
@@ -246,9 +259,10 @@ export function MediaGallery({
   }, []);
 
   // Мемоізована функція для перевірки special тегів
-  const isSpecialPhoto = useCallback((photo: Photo) => {
-    return photo.tags?.some(tag => tag.code === 'special' || tag.code === 'special_plus') ?? false;
-  }, []);
+  const hasTag = useCallback((photo: Photo, code: string) => photo.tags?.some(tag => tag.code === code) ?? false, []);
+  const isSpecialPhoto = useCallback((photo: Photo) => hasTag(photo, 'special') || hasTag(photo, 'special_plus'), [hasTag]);
+  const isSpecialPlusPhoto = useCallback((photo: Photo) => hasTag(photo, 'special_plus'), [hasTag]);
+  const isSpecialExactPhoto = useCallback((photo: Photo) => hasTag(photo, 'special') && !hasTag(photo, 'special_plus'), [hasTag]);
 
   // Мемоізована функція для перевірки temporary фото
   const isTemporaryPhoto = useCallback((photo: Photo) => {
@@ -351,7 +365,7 @@ export function MediaGallery({
   // Централізована логіка фільтрації фото
   const filterPhotosByTypeAndStatus = useCallback((
     photos: Photo[], 
-    photoType: 'regular' | 'special' | 'temporary', 
+    photoType: 'regular' | 'special' | 'special_plus' | 'temporary', 
     statusFilter: 'all' | 'available' | 'accessed' | 'sent',
     context: string
   ): Photo[] => {
@@ -364,8 +378,11 @@ export function MediaGallery({
           filtered = photos.filter(photo => !isSpecialPhoto(photo) && !isTemporaryPhoto(photo));
           break;
         case 'special':
-          // Special фото включають як звичайні special, так і special з temporary
-          filtered = photos.filter(photo => isSpecialPhoto(photo));
+          // Лише точні special (без special_plus)
+          filtered = photos.filter(photo => isSpecialExactPhoto(photo));
+          break;
+        case 'special_plus':
+          filtered = photos.filter(photo => isSpecialPlusPhoto(photo));
           break;
         case 'temporary':
           // Тимчасові фото - тільки ті що temporary але НЕ special
@@ -454,30 +471,35 @@ export function MediaGallery({
     setAutoLoadAttempts(0);
   }, [statusFilter]);
 
-  // Завантажуємо фільтри з кешу при відкритті галереї
+  // Завжди активуємо першу дозволену вкладку при відкритті (ігноруємо кеш для photoType)
   useEffect(() => {
     if (isOpen) {
+      let initial: 'regular' | 'special' | 'special_plus' | 'temporary' = 'regular';
+      if (mode === 'attach') {
+        // Для attach віддаємо пріоритет special
+        if (!allowedPhotoTabs || allowedPhotoTabs.includes('special')) initial = 'special';
+        else if (allowedPhotoTabs.includes('special_plus')) initial = 'special_plus';
+        else if (allowedPhotoTabs.includes('regular')) initial = 'regular';
+        else if (allowedPhotoTabs.includes('temporary')) initial = 'temporary';
+      } else {
+        // Для звичайного режиму: перша з дозволених
+        if (allowedPhotoTabs && allowedPhotoTabs.length > 0) initial = allowedPhotoTabs[0];
+        else initial = 'regular';
+      }
+      setActiveTab(initial);
+      setPhotoType(initial);
+      // статус-фільтр можемо брати з кешу як і раніше
       try {
         const cachedFilters = localStorage.getItem(`gallery_filters_${profileId}`);
         if (cachedFilters) {
           const filters = JSON.parse(cachedFilters);
-          console.log('💾 Loading filters from cache:', filters);
-          
-          // Встановлюємо фільтри
-          if (filters.photoType) {
-            setPhotoType(filters.photoType);
-            setActiveTab(filters.photoType);
-          }
-          if (filters.statusFilter) {
-            console.log('💾 Setting statusFilter from cache:', filters.statusFilter);
-            setStatusFilter(filters.statusFilter);
-          }
+          if (filters.statusFilter) setStatusFilter(filters.statusFilter);
         }
-      } catch (error) {
-        console.warn('Failed to load filters from cache:', error);
+      } catch (e) {
+        // ignore
       }
     }
-  }, [isOpen]);
+  }, [isOpen, mode, allowedPhotoTabs, profileId]);
 
   // Зберігаємо фільтри в кеш при зміні
   useEffect(() => {
@@ -1554,12 +1576,21 @@ export function MediaGallery({
 
   // Перевірка чи фото можна вибрати
   const isPhotoSelectable = useCallback((photo: Photo) => {
+    // Режим прикріплення для ексклюзивних постів: дозволяємо тільки дозволені категорії
+    if (mode === 'attach') {
+      if (allowedPhotoTabs && allowedPhotoTabs.length > 0) {
+        const allowSpecial = allowedPhotoTabs.includes('special') && hasTag(photo, 'special');
+        const allowSpecialPlus = allowedPhotoTabs.includes('special_plus') && hasTag(photo, 'special_plus');
+        return allowSpecial || allowSpecialPlus;
+      }
+      // Якщо не задано, за замовчуванням забороняємо special у chat
+      return !isSpecialPhoto(photo);
+    }
     if (context === 'chat') {
-      // В чаті можна вибирати доступні фото та тимчасові фото (але не special)
       return !isSpecialPhoto(photo);
     }
     return true;
-  }, [context, isSpecialPhoto]);
+  }, [mode, allowedPhotoTabs, context, isSpecialPhoto, hasTag]);
 
   // Форматування тривалості відео
   const formatDuration = useCallback((seconds: number): string => {
@@ -1587,7 +1618,7 @@ export function MediaGallery({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
       <div className="bg-white rounded-lg w-full max-w-4xl h-[80vh] flex flex-col">
         {/* Header with media type tabs and close button */}
         <div className="flex items-center justify-between p-3">
@@ -1612,16 +1643,21 @@ export function MediaGallery({
             >
               Відео
             </button>
-            <button
-              onClick={() => setMediaType('audio')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                mediaType === 'audio'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Аудіо
-            </button>
+            {(mode !== 'attach' || allowAudio) && (
+              <button
+                onClick={() => setMediaType('audio')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  mediaType === 'audio'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Аудіо
+              </button>
+            )}
+            {mode === 'attach' && !allowAudio && (
+              <span className="ml-2 text-xs text-gray-400">(у режимі прикріплення аудіо приховано)</span>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -1655,42 +1691,67 @@ export function MediaGallery({
               {/* Photo type tabs - only in chat context */}
               {context === 'chat' ? (
                 <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-                  <button
-                    onClick={() => setPhotoType('regular')}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                      photoType === 'regular'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    Звичайні
-                  </button>
-                  <button
-                    onClick={() => setPhotoType('special')}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
-                      photoType === 'special'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0112.12 15.12z" />
-                    </svg>
-                    <span>Special</span>
-                  </button>
-                  <button
-                    onClick={() => setPhotoType('temporary')}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
-                      photoType === 'temporary'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V5z" />
-                    </svg>
-                    <span>Тимчасові</span>
-                  </button>
+                  {(!allowedPhotoTabs || allowedPhotoTabs.includes('regular')) && (
+                    <button
+                      onClick={() => setPhotoType('regular')}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                        photoType === 'regular'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Звичайні
+                    </button>
+                  )}
+                  {(!allowedPhotoTabs || allowedPhotoTabs.includes('special')) && (
+                    <button
+                      onClick={() => setPhotoType('special')}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                        photoType === 'special'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0112.12 15.12z" />
+                      </svg>
+                      <span>Special</span>
+                    </button>
+                  )}
+                  {(!allowedPhotoTabs || allowedPhotoTabs.includes('special_plus')) && (
+                    <button
+                      onClick={() => setPhotoType('special_plus')}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                        photoType === 'special_plus'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                      title={'Special+'}
+                    >
+                      <span className="relative inline-flex items-center justify-center w-4 h-4">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0112.12 15.12z" />
+                          </svg>
+                          <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-white text-pink-600 text-[9px] font-extrabold leading-none flex items-center justify-center border border-pink-500">+</span>
+                        </span>
+                        <span>Special+</span>
+                      </button>
+                    )}
+                  {(!allowedPhotoTabs || allowedPhotoTabs.includes('temporary')) && (
+                    <button
+                      onClick={() => setPhotoType('temporary')}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                        photoType === 'temporary'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V5z" />
+                      </svg>
+                      <span>Тимчасові</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <h3 className="font-medium">All photos</h3>
@@ -1775,9 +1836,12 @@ export function MediaGallery({
               >
               {filteredPhotos.map((photo) => {
                 const isSpecial = isSpecialPhoto(photo);
+                const isSpecialPlus = isSpecialPlusPhoto(photo);
+                const isSpecialExact = isSpecialExactPhoto(photo);
                 const isTemporary = isTemporaryPhoto(photo);
                 const isSelectable = isPhotoSelectable(photo);
-                const shouldBeGrayed = context === 'chat' && isSpecial; // Тільки special фото сірі
+                // У режимі прикріплення дозволяємо вибір special/special+ і показуємо кольоровими
+                const shouldBeGrayed = context === 'chat' && isSpecial && mode !== 'attach';
                 
                 return (
                   <div
@@ -1798,12 +1862,17 @@ export function MediaGallery({
                       loading="lazy"
                     />
                     
-                    {/* Special photo indicator */}
-                    {isSpecial && (
-                      <div className="absolute top-1 left-1 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center shadow-sm">
+                    {/* Special / Special+ photo indicator */}
+                    {(isSpecialExact || isSpecialPlus) && (
+                      <div className="absolute top-1 left-1 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center shadow-sm relative">
+                        {/* base special icon */}
                         <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                           <path d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0112.12 15.12z" />
                         </svg>
+                        {/* plus overlay for special+ */}
+                        {isSpecialPlus && (
+                          <div className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-white text-pink-600 flex items-center justify-center text-[10px] font-extrabold leading-none">+</div>
+                        )}
                       </div>
                     )}
 
@@ -2330,32 +2399,46 @@ export function MediaGallery({
               >
                 Cancel
               </button>
-              <button
-                onClick={
-                  mediaType === 'photo' 
-                    ? handleSendPhotos 
-                    : mediaType === 'video' 
-                    ? handleSendVideos 
-                    : handleSendAudios
-                }
-                disabled={
-                  (mediaType === 'photo' ? selectedPhotos.length === 0 
-                   : mediaType === 'video' ? selectedVideos.length === 0 
-                   : selectedAudios.length === 0) || loading
-                }
-                className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
-                  ((mediaType === 'photo' ? selectedPhotos.length > 0 
-                    : mediaType === 'video' ? selectedVideos.length > 0 
-                    : selectedAudios.length > 0) && !loading)
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                {loading && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                )}
-                <span>{loading ? 'Sending...' : 'Send →'}</span>
-              </button>
+              {mode === 'attach' && onAttach ? (
+                <button
+                  onClick={() => onAttach({ photos: selectedPhotos, videos: selectedVideos })}
+                  disabled={(selectedPhotos.length === 0 && selectedVideos.length === 0) || loading}
+                  className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
+                    ((selectedPhotos.length > 0 || selectedVideos.length > 0) && !loading)
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  <span>{actionLabel || 'Прикріпити'}</span>
+                </button>
+              ) : (
+                <button
+                  onClick={
+                    mediaType === 'photo' 
+                      ? handleSendPhotos 
+                      : mediaType === 'video' 
+                      ? handleSendVideos 
+                      : handleSendAudios
+                  }
+                  disabled={
+                    (mediaType === 'photo' ? selectedPhotos.length === 0 
+                     : mediaType === 'video' ? selectedVideos.length === 0 
+                     : selectedAudios.length === 0) || loading
+                  }
+                  className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
+                    ((mediaType === 'photo' ? selectedPhotos.length > 0 
+                      : mediaType === 'video' ? selectedVideos.length > 0 
+                      : selectedAudios.length > 0) && !loading)
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {loading && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  )}
+                  <span>{loading ? 'Sending...' : 'Send →'}</span>
+                </button>
+              )}
             </div>
           </div>
         )}

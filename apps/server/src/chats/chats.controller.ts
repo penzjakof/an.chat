@@ -135,4 +135,15 @@ export class ChatsController {
 		console.log('⚡ ChatsController.getTtRestrictions called:', body);
 		return this.chats.getTtRestrictions(req.auth!, body.profileId, body.idInterlocutor);
 	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 нових постів за хвилину
+	@Post('tt-send-post')
+	async sendExclusivePost(
+		@Req() req: Request,
+		@Body() body: { profileId: number; idRegularUser: number; idsGalleryPhotos: number[]; idsGalleryVideos: number[]; text: string }
+	) {
+		console.log('📝 ChatsController.sendExclusivePost called:', { profileId: body.profileId, idRegularUser: body.idRegularUser, photos: body.idsGalleryPhotos?.length || 0, videos: body.idsGalleryVideos?.length || 0, textLen: body.text?.length || 0 });
+		return this.chats.sendExclusivePost(req.auth!, body);
+	}
 }

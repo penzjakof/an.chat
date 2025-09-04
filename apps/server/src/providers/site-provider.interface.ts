@@ -31,4 +31,6 @@ export interface SiteProvider {
 	searchDialogByPair?(profileId: string, clientId: number): Promise<{ success: boolean; dialog?: any; error?: string }>;
 	fetchRestrictions?(profileId: string, clientId: number): Promise<{ success: boolean; lettersLeft?: number; error?: string }>;
 	getTtRestrictions?(ctx: ProviderRequestContext, profileId: number, idInterlocutor: number): Promise<{ success: boolean; hasExclusivePosts?: boolean; categories?: string[]; categoryCounts?: Record<string, number>; tier?: 'special' | 'specialplus'; error?: string }>;
+	/** Відправка ексклюзивного посту (новий тип повідомлення) */
+	sendExclusivePost?(profileId: number, idRegularUser: number, payload: { idsGalleryPhotos: number[]; idsGalleryVideos: number[]; text: string }): Promise<{ success: boolean; data?: any; error?: string }>;
 }

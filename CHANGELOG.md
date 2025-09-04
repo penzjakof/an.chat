@@ -19,12 +19,28 @@
 
 #### 🎨 Frontend
 - `apps/web/src/utils/grpcUtils.ts` — клієнт до бекенду, повертає `tier`
-- `apps/web/src/app/chats/[dialogId]/page.tsx` — індикатор блискавки з кольором за `tier`
+- `apps/web/src/app/chats/[dialogId]/page.tsx` — індикатор блискавки з кольором за `tier`; модалка Exclusive Post; прев’ю прикріплень; дві галереї (чат/attach)
+- `apps/web/src/components/MediaGallery.tsx` — режим `attach`, нові пропси (`mode`, `actionLabel`, `allowAudio`, `allowedPhotoTabs`, `isSpecialPlusAllowed`, `onAttach`), автоселект першої вкладки, кольорові Special/Special+ в attach, іконки вкладок (вогонь; вогонь+плюс)
 
 #### 🐛 Виправлення
 - Неправильне формування referer/тіла для gRPC — виправлено
 - Некоректна типізація body (Uint8Array → ArrayBuffer) — виправлено
 - CORS: перенесено виклик з фронта на бекенд-проксі
+- 404 на `/api/chats/tt-send-post`: вирішено повним перезапуском dev-процесів і синком білда
+
+### ✉️ Exclusive Post Sending (нове)
+
+#### ✨ Нове
+- `POST /api/chats/tt-send-post` — проксі до `talkytimes.com/platform/chat/send/new-post`
+- Модалка для відправки exclusive постів з валідацією: мін. 100 символів; правила вибору медіа (макс 1 відео; 1 відео + N фото; або ≥4 фото без відео)
+- Attach-галерея відкривається з модалки; прев’ю вибраних фото/відео з можливістю видалення
+
+#### 🔧 Backend
+- `apps/server/src/chats/chats.controller.ts` — `POST /api/chats/tt-send-post`
+- `apps/server/src/chats/chats.service.ts` — делегація у провайдер
+- `apps/server/src/providers/site-provider.interface.ts` — `sendExclusivePost`
+- `apps/server/src/providers/talkytimes/talkytimes.provider.ts` — імплементація `sendExclusivePost`
+
 
 ---
 
