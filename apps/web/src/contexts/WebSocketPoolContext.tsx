@@ -40,7 +40,7 @@ export function WebSocketPoolProvider({ children }: { children: React.ReactNode 
 
 
     
-    const socket = io(`${apiUrl}/ws`, {
+    const socket = io(`${apiUrl}`, {
       transports: ['websocket'],
       auth: { token, profileId }, // Передаємо profileId в auth
       timeout: 10000,

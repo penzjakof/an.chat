@@ -14,6 +14,12 @@ export interface PhotoUrls {
   urlStandard: string;
 }
 
+export interface VideoUrls {
+  urlMp4Hd: string;
+  urlMp4Sd: string;
+  urlThumbnail: string;
+}
+
 export interface PhotoStatus {
   code: string;
   description: string;
@@ -30,8 +36,24 @@ export interface Photo {
   canDisagree: boolean;
 }
 
+export interface Video {
+  idVideo: number;
+  idUser: number;
+  status: PhotoStatus;
+  tags: PhotoTag[];
+  declineReasons: string[];
+  comment: string;
+  urls: VideoUrls;
+  duration: number;
+}
+
 export interface PhotoConnectionStatus {
   idPhoto: number;
+  status: 'accessed' | 'sent' | null;
+}
+
+export interface VideoConnectionStatus {
+  idVideo: number;
   status: 'accessed' | 'sent' | null;
 }
 
@@ -50,6 +72,11 @@ interface CachedPhotoData {
 export interface GalleryResponse {
   cursor: string;
   photos: Photo[];
+}
+
+export interface VideoGalleryResponse {
+  cursor: string;
+  videos: Video[];
 }
 
 interface MediaGalleryProps {
@@ -80,19 +107,27 @@ export function MediaGallery({
     console.warn('MediaGallery: idRegularUser is required when context is "chat"');
   }
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [videos, setVideos] = useState<Video[]>([]);
   const [selectedPhotos, setSelectedPhotos] = useState<Photo[]>([]);
+  const [selectedVideos, setSelectedVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(false);
   const [regularCursor, setRegularCursor] = useState('');
   const [temporaryCursor, setTemporaryCursor] = useState('');
+  const [videoCursor, setVideoCursor] = useState('');
   const [hasMore, setHasMore] = useState(true);
+  const [hasMoreVideos, setHasMoreVideos] = useState(true);
 
   const [photoType, setPhotoType] = useState<'regular' | 'special' | 'temporary'>('regular');
   const [activeTab, setActiveTab] = useState<'regular' | 'special' | 'temporary'>('regular');
   const [mediaType, setMediaType] = useState<'photo' | 'video' | 'audio'>('photo');
+  
   const [fullSizePhoto, setFullSizePhoto] = useState<Photo | null>(null);
+  const [fullSizeVideo, setFullSizeVideo] = useState<Video | null>(null);
   const [photoStatuses, setPhotoStatuses] = useState<Map<number, 'accessed' | 'sent' | null>>(new Map());
+  const [videoStatuses, setVideoStatuses] = useState<Map<number, 'accessed' | 'sent' | null>>(new Map());
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'accessed' | 'sent'>('all');
   const [statusRequestedPhotos, setStatusRequestedPhotos] = useState<Set<number>>(new Set()); // Відстеження запитів статусів
+  const [statusRequestedVideos, setStatusRequestedVideos] = useState<Set<number>>(new Set()); // Відстеження запитів статусів відео
   const [temporaryPhotoIds, setTemporaryPhotoIds] = useState<Set<number>>(new Set()); // Відстеження temporary фото
   const [autoLoadAttempts, setAutoLoadAttempts] = useState(0); // Лічильник спроб автозавантаження
 
@@ -323,6 +358,31 @@ export function MediaGallery({
     return filtered;
   }, [isSpecialPhoto, isTemporaryPhoto, photoStatuses]);
 
+  // Функція фільтрації відео за статусом
+  const filterVideosByStatus = useCallback((
+    videos: Video[], 
+    statusFilter: 'all' | 'available' | 'accessed' | 'sent'
+  ): Video[] => {
+    // Фільтрація за статусом
+    if (statusFilter !== 'all') {
+      return videos.filter(video => {
+        const status = videoStatuses.get(video.idVideo);
+        switch (statusFilter) {
+          case 'available':
+            return status === null; // Тільки відео без статусу (не переглянуті)
+          case 'accessed':
+            return status === 'accessed'; // Тільки переглянуті
+          case 'sent':
+            return status === 'sent'; // Тільки надіслані
+          default:
+            return true;
+        }
+      });
+    }
+
+    return videos;
+  }, [videoStatuses]);
+
   const convertCacheToPhotos = useCallback((cacheMap: Map<number, CachedPhotoData>): Photo[] => {
     return Array.from(cacheMap.values()).map(cached => ({
       idPhoto: cached.idPhoto,
@@ -411,6 +471,78 @@ export function MediaGallery({
     regularCursorRef.current = regularCursor;
     temporaryCursorRef.current = temporaryCursor;
   }, [hasMore, regularCursor, temporaryCursor]);
+
+  // Завантаження статусів відео з відстеженням (батчами по 100)
+  const loadVideoStatuses = useCallback(async (videos: Video[], idUser: number) => {
+    if (videos.length === 0) return;
+
+    // Фільтруємо тільки ті відео, для яких ще не запитували статуси
+    const videosToRequest = videos.filter(video => !statusRequestedVideos.has(video.idVideo));
+    
+    if (videosToRequest.length === 0) {
+      return;
+    }
+
+    // Розбиваємо на батчі по 100 відео
+    const batchSize = 100;
+    const batches = [];
+    for (let i = 0; i < videosToRequest.length; i += batchSize) {
+      batches.push(videosToRequest.slice(i, i + batchSize));
+    }
+
+    // Обробляємо кожен батч
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+
+      try {
+        const idsVideos = batch.map(v => v.idVideo);
+        
+        // Відмічаємо що для цих відео запит відправлено
+        setStatusRequestedVideos(prev => {
+          const newSet = new Set(prev);
+          idsVideos.forEach(id => newSet.add(id));
+          return newSet;
+        });
+
+        const response = await apiPost('/api/gallery/video-statuses', {
+          idUser,
+          idsVideos,
+          profileId: parseInt(profileId)
+        });
+
+        const typedResponse = response as { success: boolean; data?: { videos: VideoConnectionStatus[] }; error?: string };
+        if (typedResponse.success && typedResponse.data?.videos) {
+          setVideoStatuses(prev => {
+            const newStatusMap = new Map(prev);
+            typedResponse.data!.videos.forEach((videoStatus: VideoConnectionStatus) => {
+              newStatusMap.set(videoStatus.idVideo, videoStatus.status);
+            });
+            
+            return newStatusMap;
+          });
+        } else {
+          // У випадку помилки - видаляємо з списку запитаних, щоб спробувати знову
+          setStatusRequestedVideos(prev => {
+            const newSet = new Set(prev);
+            batch.forEach(video => newSet.delete(video.idVideo));
+            return newSet;
+          });
+        }
+      } catch (error) {
+        // У випадку помилки - видаляємо з списку запитаних, щоб спробувати знову
+        setStatusRequestedVideos(prev => {
+          const newSet = new Set(prev);
+          batch.forEach(video => newSet.delete(video.idVideo));
+          return newSet;
+        });
+      }
+
+      // Невелика затримка між батчами щоб не перевантажити API
+      if (batchIndex < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+  }, [profileId, statusRequestedVideos]);
 
   // Завантаження статусів фото з відстеженням (батчами по 100)
   const loadPhotoStatuses = useCallback(async (photos: Photo[], idUser: number) => {
@@ -534,6 +666,58 @@ export function MediaGallery({
     }
   }, [isOpen, photos.length, context, ensureAllStatusesLoaded]);
 
+  // Завантаження відео
+  const loadVideos = useCallback(async (reset: boolean = false) => {
+    if (loading) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const cursor = reset ? '' : videoCursor;
+      const response = await apiGet(`/api/gallery/${profileId}/videos`, {
+        cursor,
+        limit: '100',
+        statuses: 'approved'
+      });
+
+      const typedResponse = response as { success: boolean; data?: VideoGalleryResponse; error?: string };
+      if (typedResponse.success && typedResponse.data) {
+        const videoData = typedResponse.data;
+        
+        if (reset) {
+          setVideos(videoData.videos);
+        } else {
+          setVideos(prev => {
+            const existingIds = new Set(prev.map(v => v.idVideo));
+            const newVideos = videoData.videos.filter(video => !existingIds.has(video.idVideo));
+            return [...prev, ...newVideos].sort((a, b) => b.idVideo - a.idVideo);
+          });
+        }
+        
+        setVideoCursor(videoData.cursor);
+        setHasMoreVideos(videoData.videos.length >= 100);
+        
+        // Завантажуємо статуси для відео якщо є idRegularUser
+        if (idRegularUser && context === 'chat') {
+          const videosToLoad = reset ? videoData.videos : videoData.videos.filter(video => {
+            const existingIds = new Set(videos.map(v => v.idVideo));
+            return !existingIds.has(video.idVideo);
+          });
+          if (videosToLoad.length > 0) {
+            loadVideoStatuses(videosToLoad, idRegularUser);
+          }
+        }
+      } else {
+        setError('Помилка завантаження відео');
+      }
+    } catch (err) {
+      setError('Помилка завантаження відео');
+    } finally {
+      setLoading(false);
+    }
+  }, [profileId, loading, videoCursor, videos, idRegularUser, context, loadVideoStatuses]);
+
   // Завантаження перших 500 фото з показом одразу
   const loadInitialPhotos = useCallback(async () => {
     if (loading) return;
@@ -571,7 +755,7 @@ export function MediaGallery({
     setError(null);
 
     try {
-      let allPhotos: Photo[] = [];
+      const allPhotos: Photo[] = [];
       let regularCursor = '';
       let temporaryCursor = '';
       let hasMoreRegular = true;
@@ -619,7 +803,7 @@ export function MediaGallery({
           [temporaryResponse] = responses;
         }
 
-        let newPhotos: Photo[] = [];
+        const newPhotos: Photo[] = [];
 
         // Обробляємо відповіді
         const typedRegularResponse = regularResponse as { success: boolean; data?: GalleryResponse; error?: string };
@@ -779,7 +963,7 @@ export function MediaGallery({
         [temporaryResponse] = responses;
       }
 
-      let newPhotos: Photo[] = [];
+      const newPhotos: Photo[] = [];
       let newRegularCursor = regularCursor;
       let newTemporaryCursor = temporaryCursor;
 
@@ -864,20 +1048,25 @@ export function MediaGallery({
     loadPhotosRef.current = loadMorePhotos;
   }, [loadMorePhotos]);
 
-  // Обробник скролу для завантаження більше фото
+  // Обробник скролу для завантаження більше медіа
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
-    if (!container || loading || !hasMore) return;
+    if (!container || loading) return;
 
     const { scrollTop, scrollHeight, clientHeight } = container;
     const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
 
-    // Завантажуємо більше фото коли доскролили до 80%
+    // Завантажуємо більше медіа коли доскролили до 80%
     if (scrollPercentage > 0.8) {
-      console.log('🔄 Scroll threshold reached! Loading more photos...');
-      loadMorePhotos();
+      if (mediaType === 'photo' && hasMore) {
+        console.log('🔄 Scroll threshold reached! Loading more photos...');
+        loadMorePhotos();
+      } else if (mediaType === 'video' && hasMoreVideos) {
+        console.log('🔄 Scroll threshold reached! Loading more videos...');
+        loadVideos(false);
+      }
     }
-  }, [loading, hasMore, loadMorePhotos]);
+  }, [loading, hasMore, hasMoreVideos, mediaType, loadMorePhotos, loadVideos]);
 
   // Додаємо обробник скролу
   useEffect(() => {
@@ -922,30 +1111,47 @@ export function MediaGallery({
     return filterPhotosByTypeAndStatus(photos, photoType, statusFilter, context);
   }, [photos, photoType, statusFilter, context, filterPhotosByTypeAndStatus]);
 
+  // Мемоізований список відфільтрованих відео
+  const filteredVideos = useMemo(() => {
+    return filterVideosByStatus(videos, statusFilter);
+  }, [videos, statusFilter, filterVideosByStatus]);
+
   // Видаляємо checkAndLoadMorePhotos щоб уникнути циклічних залежностей
 
-  // Завантажуємо фото при відкритті галереї
+  // Завантажуємо медіа при відкритті галереї або зміні типу
   useEffect(() => {
     if (isOpen) {
-      setPhotos([]);
-      setRegularCursor('');
-      setTemporaryCursor('');
-      setHasMore(true);
-      setSelectedPhotos([]);
-      setError(null);
-      setAutoLoadAttempts(0); // Скидаємо лічильник при відкритті
-      setPhotoStatuses(new Map()); // Очищуємо статуси фото
+      if (mediaType === 'photo') {
+        setPhotos([]);
+        setRegularCursor('');
+        setTemporaryCursor('');
+        setHasMore(true);
+        setSelectedPhotos([]);
+        setError(null);
+        setAutoLoadAttempts(0); // Скидаємо лічильник при відкритті
+        setPhotoStatuses(new Map()); // Очищуємо статуси фото
 
-      setStatusRequestedPhotos(new Set()); // Очищуємо відстеження запитів статусів
-      setTemporaryPhotoIds(new Set()); // Очищуємо відстеження temporary фото
-      // Завантажуємо перші 500 фото
-      loadInitialPhotos();
+        setStatusRequestedPhotos(new Set()); // Очищуємо відстеження запитів статусів
+        setTemporaryPhotoIds(new Set()); // Очищуємо відстеження temporary фото
+        // Завантажуємо перші 500 фото
+        loadInitialPhotos();
+      } else if (mediaType === 'video') {
+        setVideos([]);
+        setVideoCursor('');
+        setHasMoreVideos(true);
+        setSelectedVideos([]);
+        setVideoStatuses(new Map()); // Очищуємо статуси відео
+        setStatusRequestedVideos(new Set()); // Очищуємо відстеження запитів статусів відео
+        setError(null);
+        // Завантажуємо відео
+        loadVideos(true);
+      }
     } else {
       // Очищуємо стан при закритті
       setError(null);
       setLoading(false);
     }
-  }, [isOpen, profileId]);
+  }, [isOpen, profileId, mediaType]);
 
 
 
@@ -972,6 +1178,24 @@ export function MediaGallery({
           return prev;
         }
         return [...prev, photo];
+      }
+    });
+  };
+
+  // Обробка вибору відео
+  const handleVideoSelect = (video: Video) => {
+    setSelectedVideos(prev => {
+      const isSelected = prev.some(v => v.idVideo === video.idVideo);
+      
+      if (isSelected) {
+        // Видаляємо відео з вибраних
+        return prev.filter(v => v.idVideo !== video.idVideo);
+      } else {
+        // Додаємо відео до вибраних (з обмеженням)
+        if (prev.length >= maxSelection) {
+          return prev;
+        }
+        return [...prev, video];
       }
     });
   };
@@ -1009,6 +1233,38 @@ export function MediaGallery({
     }
   };
 
+  // Відправка вибраних відео
+  const handleSendVideos = async () => {
+    if (selectedVideos.length === 0) return;
+
+    // Якщо є idRegularUser, відправляємо через API
+    if (idRegularUser && context === 'chat') {
+      setLoading(true);
+      try {
+        const response = await apiPost('/api/gallery/send-videos', {
+          idsGalleryVideos: selectedVideos.map(v => v.idVideo),
+          idRegularUser,
+          profileId: parseInt(profileId)
+        });
+
+        const typedResponse = response as { success: boolean; data?: any; error?: string };
+        if (typedResponse.success) {
+          onClose();
+          setSelectedVideos([]);
+        } else {
+          setError('Помилка відправки відео');
+        }
+      } catch {
+        setError('Помилка відправки відео');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Для інших контекстів поки що не підтримуємо
+      setError('Відправка відео підтримується тільки в чаті');
+    }
+  };
+
   // Мемоізований Set для швидкої перевірки вибраних фото
   const selectedPhotoIds = useMemo(() => {
     return new Set(selectedPhotos.map(p => p.idPhoto));
@@ -1027,6 +1283,23 @@ export function MediaGallery({
     }
     return true;
   }, [context, isSpecialPhoto]);
+
+  // Форматування тривалості відео
+  const formatDuration = useCallback((seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, []);
+
+  // Мемоізований Set для швидкої перевірки вибраних відео
+  const selectedVideoIds = useMemo(() => {
+    return new Set(selectedVideos.map(v => v.idVideo));
+  }, [selectedVideos]);
+
+  // Перевірка чи відео вибране
+  const isVideoSelected = useCallback((video: Video) => {
+    return selectedVideoIds.has(video.idVideo);
+  }, [selectedVideoIds]);
 
 
 
@@ -1081,11 +1354,13 @@ export function MediaGallery({
 
         {/* Девайдер з індикацією завантаження */}
         <div className={`border-t-2 transition-colors duration-300 ${
-          loading || (filteredPhotos.length < 15 && hasMore) 
+          loading || (mediaType === 'photo' && filteredPhotos.length < 15 && hasMore) || 
+          (mediaType === 'video' && videos.length < 15 && hasMoreVideos)
             ? 'border-blue-500' 
             : 'border-gray-200'
         }`} style={{
-          animation: loading || (filteredPhotos.length < 15 && hasMore) 
+          animation: loading || (mediaType === 'photo' && filteredPhotos.length < 15 && hasMore) || 
+          (mediaType === 'video' && videos.length < 15 && hasMoreVideos)
             ? 'pulse 0.8s ease-in-out infinite alternate' 
             : 'none'
         }}></div>
@@ -1365,14 +1640,196 @@ export function MediaGallery({
           </div>
           ) : mediaType === 'video' ? (
             /* Video Grid */
-            <div className="flex-1 p-3 flex items-center justify-center">
-              <div className="flex flex-col items-center justify-center text-gray-500">
-                <svg className="w-16 h-16 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                <p className="text-lg font-medium mb-2">Відео поки недоступні</p>
-                <p className="text-sm text-center">Функціональність відео буде додана пізніше</p>
+            <div className="flex-1 p-3 flex flex-col min-h-0">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-medium">Відео</h3>
               </div>
+              
+              {/* Status filters for videos */}
+              {context === 'chat' && idRegularUser && (
+                <div className="flex space-x-1 bg-gray-100 rounded-lg p-1 mb-3">
+                  <button
+                    onClick={() => setStatusFilter('all')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                      statusFilter === 'all'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                    <span>Усі</span>
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('available')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                      statusFilter === 'available'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Доступні</span>
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('accessed')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                      statusFilter === 'accessed'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span>Переглянуті</span>
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('sent')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                      statusFilter === 'sent'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    <span>Відправлені</span>
+                  </button>
+                </div>
+              )}
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <p className="text-red-600">{error}</p>
+                </div>
+              )}
+
+              {/* Videos Grid */}
+              <div 
+                ref={scrollContainerRef}
+                className="overflow-y-auto flex-1 p-2"
+              >
+                <div 
+                  className="grid grid-cols-5 gap-2"
+                  style={{
+                    gridAutoRows: 'minmax(0, max-content)'
+                  }}
+                >
+                  {filteredVideos.map((video) => (
+                    <div
+                      key={video.idVideo}
+                      className={`group relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                        isVideoSelected(video)
+                          ? 'cursor-pointer border-blue-500 ring-2 ring-blue-200'
+                          : 'cursor-pointer border-gray-200 hover:border-gray-300'
+                      }`}
+                      onClick={() => handleVideoSelect(video)}
+                    >
+                      <img
+                        src={video.urls.urlThumbnail}
+                        alt={`Video ${video.idVideo}`}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+
+                      {/* Duration badge */}
+                      <div className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                        {formatDuration(video.duration)}
+                      </div>
+
+                      {/* Video status indicator */}
+                      {(() => {
+                        const status = videoStatuses.get(video.idVideo);
+                        if (!status) return null;
+                        
+                        return (
+                          <div className={`absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center ${
+                            status === 'accessed' 
+                              ? 'bg-green-500' 
+                              : status === 'sent' 
+                              ? 'bg-yellow-500' 
+                              : 'bg-black bg-opacity-60'
+                          }`}>
+                            {status === 'accessed' ? (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            ) : status === 'sent' ? (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                              </svg>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Selection indicator */}
+                      {isVideoSelected(video) && (
+                        <div className="absolute top-1 right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
+
+                      {/* Full size view button - показується при ховері */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFullSizeVideo(video);
+                        }}
+                        className="absolute bottom-1 left-1 w-12 h-12 bg-black bg-opacity-60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-opacity-80"
+                        title="Переглянути відео"
+                      >
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* No more videos message */}
+                  {!loading && !hasMoreVideos && videos.length > 0 && (
+                    <div className="col-span-5 flex flex-col items-center py-6 text-gray-500">
+                      <svg className="w-12 h-12 mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      <p className="text-sm font-medium mb-1">Це всі відео</p>
+                      <p className="text-xs text-gray-400">Більше відео поки що немає</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Empty state for videos */}
+              {filteredVideos.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                  {(loading || hasMoreVideos) ? (
+                    <>
+                      <svg className="w-12 h-12 mb-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      <p className="text-lg font-medium mb-2">Шукаємо відео...</p>
+                      <p className="text-sm text-center">Завантажуємо відео з сервера</p>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-12 h-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      <p className="text-lg font-medium mb-2">Немає відео</p>
+                      <p className="text-sm text-center">В цьому профілі поки що немає відео</p>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             /* Audio Grid */
@@ -1388,11 +1845,14 @@ export function MediaGallery({
           )}
         </div>
 
-        {/* Footer - only show for photos */}
-        {mediaType === 'photo' && (
+        {/* Footer - show for photos and videos */}
+        {(mediaType === 'photo' || mediaType === 'video') && (
           <div className="border-t p-3 flex items-center justify-between">
             <div className="text-sm text-gray-500">
-              {selectedPhotos.length} of {maxSelection} selected
+              {mediaType === 'photo' 
+                ? `${selectedPhotos.length} of ${maxSelection} selected`
+                : `${selectedVideos.length} of ${Math.min(maxSelection, filteredVideos.length)} selected`
+              }
             </div>
             <div className="flex space-x-2">
               <button
@@ -1402,10 +1862,10 @@ export function MediaGallery({
                 Cancel
               </button>
               <button
-                onClick={handleSendPhotos}
-                disabled={selectedPhotos.length === 0 || loading}
+                onClick={mediaType === 'photo' ? handleSendPhotos : handleSendVideos}
+                disabled={(mediaType === 'photo' ? selectedPhotos.length === 0 : selectedVideos.length === 0) || loading}
                 className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
-                  selectedPhotos.length > 0 && !loading
+                  ((mediaType === 'photo' ? selectedPhotos.length > 0 : selectedVideos.length > 0) && !loading)
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
@@ -1442,6 +1902,40 @@ export function MediaGallery({
               onClick={(e) => {
                 e.stopPropagation();
                 setFullSizePhoto(null);
+              }}
+              className="absolute top-4 right-4 w-10 h-10 bg-black bg-opacity-60 rounded-full flex items-center justify-center text-white hover:bg-opacity-80 transition-all"
+              title="Закрити"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Full size video modal */}
+      {fullSizeVideo && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[60]"
+          onClick={() => setFullSizeVideo(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center">
+            <video
+              src={fullSizeVideo.urls.urlMp4Hd}
+              controls
+              autoPlay
+              className="max-w-full max-h-full object-contain rounded-lg"
+              onError={(e) => {
+                // Fallback to SD quality if HD fails
+                const target = e.target as HTMLVideoElement;
+                target.src = fullSizeVideo.urls.urlMp4Sd;
+              }}
+            />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setFullSizeVideo(null);
               }}
               className="absolute top-4 right-4 w-10 h-10 bg-black bg-opacity-60 rounded-full flex items-center justify-center text-white hover:bg-opacity-80 transition-all"
               title="Закрити"

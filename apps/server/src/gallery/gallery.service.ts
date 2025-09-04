@@ -14,6 +14,12 @@ export interface PhotoUrls {
   urlStandard: string;
 }
 
+export interface VideoUrls {
+  urlMp4Hd: string;
+  urlMp4Sd: string;
+  urlThumbnail: string;
+}
+
 export interface PhotoStatus {
   code: string;
   description: string;
@@ -30,9 +36,25 @@ export interface Photo {
   canDisagree: boolean;
 }
 
+export interface Video {
+  idVideo: number;
+  idUser: number;
+  status: PhotoStatus;
+  tags: PhotoTag[];
+  declineReasons: string[];
+  comment: string;
+  urls: VideoUrls;
+  duration: number;
+}
+
 export interface GalleryResponse {
   cursor: string;
   photos: Photo[];
+}
+
+export interface VideoGalleryResponse {
+  cursor: string;
+  videos: Video[];
 }
 
 export interface GalleryRequest {
@@ -43,6 +65,14 @@ export interface GalleryRequest {
   idAlbum?: number | null;
   idAlbumExcluded?: number | null;
   isTemporary?: boolean; // Новий параметр для temporary фото
+}
+
+export interface VideoGalleryRequest {
+  cursor?: string;
+  statuses?: string[];
+  tags?: string[];
+  limit?: number;
+  excludeTags?: string[];
 }
 
 @Injectable()
@@ -184,6 +214,126 @@ export class GalleryService {
   }
 
   /**
+   * Отримує список відео з галереї профілю
+   */
+  async getVideos(profileId: number, request: VideoGalleryRequest = {}): Promise<VideoGalleryResponse> {
+    this.logger.log(`🎥 Fetching videos for profile ${profileId}`);
+
+    try {
+      // Перевіряємо чи є активна сесія для профілю
+      const session = await this.sessionService.getActiveSession(profileId);
+      if (!session) {
+        throw new Error(`No active session found for profile ${profileId}`);
+      }
+
+      // Підготовуємо параметри запиту
+      const requestBody = {
+        cursor: request.cursor || '',
+        statuses: request.statuses || ['approved'],
+        tags: request.tags || [],
+        limit: request.limit || 100,
+        excludeTags: request.excludeTags || [],
+      };
+
+      this.logger.log(`📋 Video gallery request for profile ${profileId}:`, requestBody);
+
+      // Відправляємо запит до TalkyTimes
+      if (!this.talkyTimesProvider.makeRequest) {
+        throw new Error('Provider does not support makeRequest method');
+      }
+
+      const response = await this.talkyTimesProvider.makeRequest!({
+        method: 'POST',
+        url: '/platform/gallery/video/list',
+        data: requestBody,
+        profileId,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.success) {
+        this.logger.error(`❌ TalkyTimes video API failed:`, response.error);
+        throw new Error(`Failed to fetch videos: ${response.error}`);
+      }
+
+      return response.data as VideoGalleryResponse;
+
+    } catch (error) {
+      this.logger.error(`❌ Failed to fetch videos for profile ${profileId}:`, error);
+      
+      // Повертаємо пусту відповідь замість викидання помилки для кращого UX
+      if (error instanceof Error && error.message.includes('Network')) {
+        throw new Error('Мережева помилка. Перевірте з\'єднання з інтернетом.');
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Отримує відео з пагінацією
+   */
+  async getVideosWithPagination(
+    profileId: number,
+    cursor?: string,
+    limit: number = 100
+  ): Promise<VideoGalleryResponse> {
+    return this.getVideos(profileId, {
+      cursor,
+      limit,
+      statuses: ['approved'],
+    });
+  }
+
+  /**
+   * Відправляє відео в чат
+   */
+  async sendVideosToChat(idsGalleryVideos: number[], idRegularUser: number, profileId: number): Promise<any> {
+    this.logger.log(`🎥 Sending ${idsGalleryVideos.length} videos to chat for profile ${profileId}`);
+
+    // Відправляємо запит до TalkyTimes
+    if (!this.talkyTimesProvider.makeRequest) {
+      throw new Error('Provider does not support makeRequest method');
+    }
+
+    const results: any[] = [];
+    
+    // Відправляємо кожне відео окремим запитом
+    for (const idGalleryVideo of idsGalleryVideos) {
+      try {
+        const response = await this.talkyTimesProvider.makeRequest!({
+          method: 'POST',
+          url: '/platform/chat/send/gallery-video',
+          data: {
+            idGalleryVideo,
+            idRegularUser
+          },
+          profileId,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (!response.success) {
+          this.logger.error(`❌ TalkyTimes send video ${idGalleryVideo} failed:`, response.error);
+          throw new Error(`Failed to send video ${idGalleryVideo}: ${response.error}`);
+        }
+
+        results.push(response.data);
+        this.logger.log(`✅ Video ${idGalleryVideo} sent successfully, message ID: ${response.data?.idMessage}`);
+      } catch (error) {
+        this.logger.error(`❌ Error sending video ${idGalleryVideo}:`, error);
+        throw error;
+      }
+    }
+
+    return { messages: results };
+  }
+
+  /**
    * Відправляє фото в чат
    */
   async sendPhotosToChat(idsGalleryPhotos: number[], idRegularUser: number, profileId: number): Promise<any> {
@@ -242,6 +392,38 @@ export class GalleryService {
     if (!response.success) {
       this.logger.error(`❌ TalkyTimes get photo statuses failed:`, response.error);
       throw new Error(`Failed to get photo statuses: ${response.error}`);
+    }
+
+    return response.data;
+  }
+
+  /**
+   * Отримує статуси відео (accessed/sent/null)
+   */
+  async getVideoStatuses(idUser: number, idsVideos: number[], profileId: number): Promise<any> {
+    this.logger.log(`🎥 Getting video statuses for user ${idUser}, videos: ${idsVideos.length}, profile: ${profileId}`);
+
+    if (!this.talkyTimesProvider.makeRequest) {
+      throw new Error('makeRequest method is not available on TalkyTimes provider');
+    }
+
+    const response = await this.talkyTimesProvider.makeRequest({
+      method: 'POST',
+      url: '/platform/gallery/video/connection/list',
+      data: {
+        idUser,
+        idsVideos
+      },
+      profileId,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.success) {
+      this.logger.error(`❌ TalkyTimes get video statuses failed:`, response.error);
+      throw new Error(`Failed to get video statuses: ${response.error}`);
     }
 
     return response.data;

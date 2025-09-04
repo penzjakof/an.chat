@@ -313,7 +313,7 @@ export default function ChatsLayout({
 		const token = getAccessToken();
 		if (!token) return;
 
-		const socket = io('http://localhost:4000/ws', { 
+		const socket = io('http://localhost:4000', { 
 			transports: ['websocket'], 
 			auth: { token } 
 		});
