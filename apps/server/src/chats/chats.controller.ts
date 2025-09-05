@@ -137,6 +137,22 @@ export class ChatsController {
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)
+	@Throttle({ default: { limit: 30, ttl: 60000 } }) // 30 запитів за хвилину
+	@Post('tt-forbidden-tags')
+	async getForbiddenTags(@Req() req: Request, @Body() body: { profileId: number; idInterlocutor: number }) {
+		console.log('⚠️ ChatsController.getForbiddenTags called:', body);
+		return this.chats.getForbiddenCorrespondenceTags(req.auth!, body.profileId, body.idInterlocutor);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 листів за хвилину
+	@Post('send-letter')
+	async sendLetter(@Req() req: Request, @Body() body: { profileId: number; idUserTo: number; content: string; photoIds?: number[]; videoIds?: number[] }) {
+		console.log('✉️ ChatsController.sendLetter called:', { profileId: body.profileId, idUserTo: body.idUserTo, textLen: body.content?.length, photos: body.photoIds?.length || 0, videos: body.videoIds?.length || 0 });
+		return this.chats.sendLetter(req.auth!, body.profileId, body.idUserTo, { content: body.content, photoIds: body.photoIds, videoIds: body.videoIds });
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
 	@Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 нових постів за хвилину
 	@Post('tt-send-post')
 	async sendExclusivePost(

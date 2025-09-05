@@ -5,12 +5,16 @@ import { useRouter, usePathname } from 'next/navigation';
 
 export interface ToastData {
   id: string;
-  messageId: number;
-  idUserFrom: number;
-  idUserTo: number;
-  dateCreated: string;
-  type: 'new_message';
-  dialogId?: string; // Додаємо ID діалогу для навігації
+  type: 'new_message' | 'success' | 'error' | 'info';
+  // Загальні поля
+  title?: string;
+  message?: string;
+  dialogId?: string; // Для навігації при кліку
+  // Поля для типу new_message
+  messageId?: number;
+  idUserFrom?: number;
+  idUserTo?: number;
+  dateCreated?: string;
 }
 
 interface ToastProps {
@@ -60,6 +64,15 @@ export function Toast({ toast, onClose }: ToastProps) {
     setTimeout(() => onClose(toast.id), 300);
   };
 
+  // Відмінні стилі для різних типів
+  const bgByType: Record<NonNullable<ToastData['type']>, { bg: string; border: string; icon: string; label: string }> = {
+    new_message: { bg: '#1e40af', border: '#1d4ed8', icon: '💬', label: 'Нове повідомлення' },
+    success: { bg: '#065f46', border: '#059669', icon: '✅', label: 'Успіх' },
+    error: { bg: '#7f1d1d', border: '#dc2626', icon: '❌', label: 'Помилка' },
+    info: { bg: '#1f2937', border: '#374151', icon: 'ℹ️', label: 'Інфо' },
+  };
+  const colors = bgByType[toast.type];
+
   return (
     <div
       className={`
@@ -69,8 +82,8 @@ export function Toast({ toast, onClose }: ToastProps) {
       `}
       style={{ 
         zIndex: 9999,
-        backgroundColor: '#1e40af',
-        borderColor: '#1d4ed8',
+        backgroundColor: colors.bg,
+        borderColor: colors.border,
         color: 'white',
         minHeight: '80px',
         width: '320px',
@@ -83,28 +96,41 @@ export function Toast({ toast, onClose }: ToastProps) {
             <div style={{ 
               width: '32px', 
               height: '32px', 
-              backgroundColor: '#3b82f6', 
+              backgroundColor: colors.border, 
               borderRadius: '50%', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center' 
             }}>
-              <svg style={{ width: '16px', height: '16px', color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
+              <span style={{ fontSize: '14px' }}>{colors.icon}</span>
             </div>
           </div>
           <div style={{ flex: 1 }}>
-            <p style={{ color: 'white', fontSize: '14px', fontWeight: 'bold', margin: 0, lineHeight: '1.4' }}>
-              💬 Нове повідомлення!
-            </p>
-            <p style={{ color: '#e0e7ff', fontSize: '14px', margin: '4px 0 0 0', lineHeight: '1.4' }}>
-              Від користувача {toast.idUserFrom}
-            </p>
-            <p style={{ color: '#c7d2fe', fontSize: '12px', margin: '4px 0 0 0', lineHeight: '1.4' }}>
-              {new Date(toast.dateCreated).toLocaleTimeString()}
-              {toast.dialogId && (pathname === `/chats/${toast.dialogId}` ? ' • Натисніть щоб закрити' : ' • Натисніть щоб відкрити')}
-            </p>
+            {toast.type === 'new_message' ? (
+              <>
+                <p style={{ color: 'white', fontSize: '14px', fontWeight: 'bold', margin: 0, lineHeight: '1.4' }}>
+                  {colors.icon} {colors.label}!
+                </p>
+                <p style={{ color: '#e0e7ff', fontSize: '14px', margin: '4px 0 0 0', lineHeight: '1.4' }}>
+                  Від користувача {toast.idUserFrom}
+                </p>
+                <p style={{ color: '#c7d2fe', fontSize: '12px', margin: '4px 0 0 0', lineHeight: '1.4' }}>
+                  {toast.dateCreated ? new Date(toast.dateCreated).toLocaleTimeString() : ''}
+                  {toast.dialogId && (pathname === `/chats/${toast.dialogId}` ? ' • Натисніть щоб закрити' : ' • Натисніть щоб відкрити')}
+                </p>
+              </>
+            ) : (
+              <>
+                <p style={{ color: 'white', fontSize: '14px', fontWeight: 'bold', margin: 0, lineHeight: '1.4' }}>
+                  {colors.icon} {toast.title || colors.label}
+                </p>
+                {toast.message && (
+                  <p style={{ color: '#e5e7eb', fontSize: '13px', margin: '6px 0 0 0', lineHeight: '1.5' }}>
+                    {toast.message}
+                  </p>
+                )}
+              </>
+            )}
           </div>
           <button
             onClick={(e) => {

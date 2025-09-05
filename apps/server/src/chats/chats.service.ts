@@ -537,4 +537,54 @@ export class ChatsService {
 			throw error;
 		}
 	}
+
+	/**
+	 * Отримує заборонені категорії для кореспонденції (forbidden-tags)
+	 */
+	async getForbiddenCorrespondenceTags(auth: RequestAuthContext, profileIdInput: number, idInterlocutor: number) {
+		try {
+			console.log('⚠️ ChatsService.getForbiddenCorrespondenceTags called for:', { profileId: profileIdInput, idInterlocutor });
+
+			const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
+			if (accessibleProfiles.length === 0) {
+				throw new ForbiddenException('No accessible profiles found');
+			}
+
+			const targetProfile = accessibleProfiles.find(p => parseInt(p.profileId) === profileIdInput) || accessibleProfiles[0];
+			const profileId = parseInt(targetProfile.profileId);
+
+			if (!this.provider.getForbiddenCorrespondenceTags) {
+				throw new Error('getForbiddenCorrespondenceTags method not supported by provider');
+			}
+
+			const result = await this.provider.getForbiddenCorrespondenceTags(profileId, idInterlocutor);
+			console.log('⚠️ Forbidden-tags result:', result);
+			return result;
+		} catch (error) {
+			console.error('💥 ПОМИЛКА в ChatsService.getForbiddenCorrespondenceTags:', error);
+			throw error;
+		}
+	}
+
+	async sendLetter(auth: RequestAuthContext, profileIdInput: number, idUserTo: number, payload: { content: string; photoIds?: number[]; videoIds?: number[] }) {
+		try {
+			// Валідація обмежень
+			const text = (payload.content || '').trim();
+			if (text.length < 300) throw new Error('Мінімальна довжина листа 300 символів');
+			if (text.length > 3000) throw new Error('Максимальна довжина листа 3000 символів');
+			const photoIds = (payload.photoIds || []).slice(0, 10);
+			const videoIds = (payload.videoIds || []).slice(0, 10);
+
+			// Доступ до профілю
+			const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
+			const targetProfile = accessibleProfiles.find(p => parseInt(p.profileId) === profileIdInput);
+			if (!targetProfile) throw new ForbiddenException(`Access denied to profile ${profileIdInput}`);
+
+			if (!this.provider.sendLetter) throw new Error('sendLetter not supported by provider');
+			return await this.provider.sendLetter(profileIdInput, idUserTo, { content: text, photoIds, videoIds });
+		} catch (error) {
+			console.error('💥 ПОМИЛКА в ChatsService.sendLetter:', error);
+			throw error;
+		}
+	}
 }

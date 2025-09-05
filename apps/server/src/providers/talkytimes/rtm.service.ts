@@ -2,6 +2,8 @@ import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/commo
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import WebSocket from 'ws';
 import { TalkyTimesSessionService } from './session.service';
+import * as fs from 'fs';
+import * as path from 'path';
 
 interface RTMMessage {
 	id?: number;
@@ -47,6 +49,18 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 	private readonly reconnectDelay = 3000; // 3 секунди між спробами
 	private readonly connectionTimeout = 10000; // 10 секунд таймаут підключення
 	private isConnecting = false;
+
+	// Файлове логування всіх RTM повідомлень (apps/server/tt-rtm-messages.log)
+	private readonly rtmLogFilePath = path.resolve(process.cwd(), 'tt-rtm-messages.log');
+
+	private appendRtmLog(entry: Record<string, unknown>): void {
+		try {
+			const payload = { timestamp: new Date().toISOString(), ...entry };
+			fs.appendFileSync(this.rtmLogFilePath, JSON.stringify(payload) + '\n', 'utf8');
+		} catch (e) {
+			// ігноруємо помилки файлового логування, не впливаємо на роботу сервісу
+		}
+	}
 
 	constructor(
 		private readonly eventEmitter: EventEmitter2,
@@ -179,6 +193,8 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 				const message: RTMMessage = JSON.parse(data.toString());
 				const timestamp = new Date().toISOString();
 				this.logger.log(`📨 RTM: Profile ${profileId} received message at ${timestamp}:`, JSON.stringify(message, null, 2));
+				// Записуємо у файл ВСІ отримані повідомлення
+				this.appendRtmLog({ profileId, direction: 'in', message });
 				this.handleMessage(message, profileId);
 			} catch (error) {
 				const timestamp = new Date().toISOString();
@@ -190,6 +206,7 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 			clearTimeout(connectionTimeout);
 			const timestamp = new Date().toISOString();
 			this.logger.warn(`🔌 RTM: Profile ${profileId} connection closed at ${timestamp} (${code}): ${reason}`);
+			this.appendRtmLog({ profileId, event: 'close', code, reason: reason?.toString?.() });
 			
 			const connection = this.connections.get(profileId);
 			if (connection) {
@@ -207,6 +224,7 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 			clearTimeout(connectionTimeout);
 			const timestamp = new Date().toISOString();
 			this.logger.error(`❌ RTM: Profile ${profileId} WebSocket error at ${timestamp}:`, error);
+			this.appendRtmLog({ profileId, event: 'error', error: (error as any)?.message || String(error) });
 			
 			const connection = this.connections.get(profileId);
 			if (connection) {

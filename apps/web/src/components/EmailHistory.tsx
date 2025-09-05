@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState, useRef, useCallback, useLayoutEffect, useMemo } from 'react';
 import { apiPost } from '@/lib/api';
+import { useToast } from '@/contexts/ToastContext';
+import { MediaGallery, Photo, Video } from '@/components/MediaGallery';
 
 interface EmailAttachment {
   id: string;
@@ -31,6 +33,7 @@ interface EmailHistoryProps {
   profileId: string;
   clientId: string;
   correspondenceId: string;
+  lettersLeft?: number | null;
 }
 
 // Мемоізований компонент для прикріплень
@@ -79,7 +82,8 @@ const EmailAttachments = React.memo(({
   </div>
 ));
 
-export default function EmailHistory({ isOpen, onClose, profileId, clientId, correspondenceId }: EmailHistoryProps) {
+export default function EmailHistory({ isOpen, onClose, profileId, clientId, correspondenceId, lettersLeft }: EmailHistoryProps) {
+  const { showToast } = useToast();
   const [emails, setEmails] = useState<EmailMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingTop, setLoadingTop] = useState(false);
@@ -92,6 +96,48 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
   
   // 🎯 useRef для page - вирішує проблему stale closure
   const pageRef = useRef(1);
+
+  // Стан для написання нового листа
+  const [composeText, setComposeText] = useState('');
+  const [isAttachGalleryOpen, setIsAttachGalleryOpen] = useState(false);
+  const [attachedPhotos, setAttachedPhotos] = useState<Photo[]>([]);
+  const [attachedVideos, setAttachedVideos] = useState<Video[]>([]);
+  const [forbiddenTags, setForbiddenTags] = useState<string[]>([]); // майбутній запит заборонених тегів
+
+  // Дозволені вкладки для фото з урахуванням заборонених тегів
+  const emailAllowedPhotoTabs = useMemo(() => {
+    const disallow = new Set(forbiddenTags || []);
+    const tabs: Array<'regular' | 'special' | 'special_plus' | 'temporary'> = ['regular', 'temporary'];
+    if (!disallow.has('special')) tabs.push('special');
+    if (!disallow.has('special_plus')) tabs.push('special_plus');
+    return tabs;
+  }, [forbiddenTags]);
+
+  // Завантаження заборонених тегів (категорій) для поточного діалогу
+  useEffect(() => {
+    const loadForbidden = async () => {
+      try {
+        if (!isOpen || !profileId || !clientId) return;
+        const resp = await apiPost<{ success: boolean; tags?: string[]; error?: string }>(
+          '/api/chats/tt-forbidden-tags',
+          { profileId: parseInt(profileId), idInterlocutor: parseInt(clientId) }
+        );
+        if (resp.success && Array.isArray(resp.tags)) {
+          setForbiddenTags(resp.tags);
+        } else {
+          setForbiddenTags([]);
+        }
+      } catch (e: any) {
+        setForbiddenTags([]);
+        showToast({
+          title: 'Помилка заборонених категорій',
+          message: e?.message || 'Не вдалося отримати обмеження категорій',
+          type: 'error'
+        });
+      }
+    };
+    loadForbidden();
+  }, [isOpen, profileId, clientId]);
 
   // Завантаження листів
   const loadEmails = useCallback(async (pageNum: number = 1, append: boolean = false) => {
@@ -401,6 +447,137 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
               </div>
             )}
           </div>
+
+          {/* Compose area (показуємо лише якщо є листи, які можна надіслати) */}
+          {(typeof lettersLeft === 'number' && lettersLeft > 0) && (
+            <div className="border-t p-3">
+              {/* Попередній перегляд прикріплень */}
+              {(attachedPhotos.length > 0 || attachedVideos.length > 0) && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {attachedPhotos.map((p) => (
+                    <div key={`p-${p.idPhoto}`} className="relative w-14 h-14 rounded-md overflow-hidden border border-gray-200">
+                      <img src={p.urls.urlPreview} alt={`Фото ${p.idPhoto}`} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setAttachedPhotos(prev => prev.filter(x => x.idPhoto !== p.idPhoto))}
+                        className="absolute -top-1 -right-1 bg-white/90 border border-gray-300 rounded-full w-5 h-5 text-[10px] flex items-center justify-center shadow"
+                        title="Прибрати фото"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  {attachedVideos.map((v) => (
+                    <div key={`v-${v.idVideo}`} className="relative w-14 h-14 rounded-md overflow-hidden border border-gray-200">
+                      <img src={v.urls.urlThumbnail} alt={`Відео ${v.idVideo}`} className="w-full h-full object-cover" />
+                      <span className="absolute bottom-0 right-0 m-0.5 text-[10px] px-1 py-0.5 rounded bg-black/60 text-white">▶</span>
+                      <button
+                        onClick={() => setAttachedVideos(prev => prev.filter(x => x.idVideo !== v.idVideo))}
+                        className="absolute -top-1 -right-1 bg-white/90 border border-gray-300 rounded-full w-5 h-5 text-[10px] flex items-center justify-center shadow"
+                        title="Прибрати відео"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                {/* Кнопка атачменту поруч з інпутом */}
+                <button
+                  onClick={() => setIsAttachGalleryOpen(true)}
+                  className="flex-shrink-0 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Прикріпити медіа"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </button>
+
+                {/* Інпут для тексту листа */}
+                <div className="flex-1">
+                  <textarea
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    placeholder="Напишіть лист... (300–3000 символів)"
+                    value={composeText}
+                    onChange={(e) => setComposeText(e.target.value)}
+                    rows={3}
+                    maxLength={3000}
+                  />
+                  <div className="text-xs mt-1 flex items-center justify-between">
+                    <span className={`${composeText.trim().length < 300 ? 'text-red-600' : composeText.trim().length > 3000 ? 'text-red-600' : 'text-gray-500'}`}>
+                      Символів: {composeText.trim().length}/3000
+                    </span>
+                    <span className="text-gray-400">Мінімум 300</span>
+                  </div>
+                </div>
+                
+                {/* Кнопка Надіслати */}
+                <button
+                  onClick={async () => {
+                    const text = composeText.trim();
+                    if (text.length < 300 || text.length > 3000) return;
+                    const photos = attachedPhotos.slice(0, 10).map(p => p.idPhoto);
+                    const videos = attachedVideos.slice(0, 10).map(v => v.idVideo);
+                    try {
+                      const resp = await apiPost<{ success: boolean; data?: any; error?: string }>(
+                        '/api/chats/send-letter',
+                        { profileId: parseInt(profileId), idUserTo: parseInt(clientId), content: text, photoIds: photos, videoIds: videos }
+                      );
+                      if (resp.success) {
+                        // Оптимістичне додавання листа в історію
+                        const escapeHtml = (s: string) => s
+                          .replace(/&/g, '&amp;')
+                          .replace(/</g, '&lt;')
+                          .replace(/>/g, '&gt;')
+                          .replace(/"/g, '&quot;')
+                          .replace(/'/g, '&#39;');
+                        const contentHtml = escapeHtml(text).replace(/\n/g, '<br/>');
+                        const imageAttachments = attachedPhotos.slice(0, 10).map(p => ({
+                          id: `p-${p.idPhoto}`,
+                          url_thumbnail: p.urls.urlPreview,
+                          url_original: p.urls.urlOriginal,
+                          is_paid: false,
+                          display_attributes: []
+                        }));
+                        const optimisticEmail: EmailMessage = {
+                          id: `temp-${Date.now()}`,
+                          id_user_from: profileId,
+                          id_user_to: clientId,
+                          title: '',
+                          content: contentHtml,
+                          date_created: new Date().toISOString(),
+                          status: 'unread',
+                          attachments: imageAttachments.length ? { images: imageAttachments } : undefined,
+                          is_paid: false
+                        };
+                        setEmails(prev => [...prev, optimisticEmail]);
+                        // Прокручуємо вниз до щойно доданого листа
+                        setTimeout(() => {
+                          const container = messagesContainerRef.current;
+                          if (container) container.scrollTop = container.scrollHeight;
+                        }, 0);
+                        setComposeText('');
+                        setAttachedPhotos([]);
+                        setAttachedVideos([]);
+                        showToast({ title: 'Лист надіслано', message: 'Ваш лист успішно відправлено', type: 'success' });
+                      } else {
+                        console.error('❌ Send letter failed:', resp.error);
+                        showToast({ title: 'Помилка відправки', message: resp.error || 'Невідома помилка', type: 'error' });
+                      }
+                    } catch (e: any) {
+                      console.error('❌ Send letter error:', e);
+                      showToast({ title: 'Помилка відправки', message: e?.message || 'Невідома помилка', type: 'error' });
+                    }
+                  }}
+                  disabled={composeText.trim().length < 300 || composeText.trim().length > 3000}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors disabled:bg-gray-300"
+                >
+                  Надіслати
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -425,6 +602,26 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
           </div>
         </div>
       )}
+      {/* Галерея для прикріплення до листа */}
+      <MediaGallery
+        profileId={profileId}
+        isOpen={isAttachGalleryOpen}
+        onClose={() => setIsAttachGalleryOpen(false)}
+        onPhotoSelect={() => {}}
+        maxSelection={10}
+        context="chat"
+        idRegularUser={parseInt(clientId)}
+        mode="attach"
+        actionLabel="Прикріпити"
+        allowAudio={false}
+        allowedPhotoTabs={emailAllowedPhotoTabs as Array<'regular' | 'special' | 'special_plus' | 'temporary'>}
+        isSpecialPlusAllowed={!forbiddenTags.includes('special_plus')}
+        onAttach={({ photos, videos }) => {
+          setAttachedPhotos(photos);
+          setAttachedVideos(videos);
+          setIsAttachGalleryOpen(false);
+        }}
+      />
     </React.Fragment>
   );
 }

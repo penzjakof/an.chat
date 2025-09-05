@@ -1793,6 +1793,110 @@ export class TalkyTimesProvider implements SiteProvider {
 		}
 	}
 
+	/**
+	 * Заборонені теги (категорії) для кореспонденції — проксі на TT
+	 */
+	async getForbiddenCorrespondenceTags(profileId: number, idInterlocutor: number): Promise<{ success: boolean; tags?: string[]; error?: string }> {
+		try {
+			console.log(`⚠️ TalkyTimes.getForbiddenCorrespondenceTags: profileId=${profileId}, idInterlocutor=${idInterlocutor}, isMock=${this.isMock()}`);
+
+			if (this.isMock()) {
+				// У мок-режимі випадково забороняємо special_plus ~30% випадків
+				const tags = Math.random() < 0.3 ? ['special_plus'] : [];
+				return { success: true, tags };
+			}
+
+			const session = await this.sessionService.getSession(profileId.toString());
+			if (!session) {
+				return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+			}
+
+			const url = 'https://talkytimes.com/platform/correspondence/video/forbidden-tags';
+			const headers = this.sessionService.getRequestHeaders(session);
+			headers['referer'] = `https://talkytimes.com/user/${String(idInterlocutor).padStart(12, '0')}`;
+
+			const payload = { idInterlocutor };
+			console.log('⚠️ Forbidden-tags request:', { url, headers: { ...headers, Cookie: '***' }, payload });
+
+			const res = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(payload),
+				timeoutMs: 15000
+			});
+
+			if (!res.ok) {
+				const errorText = await res.text();
+				console.error(`❌ Forbidden-tags API error ${res.status}:`, errorText);
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId.toString());
+					return { success: false, error: `Session expired for profile ${profileId}. Please re-authenticate.` };
+				}
+				return { success: false, error: `HTTP ${res.status}: ${errorText}` };
+			}
+
+			const data = await res.json();
+			// Очікується масив рядків, напр.: ["special_plus"]
+			const tags = Array.isArray(data) ? data.filter((x: any) => typeof x === 'string') : [];
+			return { success: true, tags };
+		} catch (error: any) {
+			console.error('TalkyTimes.getForbiddenCorrespondenceTags error:', error);
+			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
+
+	/**
+	 * Відправка листа в кореспонденції
+	 */
+	async sendLetter(profileId: number, idUserTo: number, payload: { content: string; photoIds?: number[]; videoIds?: number[] }): Promise<{ success: boolean; data?: any; error?: string }> {
+		try {
+			console.log('✉️ TalkyTimes.sendLetter:', { profileId, idUserTo, textLen: payload.content?.length, photos: payload.photoIds?.length || 0, videos: payload.videoIds?.length || 0, isMock: this.isMock() });
+
+			if (this.isMock()) {
+				return { success: true, data: { status: 'success', details: [] } };
+			}
+
+			const session = await this.sessionService.getSession(profileId.toString());
+			if (!session) {
+				return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+			}
+
+			const url = 'https://talkytimes.com/platform/correspondence/send-letter';
+			const headers = this.sessionService.getRequestHeaders(session);
+			headers['referer'] = `https://talkytimes.com/mails/view/${profileId}_${idUserTo}`;
+
+			const body = {
+				idUserTo,
+				content: payload.content,
+				images: (payload.photoIds || []).slice(0, 10).map(id => ({ idPhoto: id })),
+				videos: (payload.videoIds || []).slice(0, 10).map(id => ({ idVideo: id })),
+			};
+
+			const res = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(body),
+				timeoutMs: 20000
+			});
+
+			if (!res.ok) {
+				const errorText = await res.text();
+				console.error(`❌ TalkyTimes sendLetter error ${res.status}:`, errorText);
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId.toString());
+					return { success: false, error: `Session expired for profile ${profileId}. Please re-authenticate.` };
+				}
+				return { success: false, error: `HTTP ${res.status}: ${errorText}` };
+			}
+
+			const data = await res.json();
+			return { success: true, data };
+		} catch (error: any) {
+			console.error('TalkyTimes.sendLetter error:', error);
+			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
+
 	async sendVirtualGift(profileId: string, clientId: number, giftId: number, message: string = ''): Promise<{ success: boolean; data?: any; error?: string }> {
 		try {
 			console.log(`🎁 TalkyTimes.sendVirtualGift: profileId=${profileId}, clientId=${clientId}, giftId=${giftId}, message="${message}", isMock=${this.isMock()}`);

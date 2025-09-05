@@ -1341,7 +1341,6 @@ export function MediaGallery({
         setRegularCursor('');
         setTemporaryCursor('');
         setHasMore(true);
-        setSelectedPhotos([]);
         setError(null);
         setAutoLoadAttempts(0); // Скидаємо лічильник при відкритті
         setPhotoStatuses(new Map()); // Очищуємо статуси фото
@@ -1354,7 +1353,6 @@ export function MediaGallery({
         setVideos([]);
         setVideoCursor('');
         setHasMoreVideos(true);
-        setSelectedVideos([]);
         setVideoStatuses(new Map()); // Очищуємо статуси відео
         setStatusRequestedVideos(new Set()); // Очищуємо відстеження запитів статусів відео
         setError(null);
@@ -1576,21 +1574,24 @@ export function MediaGallery({
 
   // Перевірка чи фото можна вибрати
   const isPhotoSelectable = useCallback((photo: Photo) => {
-    // Режим прикріплення для ексклюзивних постів: дозволяємо тільки дозволені категорії
+    // Режим прикріплення (включно з ексклюзивними постами та листами): керуємося allowedPhotoTabs
     if (mode === 'attach') {
       if (allowedPhotoTabs && allowedPhotoTabs.length > 0) {
-        const allowSpecial = allowedPhotoTabs.includes('special') && hasTag(photo, 'special');
-        const allowSpecialPlus = allowedPhotoTabs.includes('special_plus') && hasTag(photo, 'special_plus');
-        return allowSpecial || allowSpecialPlus;
+        const allowRegular = allowedPhotoTabs.includes('regular') && !isSpecialPhoto(photo) && !isTemporaryPhoto(photo);
+        const allowTemporary = allowedPhotoTabs.includes('temporary') && isTemporaryPhoto(photo) && !isSpecialPhoto(photo);
+        const allowSpecial = allowedPhotoTabs.includes('special') && isSpecialExactPhoto(photo);
+        const allowSpecialPlus = allowedPhotoTabs.includes('special_plus') && isSpecialPlusPhoto(photo);
+        return allowRegular || allowTemporary || allowSpecial || allowSpecialPlus;
       }
-      // Якщо не задано, за замовчуванням забороняємо special у chat
+      // Якщо не задано, у режимі attach дозволяємо всі несекретні фото (без special)
       return !isSpecialPhoto(photo);
     }
+    // У звичайному чаті не дозволяємо special
     if (context === 'chat') {
       return !isSpecialPhoto(photo);
     }
     return true;
-  }, [mode, allowedPhotoTabs, context, isSpecialPhoto, hasTag]);
+  }, [mode, allowedPhotoTabs, context, isSpecialPhoto, isSpecialExactPhoto, isSpecialPlusPhoto, isTemporaryPhoto]);
 
   // Форматування тривалості відео
   const formatDuration = useCallback((seconds: number): string => {

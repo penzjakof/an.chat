@@ -1679,6 +1679,7 @@ export default function DialogPage() {
 				profileId={idProfile.toString()}
 				clientId={idRegularUser.toString()}
 				correspondenceId={dialogId}
+				lettersLeft={lettersLeft}
 			/>
 
 			{/* Модальне вікно ексклюзивного посту */}
