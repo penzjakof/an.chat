@@ -288,6 +288,39 @@ export class ProfilesService {
 		return this.talkyTimesProvider.fetchProfileData(profile.profileId);
 	}
 
+	async getClientPhotos(profileId: string, clientId: number, agencyCode: string) {
+		const profile = await this.prisma.profile.findFirst({
+			where: { id: profileId, group: { agency: { code: agencyCode } } }
+		});
+
+		if (!profile || !profile.profileId) {
+			return { success: false, error: 'Profile not found or not authenticated' };
+		}
+
+		if (!this.talkyTimesProvider.fetchClientPhotos) {
+			return { success: false, error: 'Client photos fetching not supported' };
+		}
+
+		return this.talkyTimesProvider.fetchClientPhotos(profile.profileId, clientId);
+	}
+
+	async getClientPublicProfile(profileId: string, clientId: number, agencyCode: string) {
+		const profile = await this.prisma.profile.findFirst({
+			where: { id: profileId, group: { agency: { code: agencyCode } } }
+		});
+
+		if (!profile || !profile.profileId) {
+			return { success: false, error: 'Profile not found or not authenticated' };
+		}
+
+		const res = await this.talkyTimesProvider.fetchProfiles(profile.profileId, [clientId]);
+		if (!res.success) {
+			return { success: false, error: res.error || 'Failed to load client profile' };
+		}
+		const client = (res.profiles || [])[0];
+		return { success: true, profile: client };
+	}
+
 	async getGiftLimits(profileId: string, clientId: number, agencyCode: string) {
 		console.log(`🎁 Getting gift limits for profile ${profileId}, client ${clientId}, agency ${agencyCode}`);
 

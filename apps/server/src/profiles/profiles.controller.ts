@@ -70,6 +70,18 @@ export class ProfilesController {
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post(':id/client/:clientId/photos')
+	getClientPhotos(@Param('id') id: string, @Param('clientId') clientId: string, @Req() req: Request) {
+		return this.profiles.getClientPhotos(id, parseInt(clientId), req.auth!.agencyCode);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Get(':id/client/:clientId/public')
+	getClientPublicProfile(@Param('id') id: string, @Param('clientId') clientId: string, @Req() req: Request) {
+		return this.profiles.getClientPublicProfile(id, parseInt(clientId), req.auth!.agencyCode);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
 	@Post(':id/gift-limits')
 	getGiftLimits(@Param('id') id: string, @Body() body: { clientId: number }, @Req() req: Request) {
 		return this.profiles.getGiftLimits(id, body.clientId, req.auth!.agencyCode);

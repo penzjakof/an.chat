@@ -933,6 +933,13 @@ export class TalkyTimesProvider implements SiteProvider {
 		try {
 			const url = 'https://talkytimes.com/platform/connections/profiles';
 			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
+			// Для цього ендпойнта TT корисно мати реферер на сторінку користувача
+			if (userIds && userIds.length > 0) {
+				const firstId = userIds[0];
+				headers['referer'] = `https://talkytimes.com/user/${String(firstId).padStart(12, '0')}`;
+				headers['origin'] = 'https://talkytimes.com';
+			}
 			
 			const res = await fetchWithTimeout(url, {
 				method: 'POST',
@@ -959,6 +966,50 @@ export class TalkyTimesProvider implements SiteProvider {
 		} catch (error) {
 			console.error('TalkyTimes fetchProfiles error:', error);
 			return { success: false, error: 'Connection error' };
+		}
+	}
+
+	/**
+	 * Отримати фото користувача (public/private) для сторінки клієнта
+	 */
+	async fetchClientPhotos(profileId: string, clientId: number): Promise<{ success: boolean; data?: any; error?: string }> {
+		if (this.isMock()) {
+			// Спрощена мок-відповідь
+			return { success: true, data: { public: [], private: [], isTrusted: 2 } };
+		}
+
+		const session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+		}
+
+		try {
+			const url = `https://talkytimes.com/platform/operator/get-photos/${clientId}`;
+			const headers = this.sessionService.getRequestHeaders(session);
+			// Динамічний реф-код
+			await this.applyOperatorRefHeader(headers, { profileId });
+			// Правильний referer як на сторінці користувача
+			headers['referer'] = `https://talkytimes.com/user/${String(clientId).padStart(12, '0')}`;
+
+			const res = await this.fetchWithConnectionPool(url, {
+				method: 'POST',
+				headers,
+				timeoutMs: 15000,
+				maxRetries: 2
+			});
+
+			if (!res.ok) {
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+				}
+				const text = await res.text();
+				return { success: false, error: `HTTP ${res.status}: ${text}` };
+			}
+
+			const data = await res.json();
+			return { success: true, data: data?.data ?? data };
+		} catch (error: any) {
+			return { success: false, error: error.message || 'Unknown error' };
 		}
 	}
 

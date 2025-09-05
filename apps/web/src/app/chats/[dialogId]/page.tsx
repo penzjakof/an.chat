@@ -12,6 +12,7 @@ import LottieErrorBoundary from '@/components/LottieErrorBoundary';
 import EmailHistory from '@/components/EmailHistory';
 import { useResourceManager, cleanupLottieAnimations } from '@/utils/memoryCleanup';
 import { checkDialogRestrictions, logRestrictionsCheck } from '@/utils/grpcUtils';
+import { ClientPublicProfileModal } from '@/components/ClientPublicProfileModal';
 
 // Типи для Lottie
 declare global {
@@ -1463,6 +1464,8 @@ export default function DialogPage() {
 		);
 	};
 
+	const [isClientProfileOpen, setIsClientProfileOpen] = useState(false);
+
 	return (
 		<div className="flex flex-col h-full">
 			{/* Хедер діалогу */}
@@ -1475,7 +1478,7 @@ export default function DialogPage() {
 						<div className="flex items-center gap-3">
 							{/* Аватар користувача */}
 							<div className="relative flex-shrink-0">
-								<div className="w-11 h-11 rounded-full overflow-hidden bg-gray-200">
+								<div className="w-11 h-11 rounded-full overflow-hidden bg-gray-200 cursor-pointer" onClick={() => setIsClientProfileOpen(true)}>
 									{userProfile?.personal?.avatar_small ? (
 										<img
 											src={userProfile.personal.avatar_small}
@@ -2303,6 +2306,14 @@ export default function DialogPage() {
 				</div>
 			)}
 		<ImagePreviewModal isOpen={isImagePreviewOpen} src={imagePreviewUrl} isLoading={imagePreviewLoading} onClose={() => setIsImagePreviewOpen(false)} />
+		{sourceProfile?.id && (
+			<ClientPublicProfileModal
+				isOpen={isClientProfileOpen}
+				onClose={() => setIsClientProfileOpen(false)}
+				profileId={sourceProfile.id}
+				clientId={idRegularUser}
+			/>
+		)}
 		</div>
 
 );
