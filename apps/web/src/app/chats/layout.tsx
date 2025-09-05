@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { io } from 'socket.io-client';
-import { apiGet } from '@/lib/api';
-import { getSession, getAccessToken } from '@/lib/session';
+import { apiGet, apiPost } from '@/lib/api';
+import { getSession, getAccessToken, clearSession, getUserId } from '@/lib/session';
 import { ProfileAuthenticator } from '@/components/ProfileAuthenticator';
 import { DialogSkeleton } from '@/components/SkeletonLoader';
+import { useToast } from '@/contexts/ToastContext';
 
 type ChatDialog = {
 	idUser: number;
@@ -57,6 +58,7 @@ export default function ChatsLayout({
 }) {
 	const router = useRouter();
 	const pathname = usePathname();
+	const { showToast } = useToast();
 	const [dialogs, setDialogs] = useState<ChatDialog[]>([]);
 	const [profiles, setProfiles] = useState<Record<number, UserProfile>>({});
 	const [sourceProfiles, setSourceProfiles] = useState<SourceProfile[]>([]);
@@ -70,8 +72,29 @@ export default function ChatsLayout({
 		onlineOnly: false 
 	});
 	
+	// Перевірка активної зміни: якщо немає – редірект на /dashboard
+	useEffect(() => {
+		(async () => {
+			const s = getSession();
+			if (!s) {
+				router.replace('/login');
+				return;
+			}
+			try {
+				const data = await apiGet<{ active: boolean }>('/api/shifts/is-active');
+				if (!data?.active) {
+					router.replace('/dashboard');
+				}
+			} catch {
+				// якщо бек віддає 401/403, apiGet сам редіректне
+			}
+		})();
+	}, [router]);
+
 	// Стан для пошуку діалогів
 	const [showSearchForm, setShowSearchForm] = useState(false);
+	// Сайдбар зліва
+	const [sidebarOpen, setSidebarOpen] = useState(false);
 	const [searchProfileId, setSearchProfileId] = useState('');
 	const [searchClientId, setSearchClientId] = useState('');
 	const [searchResult, setSearchResult] = useState<ChatDialog | null>(null);
@@ -355,7 +378,16 @@ export default function ChatsLayout({
 			}));
 		});
 
+		// Слухаємо завершення зміни — редіректимо на дашборд
+		socket.on('shift_ended', (payload: { operatorId?: string }) => {
+			const uid = getUserId();
+			if (uid && payload?.operatorId && uid === payload.operatorId) {
+				router.replace('/dashboard');
+			}
+		});
+
 		return () => {
+			socket.off('shift_ended');
 			socket.disconnect();
 		};
 	}, []);
@@ -429,11 +461,60 @@ export default function ChatsLayout({
 		<>
 			<ProfileAuthenticator />
 			<div className="flex h-screen">
+				{/* Лівий сайдбар (стискає контент) */}
+				<div className={`${sidebarOpen ? 'w-16' : 'w-0'} overflow-hidden transition-all duration-200 bg-white border-r border-gray-200 flex flex-col items-center py-4 gap-4`}>
+					<button
+						onClick={() => router.push('/dashboard')}
+						className="w-10 h-10 flex items-center justify-center rounded hover:bg-gray-100 border border-gray-200"
+						title="На дашборд"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-gray-700">
+							<path d="M11.47 3.84a.75.75 0 0 1 1.06 0l8.25 8.25a.75.75 0 1 1-1.06 1.06L12 5.69l-7.72 7.46a.75.75 0 1 1-1.04-1.08l8.23-8.23z" />
+							<path d="M12 7.5 4.5 14v5.25A1.25 1.25 0 0 0 5.75 20.5h4.5V15h3.5v5.5h4.5a1.25 1.25 0 0 0 1.25-1.25V14L12 7.5z" />
+						</svg>
+					</button>
+					<button
+						onClick={async () => {
+							try {
+								await apiPost('/api/shifts/end', {});
+								showToast({ messageId: '', type: 'info', message: 'Зміну завершено' } as any);
+								router.replace('/dashboard');
+							} catch {
+								showToast({ messageId: '', type: 'error', message: 'Не вдалося завершити зміну' } as any);
+							}
+						}}
+						className="w-10 h-10 flex items-center justify-center rounded hover:bg-gray-100 border border-gray-200"
+						title="Завершити зміну"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-gray-700">
+							<path d="M12 2.25a.75.75 0 0 1 .75.75v8a.75.75 0 0 1-1.5 0v-8A.75.75 0 0 1 12 2.25z" />
+							<path fillRule="evenodd" d="M5.47 6.97a7.5 7.5 0 1 0 13.06 0 .75.75 0 1 1 1.06 1.06 9 9 0 1 1-15.18 0 .75.75 0 0 1 1.06-1.06z" clipRule="evenodd" />
+						</svg>
+					</button>
+					<button
+						onClick={() => { clearSession(); router.replace('/login'); }}
+						className="w-10 h-10 flex items-center justify-center rounded hover:bg-gray-100 border border-gray-200"
+						title="Вийти"
+					>
+						{/* Логаут */}
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-gray-700">
+							<path d="M16.5 3.75a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V5.56l-6.72 6.72a.75.75 0 0 1-1.06-1.06L14.69 4.5h-3.44a.75.75 0 0 1 0-1.5h5.25z" />
+							<path d="M7.5 6.75A2.25 2.25 0 0 0 5.25 9v6A2.25 2.25 0 0 0 7.5 17.25h6a2.25 2.25 0 0 0 2.25-2.25v-1.5a.75.75 0 0 1 1.5 0v1.5A3.75 3.75 0 0 1 13.5 18.75h-6A3.75 3.75 0 0 1 3.75 15V9A3.75 3.75 0 0 1 7.5 5.25h1.5a.75.75 0 0 1 0 1.5h-1.5z" />
+						</svg>
+					</button>
+				</div>
 				{/* Ліва панель - список діалогів (завжди видимий) */}
 				<div className="w-[320px] bg-white border-r border-gray-200 flex flex-col">
 					{/* Фільтри діалогів */}
 					<div className="p-4 border-b border-gray-200">
 						<div className="flex items-center gap-3">
+							<button
+								onClick={() => setSidebarOpen(v => !v)}
+								className="p-2 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
+								title={sidebarOpen ? 'Сховати панель' : 'Показати панель'}
+							>
+								<span className="text-sm">{sidebarOpen ? '←' : '→'}</span>
+							</button>
 							<select
 								value={filters.status}
 								onChange={(e) => setFilters({ ...filters, status: e.target.value })}

@@ -19,6 +19,7 @@ import { RolesGuard } from './common/auth/roles.guard';
 import { EncryptionValidatorService } from './profiles/encryption-validator.service';
 import { HttpModule } from './common/http/http.module';
 import { EncryptionModule } from './common/encryption/encryption.module';
+import { ShiftsModule } from './shifts/shifts.module';
 
 @Module({
 	imports: [
@@ -51,7 +52,8 @@ import { EncryptionModule } from './common/encryption/encryption.module';
 		ChatsModule, 
 		BackupModule, 
 		GalleryModule,
-		AuthModule
+		AuthModule,
+		ShiftsModule,
 	],
 	controllers: [AppController],
 	providers: [

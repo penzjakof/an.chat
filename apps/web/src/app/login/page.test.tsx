@@ -42,6 +42,18 @@ describe('LoginPage', () => {
 		await waitFor(() => expect(push).toHaveBeenCalledWith('/owner'));
 	});
 
+	it('logs in operator and redirects to /dashboard', async () => {
+		const TOKEN_OP =
+			'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' +
+			Buffer.from(JSON.stringify({ role: 'OPERATOR', agencyCode: 'AG' }), 'utf8').toString('base64') +
+			'.signature';
+		vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ accessToken: TOKEN_OP }) })) as unknown as typeof fetch);
+		render(<LoginPage />);
+		const btn = screen.getByRole('button', { name: /увійти/i });
+		fireEvent.click(btn);
+		await waitFor(() => expect(push).toHaveBeenCalledWith('/dashboard'));
+	});
+
 	it('shows error on invalid credentials', async () => {
 		setupFetchFail();
 		render(<LoginPage />);

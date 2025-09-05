@@ -9,6 +9,7 @@ export type StoredSession = {
 	agencyCode: string;
 	role: UserRole;
 	operatorCode?: string;
+    userId?: string;
 };
 
 const KEY = 'anchat-auth';
@@ -49,4 +50,18 @@ export function getRole(): UserRole | null {
 
 export function getAgencyCode(): string | null {
 	return getSession()?.agencyCode ?? null;
+}
+
+export function getUserId(): string | null {
+	const s = getSession();
+	if (s?.userId) return s.userId;
+	const token = s?.accessToken;
+	if (!token) return null;
+	try {
+		const [, payload] = token.split('.');
+		const data = JSON.parse(atob(payload)) as { sub?: string };
+		return data.sub ?? null;
+	} catch {
+		return null;
+	}
 }

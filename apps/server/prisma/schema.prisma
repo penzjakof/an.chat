@@ -15,6 +15,7 @@ model Agency {
   updatedAt DateTime @updatedAt
   groups    Group[]
   users     User[]
+  shifts    Shift[]
 }
 
 model User {
@@ -30,19 +31,24 @@ model User {
   updatedAt     DateTime        @updatedAt
   operatorLinks OperatorGroup[]
   agency        Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  shifts        Shift[]
 }
 
 model Group {
-  id        String          @id @default(cuid())
-  name      String
-  agencyId  String
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  agency    Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  operators OperatorGroup[]
-  profiles  Profile[]
+  id            String          @id @default(cuid())
+  name          String
+  agencyId      String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  agency        Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  operators     OperatorGroup[]
+  profiles      Profile[]
+  /// Активна зміна, яка утримує цю групу (null якщо група вільна)
+  activeShiftId String?
+  activeShift   Shift?          @relation("ShiftGroups", fields: [activeShiftId], references: [id])
 
   @@unique([agencyId, name])
+  @@index([activeShiftId])
 }
 
 model OperatorGroup {
@@ -53,6 +59,39 @@ model OperatorGroup {
   operator   User     @relation(fields: [operatorId], references: [id], onDelete: Cascade)
 
   @@id([operatorId, groupId])
+}
+
+model Shift {
+  id         String   @id @default(cuid())
+  operatorId String
+  agencyId   String
+  startedAt  DateTime @default(now())
+  endedAt    DateTime?
+
+  operator   User     @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  groups     Group[]  @relation("ShiftGroups")
+  logs       ShiftLog[]
+
+  @@index([operatorId])
+  @@index([agencyId])
+  @@index([endedAt])
+}
+
+model ShiftLog {
+  id         String   @id @default(cuid())
+  shiftId    String
+  operatorId String
+  agencyId   String
+  action     ShiftAction
+  message    String?
+  createdAt  DateTime @default(now())
+
+  shift      Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@index([shiftId])
+  @@index([operatorId])
+  @@index([agencyId])
 }
 
 model Profile {
@@ -107,4 +146,9 @@ enum ProviderSite {
 enum ProfileStatus {
   ACTIVE
   INACTIVE
+}
+
+enum ShiftAction {
+  START
+  END
 }

@@ -9,6 +9,7 @@ type JWTPayload = {
 	role?: 'OWNER' | 'OPERATOR';
 	agencyCode?: string;
 	operatorCode?: string;
+	sub?: string;
 };
 
 function parseJwt(token: string): JWTPayload | unknown {
@@ -39,9 +40,9 @@ export default function LoginPage() {
 			const { accessToken } = (await res.json()) as { accessToken: string };
 			const payload = parseJwt(accessToken) as JWTPayload;
 			const role: 'OWNER' | 'OPERATOR' = payload.role === 'OWNER' ? 'OWNER' : 'OPERATOR';
-			const s: StoredSession = { accessToken, agencyCode: payload.agencyCode ?? '', role, operatorCode: payload.operatorCode };
+			const s: StoredSession = { accessToken, agencyCode: payload.agencyCode ?? '', role, operatorCode: payload.operatorCode, userId: payload.sub };
 			setSession(s);
-			router.push(s.role === 'OWNER' ? '/owner' : '/chats');
+			router.push(s.role === 'OWNER' ? '/owner' : '/dashboard');
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Помилка входу');
 		}

@@ -116,6 +116,13 @@ export class ChatsGateway implements OnModuleInit {
 		});
 	}
 
+	// Сповіщення фронтенду про завершення зміни (миттєвий редірект оператора)
+	@OnEvent('shift.ended')
+	handleShiftEnded(data: { operatorId: string }) {
+		this.logger.log(`🛑 Shift ended for operator ${data.operatorId}, broadcasting event`);
+		this.server.emit('shift_ended', { operatorId: data.operatorId });
+	}
+
 	emitNewMessage(event: { dialogId: string; payload: any }) {
 		this.server.to(`dlg:${event.dialogId}`).emit('message', event.payload);
 	}
@@ -155,31 +162,6 @@ export class ChatsGateway implements OnModuleInit {
 			this.logger.error('❌ JWT verification failed', error);
 			client.disconnect(true);
 			return { error: 'Invalid token' };
-		}
-	}
-
-	@SubscribeMessage('leave')
-	async leave(@MessageBody() data: { dialogId: string }, @ConnectedSocket() client: Socket) {
-		const room = `dlg:${data.dialogId}`;
-		client.leave(room);
-		return { left: room };
-	}
-
-	// Обробка відключення клієнта
-	handleDisconnect(client: Socket) {
-		// Видаляємо сокет з усіх користувачів
-		for (const [userId, sockets] of this.userSockets.entries()) {
-			if (sockets.has(client.id)) {
-				sockets.delete(client.id);
-				
-				// Якщо у користувача не залишилося активних сокетів
-				if (sockets.size === 0) {
-					this.userSockets.delete(userId);
-					// НЕ відписуємося від RTM - RTM працює з профілями, а не з операторами
-					this.logger.log(`👤 User ${userId} disconnected from WebSocket`);
-				}
-				break;
-			}
 		}
 	}
 }

@@ -6,8 +6,9 @@ import type { Request } from 'express';
 import { ChatsService } from './chats.service';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { SendPhotoDto } from './dto/send-photo.dto';
+import { ActiveShiftGuard } from '../common/auth/auth.guard';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ActiveShiftGuard)
 @Throttle({ default: { limit: 60, ttl: 60000 } }) // 60 запитів до чатів за хвилину
 @Controller('api/chats')
 export class ChatsController {
@@ -116,7 +117,7 @@ export class ChatsController {
 	@Post('send-sticker')
 	async sendSticker(@Req() req: Request, @Body() body: { idProfile?: number; idRegularUser: number; stickerId: number; stickerUrl?: string }) {
 		console.log('😀 ChatsController.sendSticker called with:', body);
-
+		
 		// Якщо немає idProfile, то використовуємо поточний профіль з діалогу
 		if (!body.idProfile) {
 			// Парсимо dialogId для отримання idUser (який є idProfile)
@@ -153,7 +154,6 @@ export class ChatsController {
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)
-	@Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 нових постів за хвилину
 	@Post('tt-send-post')
 	async sendExclusivePost(
 		@Req() req: Request,
