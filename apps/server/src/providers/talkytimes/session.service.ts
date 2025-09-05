@@ -214,4 +214,45 @@ export class TalkyTimesSessionService {
 			console.error('Error cleaning up expired sessions:', error);
 		}
 	}
+	
+	/**
+	 * Повертає реф-код оператора (operatorCode), якщо для профілю є активна зміна в його групі
+	 */
+	async getActiveOperatorRefForProfile(profileId: string): Promise<string | null> {
+		try {
+			const profile = await this.prisma.profile.findFirst({
+				where: { provider: 'TALKYTIMES', profileId },
+				include: {
+					group: {
+						include: {
+							activeShift: {
+								include: { operator: true }
+							}
+						}
+					}
+				}
+			});
+
+			const operatorCode = (profile as any)?.group?.activeShift?.operator?.operatorCode as string | null | undefined;
+			return operatorCode ?? null;
+		} catch (error) {
+			console.warn('getActiveOperatorRefForProfile failed:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * Перевіряє, чи є активна зміна для користувача з даним operatorCode
+	 */
+	async hasActiveShiftForOperatorCode(operatorCode: string): Promise<boolean> {
+		try {
+			const user = await this.prisma.user.findUnique({ where: { operatorCode } });
+			if (!user) return false;
+			const shift = await this.prisma.shift.findFirst({ where: { operatorId: user.id, endedAt: null } });
+			return !!shift;
+		} catch (error) {
+			console.warn('hasActiveShiftForOperatorCode failed:', error);
+			return false;
+		}
+	}
 }

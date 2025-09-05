@@ -302,6 +302,25 @@ export class TalkyTimesProvider implements SiteProvider {
 
 	private _lastMockState?: boolean;
 
+	private async getOperatorRef(opts: { ctx?: ProviderRequestContext; profileId?: number | string }): Promise<string | null> {
+		try {
+			if (opts.profileId !== undefined && opts.profileId !== null) {
+				const ref = await this.sessionService.getActiveOperatorRefForProfile(String(opts.profileId));
+				if (ref) return ref;
+			}
+			if (opts.ctx?.operatorCode) {
+				const active = await this.sessionService.hasActiveShiftForOperatorCode(opts.ctx.operatorCode);
+				if (active) return opts.ctx.operatorCode;
+			}
+		} catch {}
+		return null;
+	}
+
+	private async applyOperatorRefHeader(headers: Record<string, string>, opts: { ctx?: ProviderRequestContext; profileId?: number | string }): Promise<void> {
+		const ref = await this.getOperatorRef(opts);
+		if (ref) headers['x-requested-with'] = ref;
+	}
+
 	private buildHeaders(ctx: ProviderRequestContext): Record<string, string> {
 		const headers: Record<string, string> = { 'x-requested-with': ctx.agencyCode };
 		if (ctx.operatorCode) headers['x-gateway'] = ctx.operatorCode;
@@ -483,6 +502,7 @@ export class TalkyTimesProvider implements SiteProvider {
 		try {
 			const url = 'https://talkytimes.com/platform/chat/dialogs/by-criteria';
 			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
 			
 			// Логування для діагностики
 			console.log(`🚀 TalkyTimes API request for profile ${profileId}:`, {
@@ -660,9 +680,8 @@ export class TalkyTimesProvider implements SiteProvider {
 			// ВИПРАВЛЕННЯ: використовуємо правильний URL для messages API
 			const url = 'https://talkytimes.com/platform/chat/messages';
 			const headers = this.sessionService.getRequestHeaders(session);
-			
+			await this.applyOperatorRefHeader(headers, { profileId });
 			// Оновлюємо referer для конкретного діалогу
-			// СПРОБУЄМО: поміняти місцями - спочатку наш профіль, потім співрозмовник
 			headers['referer'] = `https://talkytimes.com/chat/${idUser}_${idInterlocutor}`;
 			
 			console.log(`🚀 TalkyTimes messages request for profile ${profileId}:`, {
@@ -752,7 +771,7 @@ export class TalkyTimesProvider implements SiteProvider {
 		headers['referer'] = `https://talkytimes.com/chat/${idUser}_${idInterlocutor}`;
 		// Деякі прод-заголовки TT (безпечні до додавання)
 		headers['origin'] = 'https://talkytimes.com';
-		headers['x-requested-with'] = '2055';
+		await this.applyOperatorRefHeader(headers, { ctx, profileId: idUser });
 
 		const body = {
 			message: text,
@@ -799,7 +818,7 @@ export class TalkyTimesProvider implements SiteProvider {
 			const headers = this.sessionService.getRequestHeaders(session);
 			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${idRegularUser}`;
 			headers['origin'] = 'https://talkytimes.com';
-			headers['x-requested-with'] = '2055';
+			await this.applyOperatorRefHeader(headers, { profileId });
 
 			const res = await this.fetchWithConnectionPool(url, {
 				method: 'POST',
@@ -969,8 +988,7 @@ export class TalkyTimesProvider implements SiteProvider {
 					'sec-fetch-dest': 'empty',
 					'sec-fetch-mode': 'cors',
 					'sec-fetch-site': 'same-origin',
-					'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
-					'x-requested-with': '0'
+					'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36'
 				},
 				body: JSON.stringify({
 					email,
@@ -1076,6 +1094,7 @@ export class TalkyTimesProvider implements SiteProvider {
 		try {
 			const url = 'https://talkytimes.com/platform/chat/dialogs/by-pairs';
 			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
 			
 			console.log(`🚀 TalkyTimes search dialog request for profile ${profileId}:`, {
 				profileId,
@@ -1156,6 +1175,7 @@ export class TalkyTimesProvider implements SiteProvider {
 		try {
 			const url = 'https://talkytimes.com/platform/correspondence/restriction';
 			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
 
 			// Оновлюємо referer для конкретного діалогу
 			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${clientId}`;
@@ -1274,6 +1294,7 @@ export class TalkyTimesProvider implements SiteProvider {
 		try {
 			const url = 'https://talkytimes.com/platform/chat/stickers';
 			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
 
 			// Оновлюємо referer для конкретного діалогу
 			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${interlocutorId}`;
@@ -1422,6 +1443,7 @@ export class TalkyTimesProvider implements SiteProvider {
 		try {
 			const url = 'https://talkytimes.com/platform/virtual-gift/limit/get';
 			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
 
 			// Оновлюємо referer для конкретного діалогу
 			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${clientId}`;
@@ -1493,6 +1515,7 @@ export class TalkyTimesProvider implements SiteProvider {
 		try {
 			const url = 'https://talkytimes.com/platform/chat/send/sticker';
 			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
 
 			// Оновлюємо referer для конкретного діалогу
 			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${interlocutorId}`;
@@ -1557,6 +1580,7 @@ export class TalkyTimesProvider implements SiteProvider {
 
 			const url = 'https://talkytimes.com/platform/chat/send/new-post';
 			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
 			// Формуємо коректний referer як у прикладі
 			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${idRegularUser}/posts`;
 
@@ -1706,6 +1730,7 @@ export class TalkyTimesProvider implements SiteProvider {
 		try {
 			const url = 'https://talkytimes.com/platform/virtual-gift/gift/list';
 			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
 
 			// Оновлюємо referer для конкретного діалогу
 			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${clientId}`;
@@ -1839,27 +1864,29 @@ export class TalkyTimesProvider implements SiteProvider {
 			console.log(`📧 Making API request to: ${url}`);
 			console.log(`📧 Payload:`, JSON.stringify(payload, null, 2));
 
+			const headers = {
+				'accept': 'application/json',
+				'accept-language': 'en-US,en;q=0.9',
+				'baggage': 'sentry-environment=PROD,sentry-release=PROD%3A68578-1-71d5,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=a494bc58364b41d89afcab5b46233489,sentry-sampled=false,sentry-sample_rand=0.38253945589427885,sentry-sample_rate=0.0001',
+				'content-type': 'application/json',
+				'origin': 'https://talkytimes.com',
+				'priority': 'u=1, i',
+				'referer': `https://talkytimes.com/mails/view/${profileId}_${clientId}`,
+				'sec-ch-ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+				'sec-ch-ua-mobile': '?0',
+				'sec-ch-ua-platform': '"macOS"',
+				'sec-fetch-dest': 'empty',
+				'sec-fetch-mode': 'cors',
+				'sec-fetch-site': 'same-origin',
+				'sentry-trace': 'a494bc58364b41d89afcab5b46233489-b3d30c6c2f41a5f9-0',
+				'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+				'x-requested-with': '2055',
+				'Cookie': session.cookies
+			} as Record<string, string>;
+			await this.applyOperatorRefHeader(headers, { profileId });
 			const response = await fetchWithTimeout(url, {
 				method: 'POST',
-				headers: {
-					'accept': 'application/json',
-					'accept-language': 'en-US,en;q=0.9',
-					'baggage': 'sentry-environment=PROD,sentry-release=PROD%3A68578-1-71d5,sentry-public_key=36f772c5edd5474cbfbbc825a80816b8,sentry-trace_id=a494bc58364b41d89afcab5b46233489,sentry-sampled=false,sentry-sample_rand=0.38253945589427885,sentry-sample_rate=0.0001',
-					'content-type': 'application/json',
-					'origin': 'https://talkytimes.com',
-					'priority': 'u=1, i',
-					'referer': `https://talkytimes.com/mails/view/${profileId}_${clientId}`,
-					'sec-ch-ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
-					'sec-ch-ua-mobile': '?0',
-					'sec-ch-ua-platform': '"macOS"',
-					'sec-fetch-dest': 'empty',
-					'sec-fetch-mode': 'cors',
-					'sec-fetch-site': 'same-origin',
-					'sentry-trace': 'a494bc58364b41d89afcab5b46233489-b3d30c6c2f41a5f9-0',
-					'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
-					'x-requested-with': '2055',
-					'Cookie': session.cookies
-				},
+				headers,
 				body: JSON.stringify(payload),
 				timeoutMs: DEFAULT_TIMEOUT_MS
 			});
@@ -1899,6 +1926,7 @@ export class TalkyTimesProvider implements SiteProvider {
 
 			const url = 'https://talkytimes.com/platform/correspondence/video/forbidden-tags';
 			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
 			headers['referer'] = `https://talkytimes.com/user/${String(idInterlocutor).padStart(12, '0')}`;
 
 			const payload = { idInterlocutor };
@@ -1949,6 +1977,7 @@ export class TalkyTimesProvider implements SiteProvider {
 
 			const url = 'https://talkytimes.com/platform/correspondence/send-letter';
 			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
 			headers['referer'] = `https://talkytimes.com/mails/view/${profileId}_${idUserTo}`;
 
 			const body = {
@@ -2020,24 +2049,25 @@ export class TalkyTimesProvider implements SiteProvider {
 			console.log(`🎁 Making API request to: ${url}`);
 			console.log(`🎁 Payload:`, JSON.stringify(payload, null, 2));
 
+			const vgHeaders = {
+				'accept': 'application/json',
+				'accept-language': 'en-US,en;q=0.9',
+				'content-type': 'application/json',
+				'origin': 'https://talkytimes.com',
+				'referer': `https://talkytimes.com/virtual-gifts/buy/000${clientId}/cart/checkout`,
+				'sec-ch-ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+				'sec-ch-ua-mobile': '?0',
+				'sec-ch-ua-platform': '"macOS"',
+				'sec-fetch-dest': 'empty',
+				'sec-fetch-mode': 'cors',
+				'sec-fetch-site': 'same-origin',
+				'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+				'Cookie': session.cookies
+			} as Record<string, string>;
+			await this.applyOperatorRefHeader(vgHeaders, { profileId });
 			const response = await fetchWithTimeout(url, {
 				method: 'POST',
-				headers: {
-					'accept': 'application/json',
-					'accept-language': 'en-US,en;q=0.9',
-					'content-type': 'application/json',
-					'origin': 'https://talkytimes.com',
-					'referer': `https://talkytimes.com/virtual-gifts/buy/000${clientId}/cart/checkout`,
-					'sec-ch-ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
-					'sec-ch-ua-mobile': '?0',
-					'sec-ch-ua-platform': '"macOS"',
-					'sec-fetch-dest': 'empty',
-					'sec-fetch-mode': 'cors',
-					'sec-fetch-site': 'same-origin',
-					'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
-					'x-requested-with': '2055',
-					'Cookie': session.cookies
-				},
+				headers: vgHeaders,
 				body: JSON.stringify(payload),
 				timeoutMs: DEFAULT_TIMEOUT_MS
 			});
@@ -2127,17 +2157,11 @@ export class TalkyTimesProvider implements SiteProvider {
 			for (const c of (parsed as any).allCategories || parsed.categories) {
 				counts[c] = (counts[c] || 0) + 1;
 			}
-			// Логіка рівня на вимогу:
-			// якщо присутні розширені теги (0x22/0x2a) → special, інакше → specialplus
+			// Логіка рівня на вимогу
 			let tier: 'special' | 'specialplus' | undefined = undefined;
 			if (parsed.hasExclusivePosts) {
 				tier = (parsed as any).hasExtendedTags ? 'special' : 'specialplus';
 			}
-
-			console.log('📥 TalkyTimes get restrictions response for profile', profileId, ':', {
-				hasExclusivePosts: parsed.hasExclusivePosts,
-				categories: parsed.categories
-			});
 
 			return {
 				success: true,
@@ -2149,8 +2173,8 @@ export class TalkyTimesProvider implements SiteProvider {
 
 		} catch (error: any) {
 			console.error('⚡ TalkyTimes getTtRestrictions error:', error);
-			return { 
-				success: false, 
+			return {
+				success: false,
 				error: error.message || 'Unknown error',
 				hasExclusivePosts: false,
 				categories: []
@@ -2164,111 +2188,75 @@ export class TalkyTimesProvider implements SiteProvider {
 	private createGetRestrictionsBody(dialogId: number): Uint8Array {
 		const varintBytes = this.encodeVarint(dialogId);
 		const payload = new Uint8Array(1 + varintBytes.length);
-		
-		// Protobuf тег 0x08 (field 1, varint)
-		payload[0] = 0x08;
+		payload[0] = 0x08; // Protobuf тег 0x08 (field 1, varint)
 		payload.set(varintBytes, 1);
-		
+
 		// gRPC заголовок (5 байт: 4 байти нулів + розмір payload)
 		const result = new Uint8Array(5 + payload.length);
 		result[4] = payload.length; // Розмір payload
 		result.set(payload, 5);
-		
 		return result;
 	}
 
-	/**
-	 * Кодує число у varint формат (protobuf)
-	 */
+	/** Кодує число у varint формат (protobuf) */
 	private encodeVarint(value: number): Uint8Array {
 		const bytes: number[] = [];
-		
 		while (value >= 0x80) {
 			bytes.push((value & 0xFF) | 0x80);
 			value >>>= 7;
 		}
 		bytes.push(value & 0xFF);
-		
 		return new Uint8Array(bytes);
 	}
 
-	/**
-	 * Парсить відповідь від GetRestrictions API
-	 */
+	/** Декодує varint з байтового масиву */
+	private decodeVarint(bytes: Uint8Array, offset = 0): { value: number; bytesRead: number } {
+		let value = 0;
+		let shift = 0;
+		let bytesRead = 0;
+		for (let i = offset; i < bytes.length; i++) {
+			const byte = bytes[i];
+			bytesRead++;
+			value |= (byte & 0x7F) << shift;
+			if ((byte & 0x80) === 0) break;
+			shift += 7;
+		}
+		return { value, bytesRead };
+	}
+
+	/** Парсить відповідь від GetRestrictions API */
 	private parseGetRestrictionsResponse(bytes: Uint8Array): { hasExclusivePosts: boolean; categories: string[]; allCategories: string[]; hasExtendedTags: boolean } {
 		// Пропускаємо gRPC заголовок (перші 5 байт)
 		let offset = 5;
-		
 		const result = {
 			hasExclusivePosts: false,
 			categories: [] as string[],
 			allCategories: [] as string[],
 			hasExtendedTags: false
 		};
-		
-		// Парсимо protobuf поля
-		while (offset < bytes.length - 20) { // Залишаємо місце для grpc-status
+		while (offset < bytes.length - 20) {
 			if (offset >= bytes.length) break;
-			
 			const tag = bytes[offset];
-			
 			if (tag === 0x08) {
-				// VARINT поле - прапорець exclusive posts
 				const { value } = this.decodeVarint(bytes, offset + 1);
 				result.hasExclusivePosts = value === 1;
-				offset += 2; // Тег + 1 байт для простого varint
-				
+				offset += 2;
 			} else if (tag === 0x12 || tag === 0x1a || tag === 0x22 || tag === 0x2a) {
-				// Визначаємо чи зустрічались розширені теги 0x22/0x2a
-				if (tag === 0x22 || tag === 0x2a) {
-					result.hasExtendedTags = true;
-				}
-				// STRING поля - категорії
+				if (tag === 0x22 || tag === 0x2a) result.hasExtendedTags = true;
 				if (offset + 1 >= bytes.length) break;
-				
 				const length = bytes[offset + 1];
 				if (offset + 2 + length > bytes.length) break;
-				
 				const categoryBytes = bytes.slice(offset + 2, offset + 2 + length);
 				const category = new TextDecoder().decode(categoryBytes);
 				if (category) {
 					result.allCategories.push(category);
-					if (!result.categories.includes(category)) {
-						result.categories.push(category);
-					}
+					if (!result.categories.includes(category)) result.categories.push(category);
 				}
-				
 				offset += 2 + length;
-				
 			} else {
 				offset++;
 			}
 		}
-		
 		return result;
-	}
-
-	/**
-	 * Декодує varint з байтового масиву
-	 */
-	private decodeVarint(bytes: Uint8Array, offset = 0): { value: number; bytesRead: number } {
-		let value = 0;
-		let shift = 0;
-		let bytesRead = 0;
-		
-		for (let i = offset; i < bytes.length; i++) {
-			const byte = bytes[i];
-			bytesRead++;
-			
-			value |= (byte & 0x7F) << shift;
-			
-			if ((byte & 0x80) === 0) {
-				break;
-			}
-			
-			shift += 7;
-		}
-		
-		return { value, bytesRead };
 	}
 }
