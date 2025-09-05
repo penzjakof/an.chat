@@ -162,4 +162,10 @@ export class ChatsController {
 		console.log('📝 ChatsController.sendExclusivePost called:', { profileId: body.profileId, idRegularUser: body.idRegularUser, photos: body.idsGalleryPhotos?.length || 0, videos: body.idsGalleryVideos?.length || 0, textLen: body.text?.length || 0 });
 		return this.chats.sendExclusivePost(req.auth!, body);
 	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post('photo-original')
+	getOriginalPhoto(@Req() req: Request, @Body() body: { profileId: string; idRegularUser: number; previewUrl: string }) {
+		return this.chats.getOriginalPhotoUrl(req.auth!, body.profileId, body.idRegularUser, body.previewUrl);
+	}
 }

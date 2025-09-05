@@ -7,6 +7,7 @@ import { getAccessToken, getSession } from '@/lib/session';
 import { ChatHeaderSkeleton, MessageSkeleton } from '@/components/SkeletonLoader';
 import { useDialogWebSocket } from '@/hooks/useDialogWebSocket';
 import { MediaGallery, Photo } from '@/components/MediaGallery';
+import ImagePreviewModal from '@/components/ImagePreviewModal';
 import LottieErrorBoundary from '@/components/LottieErrorBoundary';
 import EmailHistory from '@/components/EmailHistory';
 import { useResourceManager, cleanupLottieAnimations } from '@/utils/memoryCleanup';
@@ -44,6 +45,7 @@ type ChatMessage = {
 		idPhoto?: number;
 		url?: string;
 		id?: number; // Для стікерів
+		photos?: Array<{ id: number; url: string }>; // Для пакетів фото
 	};
 	isSending?: boolean; // Для локальних повідомлень що відправляються
 	error?: boolean; // Для повідомлень з помилкою відправки
@@ -122,6 +124,9 @@ export default function DialogPage() {
 	const [messagesLeft, setMessagesLeft] = useState<number | null>(null);
 	const [lettersLeft, setLettersLeft] = useState<number | null>(null);
 	const [isLoadingRestrictions, setIsLoadingRestrictions] = useState(false);
+    const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false);
+    const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+    const [imagePreviewLoading, setImagePreviewLoading] = useState(false);
 	const bottomRef = useRef<HTMLDivElement>(null);
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
 	const lastScrollTop = useRef<number>(0);
@@ -1001,40 +1006,56 @@ export default function DialogPage() {
 		onMessage: (payload: ChatMessage) => {
 			console.log('📨 RTM Pool: Received new message', payload);
 
+			// Нормалізація вхідного payload
+			const normalized: ChatMessage = {
+				id: Number((payload as any).id) || Date.now(),
+				idUserFrom: Number((payload as any).idUserFrom),
+				idUserTo: Number((payload as any).idUserTo),
+				type: (payload as any).type || 'text',
+				dateCreated: (() => {
+					const d = new Date((payload as any).dateCreated || Date.now());
+					return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+				})(),
+				content: {
+					message: (payload as any).content?.message || (payload as any).message?.message || (payload as any).text || '',
+					url: (payload as any).content?.url,
+					id: (payload as any).content?.id
+				}
+			};
+
 			setMessages((prev) => {
 				// Перевіряємо чи повідомлення вже існує
-				const exists = prev.some(msg => msg.id === payload.id);
+				const exists = prev.some(msg => msg.id === normalized.id);
 				if (exists) {
 					return prev;
 				}
 
 				// Якщо це стікер від нас і у нас є локальна версія з тимчасовим ID,
 				// замінюємо її на справжнє повідомлення від сервера
-				if (payload.type === 'sticker' && payload.idUserFrom === idProfile) {
+				if (normalized.type === 'sticker' && normalized.idUserFrom === idProfile) {
 					const localStickerIndex = prev.findIndex(msg =>
 						msg.type === 'sticker' &&
 						msg.idUserFrom === idProfile &&
 						msg.idUserTo === idRegularUser &&
-						msg.content.id === payload.content.id &&
-						msg.isSending === true // Шукаємо тільки повідомлення що відправляються
+						msg.content.id === normalized.content.id &&
+						(msg as any).isSending === true
 					);
 
 					if (localStickerIndex !== -1) {
-						// Замінюємо локальне повідомлення на справжнє від сервера
 						const newMessages = [...prev];
-						newMessages[localStickerIndex] = payload; // Видаляємо isSending поле
+						newMessages[localStickerIndex] = normalized;
 						return newMessages.sort((a, b) =>
 							new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime()
 						);
 					}
 				}
 
-				const newMessages = [...prev, payload].sort((a, b) =>
+				const newMessages = [...prev, normalized].sort((a, b) =>
 					new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime()
 				);
 
 				// Оновлюємо лічільник повідомлень якщо це наше повідомлення
-				if (payload.idUserFrom === idProfile) {
+				if (normalized.idUserFrom === idProfile) {
 					updateCountersAfterSend();
 				}
 
@@ -1053,6 +1074,15 @@ export default function DialogPage() {
 			if (data.userId === idRegularUser) {
 				setUserProfile(prev => prev ? { ...prev, is_online: data.isOnline } : null);
 			}
+		},
+		onDialogLimitChanged: (data: { idUser: number; idInterlocutor: number; limitLeft: number }) => {
+			// Оновлюємо лічильник лише для поточного діалогу
+			if (data.idUser === idProfile && data.idInterlocutor === idRegularUser) {
+				setMessagesLeft(data.limitLeft ?? messagesLeft);
+				if (typeof data.limitLeft === 'number') {
+					localStorage.setItem(`messagesLeft_${dialogId}`, String(data.limitLeft));
+				}
+			}
 		}
 	});
 
@@ -1066,24 +1096,23 @@ export default function DialogPage() {
 	const handlePhotoSelect = async (selectedPhotos: Photo[]) => {
 		console.log('Selected photos:', selectedPhotos);
 
-		try {
-			const photoIds = selectedPhotos.map(photo => photo.idPhoto);
+		// Оптимістичне відображення повідомлення з фото одразу
+		const localPhotoMessage: ChatMessage = {
+			id: Date.now(),
+			dateCreated: new Date().toISOString(),
+			idUserFrom: idProfile,
+			idUserTo: idRegularUser,
+			type: 'photo_batch',
+			content: {
+				photos: selectedPhotos.map(p => ({ id: p.idPhoto, url: p.urls.urlPreview }))
+			},
+			isSending: true
+		};
 
-			const response = await apiPost('/api/chats/send-photo', {
-				idProfile,
-				idRegularUser,
-				photoIds
-			});
-
-			if (response.success) {
-				console.log(`✅ Successfully sent ${response.data.successCount}/${response.data.totalCount} photos`);
-				// Фото будуть додані в чат через WebSocket/RTM
-			} else {
-				console.error('Failed to send photos:', response.error);
-			}
-		} catch (error) {
-			console.error('Error sending photos:', error);
-		}
+		setMessages(prev => [...prev, localPhotoMessage].sort((a, b) =>
+			new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime()
+		));
+		setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
 
 		setIsChatGalleryOpen(false);
 	};
@@ -1273,9 +1302,31 @@ export default function DialogPage() {
 		}
 	};
 
+    // Відкриття превʼю фото (отримуємо оригінал через бекенд)
+    const openPhotoPreview = async (previewUrl: string) => {
+        try {
+            setIsImagePreviewOpen(true);
+            setImagePreviewLoading(true);
+            setImagePreviewUrl(previewUrl);
+            const res = await apiPost('/api/chats/photo-original', {
+                profileId: idProfile.toString(),
+                idRegularUser,
+                previewUrl
+            });
+            const original = (res && (res.url || res.data?.url)) ? (res.url || res.data?.url) : null;
+            if (original) setImagePreviewUrl(original as string);
+        } catch (e) {
+            // залишаємо превʼю як fallback
+        } finally {
+            setImagePreviewLoading(false);
+        }
+    };
+
 	const formatDateTime = (dateString: string) => {
 		const date = new Date(dateString);
-		
+		if (isNaN(date.getTime())) {
+			return '—';
+		}
 		// Завжди показуємо дату і час
 		const dateStr = date.toLocaleDateString('uk-UA', {
 			day: '2-digit',
@@ -1289,17 +1340,18 @@ export default function DialogPage() {
 		return `${dateStr} ${timeStr}`;
 	};
 
-	const renderMessage = (message: ChatMessage) => {
+	const renderMessage = (message: ChatMessage & { _idx?: number }) => {
 		// ВИПРАВЛЕННЯ: idProfile - це наш профіль, idRegularUser - співрозмовник
 		const isFromProfile = message.idUserFrom === idProfile;
 		const isFromUser = message.idUserFrom === idRegularUser;
+		const uniqueKey = String(message.id ?? `${message.idUserFrom}-${message.idUserTo}-${message.dateCreated || ''}`) + `-${message._idx ?? 0}`;
 		
 		// Системні повідомлення відображаються по-особливому
 		if (message.type === 'system') {
 			return (
-				<div key={message.id} className="flex justify-center mb-4">
+				<div key={uniqueKey} className="flex justify-center mb-4">
 					<div className="text-center text-gray-500 text-sm">
-						{message.content.message && (
+						{message.content?.message && (
 							<p className="whitespace-pre-wrap break-words">{message.content.message}</p>
 						)}
 						<p className="text-xs mt-1 text-gray-400">
@@ -1311,30 +1363,63 @@ export default function DialogPage() {
 		}
 		
 		return (
-			<div key={message.id} className={`flex ${isFromProfile ? 'justify-end' : 'justify-start'} mb-4`}>
-				<div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+			<div key={uniqueKey} className={`flex ${isFromProfile ? 'justify-end' : 'justify-start'} mb-4`}>
+				<div className={`max-w-xs lg:max-w-md ${message.type === 'photo_batch' ? 'px-0 pt-0 pb-1' : 'px-4 py-2'} rounded-lg ${
 					isFromProfile 
 						? 'bg-purple-500 text-white' 
 						: 'bg-gray-200 text-gray-800'
-				}`}>
+				}`}
+				>
 					{/* Відображення різних типів повідомлень */}
-					{(message.type === 'message' || message.type === 'text') && message.content.message && (
+					{(message.type === 'message' || message.type === 'text') && message.content?.message && (
 						<p className="text-sm whitespace-pre-wrap break-words">{message.content.message}</p>
 					)}
 					{message.type === 'likephoto' && (
 						<div className="text-sm">
 							<p>❤️ Вподобав фото</p>
-							{message.content.url && (
+							{message.content?.url && (
 								<img src={message.content.url} alt="Photo" className="mt-2 rounded max-w-full h-auto" />
 							)}
 						</div>
 					)}
-					{message.type === 'photo' && message.content.url && (
+					{message.type === 'photo' && message.content?.url && (
 						<div className="text-sm">
 							<img src={message.content.url} alt="Photo" className="rounded max-w-full h-auto" />
 						</div>
 					)}
-					{message.type === 'sticker' && message.content.url && (
+					{message.type === 'photo_batch' && (message as any).content?.photos?.length > 0 && (() => {
+						const photos = (((message as any).content?.photos) || []) as Array<{ id: number; url: string }>;
+						if (photos.length === 1) {
+							const p = photos[0];
+							return (
+								<div className="text-sm">
+									<img
+										key={`${message.id}-${p.id || 0}`}
+										src={p.url}
+										alt={`Photo ${p.id || 0}`}
+										className="rounded max-w-full h-auto cursor-zoom-in"
+										onClick={() => openPhotoPreview(p.url)}
+									/>
+								</div>
+							);
+						}
+
+						const gridCols = photos.length >= 5 ? 3 : 2;
+						return (
+							<div className={`grid gap-0 text-sm ${gridCols === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+								{photos.map((p, idx) => (
+									<img
+										key={`${message.id}-${p.id || idx}`}
+										src={p.url}
+										alt={`Photo ${p.id || idx}`}
+										className="rounded max-w-full h-auto cursor-zoom-in"
+										onClick={() => openPhotoPreview(p.url)}
+									/>
+								))}
+							</div>
+						);
+					})()}
+					{message.type === 'sticker' && message.content?.url && (
 						<div className="text-sm relative">
 							<img
 								src={message.content.url}
@@ -1364,13 +1449,13 @@ export default function DialogPage() {
 						</div>
 					)}
 					{/* Відображення невідомих типів повідомлень для дебагу */}
-					{!['message', 'text', 'likephoto', 'photo', 'sticker', 'system'].includes(message.type) && (
+					{!['message', 'text', 'likephoto', 'photo', 'photo_batch', 'sticker', 'system'].includes(message.type) && (
 						<div className="text-sm italic text-gray-500">
 							Тип повідомлення: {message.type}
-							{message.content.message && <p className="mt-1">{message.content.message}</p>}
+							{message.content?.message && <p className="mt-1">{message.content.message}</p>}
 						</div>
 					)}
-					<p className={`text-xs mt-1 ${isFromProfile ? 'text-purple-200' : 'text-gray-500'}`}>
+					<p className={`text-xs mt-1 ml-2 ${isFromProfile ? 'text-purple-200' : 'text-gray-500'}`}>
 						{formatDateTime(message.dateCreated)}
 					</p>
 				</div>
@@ -1529,7 +1614,7 @@ export default function DialogPage() {
 				) : (
 					<div className="space-y-2 flex flex-col-reverse">
 						<div ref={bottomRef} />
-						{messages.slice().reverse().map(renderMessage)}
+						{messages.slice().reverse().map((m, idx) => renderMessage({ ...m, _idx: idx } as any))}
 						
 						{/* Індикатор завантаження більше повідомлень вгорі */}
 						{isLoadingMore && (
@@ -2217,6 +2302,8 @@ export default function DialogPage() {
 					</div>
 				</div>
 			)}
+		<ImagePreviewModal isOpen={isImagePreviewOpen} src={imagePreviewUrl} isLoading={imagePreviewLoading} onClose={() => setIsImagePreviewOpen(false)} />
 		</div>
-	);
+
+);
 }

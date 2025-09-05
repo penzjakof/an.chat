@@ -8,13 +8,15 @@ interface UseDialogWebSocketOptions {
   dialogId: string;
   onMessage?: (message: any) => void;
   onUserOnlineStatus?: (data: { userId: number; isOnline: boolean }) => void;
+  onDialogLimitChanged?: (data: { idUser: number; idInterlocutor: number; limitLeft: number }) => void;
 }
 
 export function useDialogWebSocket({
   profileId,
   dialogId,
   onMessage,
-  onUserOnlineStatus
+  onUserOnlineStatus,
+  onDialogLimitChanged
 }: UseDialogWebSocketOptions) {
   const { getSocketForProfile, joinDialog, leaveDialog } = useWebSocketPool();
   const { showToast } = useToast();
@@ -58,6 +60,10 @@ export function useDialogWebSocket({
       onUserOnlineStatus?.(data);
     };
 
+    const handleDialogLimitChanged = (data: { idUser: number; idInterlocutor: number; limitLeft: number }) => {
+      onDialogLimitChanged?.(data);
+    };
+
     const handleMessageToast = (data: any) => {
       // Показуємо toast тільки якщо повідомлення не від нас
       if (data.idUserFrom.toString() !== profileId) {
@@ -77,12 +83,14 @@ export function useDialogWebSocket({
     socket.on('message', handleMessage);
     socket.on('user_online_status', handleUserOnlineStatus);
     socket.on('message_toast', handleMessageToast);
+    socket.on('dialog_limit_changed', handleDialogLimitChanged);
 
     return () => {
       // Відписуємося від подій
       socket.off('message', handleMessage);
       socket.off('user_online_status', handleUserOnlineStatus);
       socket.off('message_toast', handleMessageToast);
+      socket.off('dialog_limit_changed', handleDialogLimitChanged);
     };
   }, [socket, onMessage, onUserOnlineStatus]);
 

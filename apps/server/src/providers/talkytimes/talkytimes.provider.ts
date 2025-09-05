@@ -730,15 +730,101 @@ export class TalkyTimesProvider implements SiteProvider {
 
 	async sendTextMessage(ctx: ProviderRequestContext, dialogId: string, text: string): Promise<unknown> {
 		if (this.isMock()) {
-			return { id: `m-${Date.now()}`, text };
+			return { idMessage: `mock-${Date.now()}` };
 		}
-		const url = `${this.baseUrl}/dialogs/${encodeURIComponent(dialogId)}/messages`;
-		const res = await fetchWithTimeout(url, {
+
+		// dialogId має формат `${idUser}-${idInterlocutor}` → idUser = profileId
+		const [idUser, idInterlocutor] = dialogId.split('-').map(Number);
+		if (!idUser || !idInterlocutor) {
+			throw new Error(`Invalid dialogId format: ${dialogId}`);
+		}
+
+		// Отримуємо сесію профілю (idUser)
+		const session = await this.sessionService.getSession(String(idUser));
+		if (!session) {
+			throw new Error(`No active session for profile ${idUser}. Please authenticate first.`);
+		}
+
+		// Реальний ендпойнт TT для тексту
+		const url = 'https://talkytimes.com/platform/chat/send/text';
+		const headers = this.sessionService.getRequestHeaders(session);
+		// Коректний referer на сторінку чату
+		headers['referer'] = `https://talkytimes.com/chat/${idUser}_${idInterlocutor}`;
+		// Деякі прод-заголовки TT (безпечні до додавання)
+		headers['origin'] = 'https://talkytimes.com';
+		headers['x-requested-with'] = '2055';
+
+		const body = {
+			message: text,
+			idRegularUser: idInterlocutor,
+			withoutTranslation: false
+		};
+
+		const res = await this.fetchWithConnectionPool(url, {
 			method: 'POST',
-			headers: { ...this.buildHeaders(ctx), 'content-type': 'application/json' },
-			body: JSON.stringify({ type: 'text', text }),
+			headers,
+			body: JSON.stringify(body),
+			timeoutMs: 15000,
+			maxRetries: 2,
+			baseDelayMs: 1500
 		});
+
+		if (!res.ok) {
+			const errorText = await res.text();
+			if (res.status === 401) {
+				await this.sessionService.removeSession(String(idUser));
+			}
+			throw new Error(`HTTP ${res.status}: ${errorText}`);
+		}
+
+		// Очікувано: { idMessage: 43331059243 }
 		return res.json();
+	}
+
+	/**
+	 * Отримує оригінальний URL фото за превʼю через операторський ендпойнт TT
+	 */
+	async getOriginalPhotoUrl(profileId: string, idRegularUser: number, previewUrl: string): Promise<{ success: boolean; url?: string; error?: string }> {
+		if (this.isMock()) {
+			return { success: true, url: previewUrl };
+		}
+
+		const session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+		}
+
+		try {
+			const url = `https://talkytimes.com/platform/operator/get-photo/${idRegularUser}?preview=${encodeURIComponent(previewUrl)}`;
+			const headers = this.sessionService.getRequestHeaders(session);
+			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${idRegularUser}`;
+			headers['origin'] = 'https://talkytimes.com';
+			headers['x-requested-with'] = '2055';
+
+			const res = await this.fetchWithConnectionPool(url, {
+				method: 'POST',
+				headers,
+				timeoutMs: 15000,
+				maxRetries: 1
+			});
+
+			if (!res.ok) {
+				const text = await res.text();
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+				}
+				return { success: false, error: `HTTP ${res.status}: ${text}` };
+			}
+
+			const data = await res.json();
+			const originalUrl = data?.data?.url || data?.url;
+			if (originalUrl) {
+				return { success: true, url: originalUrl };
+			}
+			return { success: false, error: 'Invalid response format' };
+		} catch (error: any) {
+			return { success: false, error: error.message || 'Unknown error' };
+		}
 	}
 
 

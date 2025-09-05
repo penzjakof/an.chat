@@ -1429,6 +1429,15 @@ export function MediaGallery({
 
     // Якщо є idRegularUser, відправляємо через API
     if (idRegularUser && context === 'chat') {
+      // Оптимістичне оновлення в чаті: повідомляємо батьківський компонент
+      try {
+        onPhotoSelect(selectedPhotos);
+      } catch {}
+      // Закриваємо модалку одразу, щоб користувач бачив чат
+      try {
+        onClose();
+      } catch {}
+
       setLoading(true);
       try {
         const response = await apiPost('/api/gallery/send-photos', {
@@ -1439,7 +1448,6 @@ export function MediaGallery({
 
         const typedResponse = response as { success: boolean; error?: string };
         if (typedResponse.success) {
-          onClose();
           setSelectedPhotos([]);
         } else {
           setError('Помилка відправки фото');

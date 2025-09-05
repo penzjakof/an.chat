@@ -57,36 +57,37 @@ export class ChatsGateway implements OnModuleInit {
 	handleRTMNewMessage(data: any) {
 		this.logger.log(`🍞 RTM New Message Toast: ${data.idUserFrom} -> ${data.idUserTo}`);
 		this.logger.log('🍞 RTM New Message data:', JSON.stringify(data, null, 2));
-		
-		// Знаходимо всі сокети отримувача повідомлення
-		const toUserSockets = Array.from(this.userSockets.entries())
-			.filter(([userId, sockets]) => {
-				// Шукаємо користувача який має профіль data.idUserTo
-				// Поки що відправляємо всім - потім можна буде уточнити логіку
-				return sockets.size > 0;
-			})
-			.flatMap(([userId, sockets]) => Array.from(sockets));
 
-		this.logger.log(`🍞 Connected users: ${Array.from(this.userSockets.keys()).join(', ')}`);
-		this.logger.log(`🍞 Total connected sockets: ${toUserSockets.length}`);
-
-		// Створюємо dialogId для навігації (формат: idUserTo-idUserFrom)
-		const dialogId = `${data.idUserTo}-${data.idUserFrom}`;
-		
-		// Відправляємо toast всім активним сокетам (поки що всім)
+		// 1) Тост усім (як і було)
+		// Формат dialogId у фронті: `${idProfile}-${idRegularUser}`
+		// де idProfile = відправник (наш профіль), idRegularUser = співрозмовник
+		const dialogId = `${data.idUserFrom}-${data.idUserTo}`;
 		const toastPayload = {
 			messageId: data.messageId,
 			idUserFrom: data.idUserFrom,
 			idUserTo: data.idUserTo,
 			dateCreated: data.dateCreated,
 			type: 'new_message',
-			dialogId: dialogId // Додаємо dialogId для навігації
+			dialogId
 		};
-		
-		this.logger.log('🍞 Sending toast payload:', JSON.stringify(toastPayload, null, 2));
 		this.server.emit('message_toast', toastPayload);
-		
-		this.logger.log(`🍞 Toast sent to all connected clients for message ${data.messageId}`);
+
+		// 2) Якщо у кімнаті діалогу є клієнти — відправляємо реальне повідомлення в кімнату
+		const room = `dlg:${dialogId}`;
+		const roomSize = this.server.sockets?.adapter?.rooms?.get(room)?.size || 0;
+		if (roomSize > 0) {
+			this.logger.log(`💬 Emitting message to active dialog room ${room} (clients: ${roomSize})`);
+			const text = data.content?.message ?? data.content?.text ?? '';
+			this.server.to(room).emit('message', {
+				id: data.messageId,
+				idUserFrom: data.idUserFrom,
+				idUserTo: data.idUserTo,
+				type: 'message',
+				content: { message: text },
+				message: text,
+				dateCreated: data.dateCreated
+			});
+		}
 	}
 
 	@OnEvent('rtm.message.read')

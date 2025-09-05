@@ -251,7 +251,24 @@ export class ChatsService {
 		// TODO: Додати перевірку доступу до конкретного діалогу перед відправкою
 		// Наразі дозволяємо відправку, але потрібно буде додати валідацію
 		const result = await this.provider.sendTextMessage(this.toCtx(auth), dialogId, text);
-		this.gateway?.emitNewMessage({ dialogId, payload: result });
+
+		// Формуємо повний payload для негайного оновлення чату на фронті
+		try {
+			const [idUser, idInterlocutor] = dialogId.split('-').map(Number);
+			const payload = {
+				id: (result as any)?.idMessage || Date.now(),
+				idUserFrom: idUser,
+				idUserTo: idInterlocutor,
+				type: 'message',
+				content: { message: text },
+				message: text,
+				dateCreated: new Date().toISOString()
+			};
+			this.gateway?.emitNewMessage({ dialogId, payload });
+		} catch (e) {
+			// Мовчазний fallback, якщо формат dialogId несподівано некоректний
+		}
+
 		return result;
 	}
 
@@ -265,6 +282,19 @@ export class ChatsService {
 			return this.provider.fetchProfiles(profileId, userIds);
 		}
 		return { profiles: [] };
+	}
+
+	async getOriginalPhotoUrl(auth: RequestAuthContext, profileId: string, idRegularUser: number, previewUrl: string) {
+		try {
+			if (!(this.provider as any).getOriginalPhotoUrl) {
+				throw new Error('getOriginalPhotoUrl not supported by provider');
+			}
+			const res = await (this.provider as any).getOriginalPhotoUrl(profileId, idRegularUser, previewUrl);
+			return res;
+		} catch (error) {
+			console.error('💥 ПОМИЛКА в ChatsService.getOriginalPhotoUrl:', error);
+			throw error;
+		}
 	}
 
 	async searchDialogByPair(auth: RequestAuthContext, profileId: string, clientId: string) {
@@ -373,6 +403,24 @@ export class ChatsService {
 				if (result.success) {
 					console.log(`✅ Photo ${photoId} sent successfully`);
 					results.push({ photoId, success: true, messageId: result.data?.messageId });
+
+					// Негайно емітимо у кімнату діалогу локальне медіа-повідомлення
+					try {
+						const payload = {
+							id: result.data?.messageId || Date.now(),
+							idUserFrom: Number(sendPhotoDto.idProfile),
+							idUserTo: Number(sendPhotoDto.idRegularUser),
+							type: 'photo_batch',
+							content: {
+								photos: [
+									{ id: photoId, url: result.data?.photoUrl || '' }
+								]
+							},
+							dateCreated: new Date().toISOString()
+						};
+						const dialogId = `${sendPhotoDto.idProfile}-${sendPhotoDto.idRegularUser}`;
+						this.gateway?.emitNewMessage({ dialogId, payload });
+					} catch {}
 				} else {
 					console.error(`❌ Failed to send photo ${photoId}:`, result.error);
 					results.push({ photoId, success: false, error: result.error });

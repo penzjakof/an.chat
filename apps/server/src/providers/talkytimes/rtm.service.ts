@@ -286,9 +286,22 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 					idUserTo: messageData?.idUserTo,
 					content: messageData?.content,
 					messageId: messageData?.id || data.id,
+					dateCreated: messageData?.dateCreated || timestamp,
 					timestamp
 				});
 				this.logger.log(`🆕 RTM: New message event emitted for profile ${profileId}, from: ${messageData?.idUserFrom}, to: ${messageData?.idUserTo}`);
+			}
+			else if (messageType === 'chat_DialogLimitChanged' || messageType === 'platform_CorrespondenceLimitChanged') {
+				// Уніфікуємо подію ліміту діалогу
+				const limitData = data.data || data;
+				this.eventEmitter.emit('rtm.dialog.limit.changed', {
+					profileId,
+					idUser: limitData?.idUser,
+					idInterlocutor: limitData?.idInterlocutor,
+					limitLeft: limitData?.limitLeft,
+					timestamp
+				});
+				this.logger.log(`📊 RTM: Dialog limit event emitted for profile ${profileId}: user ${limitData?.idUser}, interlocutor ${limitData?.idInterlocutor}, left ${limitData?.limitLeft}`);
 			}
 			else {
 				// Загальна подія для інших типів
