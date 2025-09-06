@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef, useCallback, useLayoutEffect, useMe
 import { apiPost } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { MediaGallery, Photo, Video } from '@/components/MediaGallery';
+import { EmojiPicker } from '@/components/EmojiPicker';
 
 interface EmailAttachment {
   id: string;
@@ -100,6 +101,7 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
   // Стан для написання нового листа
   const [composeText, setComposeText] = useState('');
   const [isAttachGalleryOpen, setIsAttachGalleryOpen] = useState(false);
+  const [isEmailEmojiPickerOpen, setIsEmailEmojiPickerOpen] = useState(false);
   const [attachedPhotos, setAttachedPhotos] = useState<Photo[]>([]);
   const [attachedVideos, setAttachedVideos] = useState<Video[]>([]);
   const [forbiddenTags, setForbiddenTags] = useState<string[]>([]); // майбутній запит заборонених тегів
@@ -303,6 +305,11 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
     }
   }, [emails, isInitialLoad]);
 
+  // Функція для додавання емодзі до тексту листа
+  const handleEmailEmojiSelect = (emoji: string) => {
+    setComposeText(prev => prev + emoji);
+  };
+
   // Закриття модалу по Escape
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -495,15 +502,32 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
                 </button>
 
                 {/* Інпут для тексту листа */}
-                <div className="flex-1">
+                <div className="flex-1 relative">
                   <textarea
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-12 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                     placeholder="Напишіть лист... (300–3000 символів)"
                     value={composeText}
                     onChange={(e) => setComposeText(e.target.value)}
                     rows={3}
                     maxLength={3000}
                   />
+                  {/* Кнопка емодзі */}
+                  <div className="absolute right-2 top-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEmailEmojiPickerOpen(!isEmailEmojiPickerOpen)}
+                      className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
+                      title="Додати емодзі"
+                    >
+                      😀
+                    </button>
+                    {/* EmojiPicker */}
+                    <EmojiPicker
+                      isOpen={isEmailEmojiPickerOpen}
+                      onEmojiSelect={handleEmailEmojiSelect}
+                      onClose={() => setIsEmailEmojiPickerOpen(false)}
+                    />
+                  </div>
                   <div className="text-xs mt-1 flex items-center justify-between">
                     <span className={`${composeText.trim().length < 300 ? 'text-red-600' : composeText.trim().length > 3000 ? 'text-red-600' : 'text-gray-500'}`}>
                       Символів: {composeText.trim().length}/3000

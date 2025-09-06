@@ -14,6 +14,7 @@ import { useResourceManager, cleanupLottieAnimations } from '@/utils/memoryClean
 import { checkDialogRestrictions, logRestrictionsCheck } from '@/utils/grpcUtils';
 import { ClientPublicProfileModal } from '@/components/ClientPublicProfileModal';
 import { MyPublicProfileModal } from '@/components/MyPublicProfileModal';
+import { EmojiPicker } from '@/components/EmojiPicker';
 
 // Типи для Lottie
 declare global {
@@ -152,6 +153,9 @@ export default function DialogPage() {
 	const [isLoadingGifts, setIsLoadingGifts] = useState(false);
 	const [giftCursor, setGiftCursor] = useState<string>('');
 	const [hasMoreGifts, setHasMoreGifts] = useState(true);
+	const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+	const [isPostEmojiPickerOpen, setIsPostEmojiPickerOpen] = useState(false);
+	const [isGiftEmojiPickerOpen, setIsGiftEmojiPickerOpen] = useState(false);
 
 	// Стан для модального вікна поста
 	const [isPostModalOpen, setIsPostModalOpen] = useState(false);
@@ -1160,6 +1164,21 @@ export default function DialogPage() {
 		setText('');
 	}
 
+	// Функція для додавання емодзі до тексту
+	const handleEmojiSelect = (emoji: string) => {
+		setText(prev => prev + emoji);
+	};
+
+	// Функція для додавання емодзі до тексту постів
+	const handlePostEmojiSelect = (emoji: string) => {
+		setExclusiveText(prev => prev + emoji);
+	};
+
+	// Функція для додавання емодзі до повідомлень подарунків
+	const handleGiftEmojiSelect = (emoji: string) => {
+		setGiftMessage(prev => prev + emoji);
+	};
+
 	// Обробка вибору фото з галереї
 	const handlePhotoSelect = async (selectedPhotos: Photo[]) => {
 		console.log('Selected photos:', selectedPhotos);
@@ -2030,15 +2049,34 @@ export default function DialogPage() {
 						</button>
 					)}
 
-					<input 
-						className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
-						placeholder="Напишіть повідомлення..." 
-						value={text} 
-						onChange={(e) => setText(e.target.value)}
-						onKeyPress={(e) => e.key === 'Enter' && send()}
-					/>
-					<button 
-						className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded-lg transition-colors" 
+					<div className="flex-1 relative">
+						<input
+							className="w-full border border-gray-300 rounded-lg px-4 py-2 pr-12 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+							placeholder="Напишіть повідомлення..."
+							value={text}
+							onChange={(e) => setText(e.target.value)}
+							onKeyPress={(e) => e.key === 'Enter' && send()}
+						/>
+						{/* Кнопка емодзі */}
+						<div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+							<button
+								type="button"
+								onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
+								className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
+								title="Додати емодзі"
+							>
+								😀
+							</button>
+							{/* EmojiPicker */}
+							<EmojiPicker
+								isOpen={isEmojiPickerOpen}
+								onEmojiSelect={handleEmojiSelect}
+								onClose={() => setIsEmojiPickerOpen(false)}
+							/>
+						</div>
+					</div>
+					<button
+						className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded-lg transition-colors"
 						onClick={send}
 					>
 						Надіслати
@@ -2104,13 +2142,32 @@ export default function DialogPage() {
 						</div>
 						<div>
 							<label className="block text-sm text-gray-600 mb-1">Текст (мінімум {minExclusiveLength} символів)</label>
-							<textarea
-								value={exclusiveText}
-								onChange={(e) => setExclusiveText(e.target.value)}
-								rows={4}
-								className="w-full border rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
-								placeholder="Введіть текст посту..."
-							/>
+							<div className="relative">
+								<textarea
+									value={exclusiveText}
+									onChange={(e) => setExclusiveText(e.target.value)}
+									rows={4}
+									className="w-full border rounded-md p-2 pr-12 focus:outline-none focus:ring-2 focus:ring-purple-500"
+									placeholder="Введіть текст посту..."
+								/>
+								{/* Кнопка емодзі */}
+								<div className="absolute right-2 top-2">
+									<button
+										type="button"
+										onClick={() => setIsPostEmojiPickerOpen(!isPostEmojiPickerOpen)}
+										className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
+										title="Додати емодзі"
+									>
+										😀
+									</button>
+									{/* EmojiPicker */}
+									<EmojiPicker
+										isOpen={isPostEmojiPickerOpen}
+										onEmojiSelect={handlePostEmojiSelect}
+										onClose={() => setIsPostEmojiPickerOpen(false)}
+									/>
+								</div>
+							</div>
 							<div className={`${exclusiveText.length < minExclusiveLength ? 'text-red-600' : 'text-gray-500'} text-sm mt-1`}>
 								Залишилось: {Math.max(0, minExclusiveLength - exclusiveText.length)}
 							</div>
@@ -2578,16 +2635,36 @@ export default function DialogPage() {
 								<label htmlFor="gift-message" className="block text-sm font-medium text-gray-700 mb-2">
 									Особисте повідомлення (не обов'язково)
 								</label>
-								<textarea
-									id="gift-message"
-									value={giftMessage}
-									onChange={(e) => setGiftMessage(e.target.value)}
-									placeholder="Напишіть тепле повідомлення до подарунку..."
-									className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-pink-500 focus:border-pink-500 resize-none"
-									rows={3}
-									maxLength={200}
-									disabled={isSendingGift}
-								/>
+								<div className="relative">
+									<textarea
+										id="gift-message"
+										value={giftMessage}
+										onChange={(e) => setGiftMessage(e.target.value)}
+										placeholder="Напишіть тепле повідомлення до подарунку..."
+										className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-pink-500 focus:border-pink-500 resize-none"
+										rows={3}
+										maxLength={200}
+										disabled={isSendingGift}
+									/>
+									{/* Кнопка емодзі */}
+									<div className="absolute right-2 top-2">
+										<button
+											type="button"
+											onClick={() => setIsGiftEmojiPickerOpen(!isGiftEmojiPickerOpen)}
+											className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors disabled:opacity-50"
+											title="Додати емодзі"
+											disabled={isSendingGift}
+										>
+											😀
+										</button>
+										{/* EmojiPicker */}
+										<EmojiPicker
+											isOpen={isGiftEmojiPickerOpen}
+											onEmojiSelect={handleGiftEmojiSelect}
+											onClose={() => setIsGiftEmojiPickerOpen(false)}
+										/>
+									</div>
+								</div>
 								<div className="text-xs text-gray-500 mt-1 text-right">
 									{giftMessage.length}/200
 								</div>
