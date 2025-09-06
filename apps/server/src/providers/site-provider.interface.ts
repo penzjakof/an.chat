@@ -37,4 +37,6 @@ export interface SiteProvider {
 	sendLetter?(profileId: number, idUserTo: number, payload: { content: string; photoIds?: number[]; videoIds?: number[] }): Promise<{ success: boolean; data?: any; error?: string }>;
 	/** Відправка ексклюзивного посту (новий тип повідомлення) */
 	sendExclusivePost?(profileId: number, idRegularUser: number, payload: { idsGalleryPhotos: number[]; idsGalleryVideos: number[]; text: string }): Promise<{ success: boolean; data?: any; error?: string }>;
+	/** Отримання деталей поста */
+	getPostDetails?(idPost: number, idProfile: number, idInterlocutor: number, ctx: ProviderRequestContext): Promise<any>;
 }

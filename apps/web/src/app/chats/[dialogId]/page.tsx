@@ -151,6 +151,11 @@ export default function DialogPage() {
 	const [giftCursor, setGiftCursor] = useState<string>('');
 	const [hasMoreGifts, setHasMoreGifts] = useState(true);
 
+	// Стан для модального вікна поста
+	const [isPostModalOpen, setIsPostModalOpen] = useState(false);
+	const [selectedPost, setSelectedPost] = useState<any>(null);
+	const [isLoadingPost, setIsLoadingPost] = useState(false);
+
 	// Прапор для запобігання race condition
 	const isLoadingGiftsRef = useRef(false);
 	const abortControllerRef = useRef<AbortController | null>(null);
@@ -337,6 +342,7 @@ export default function DialogPage() {
 
 	// ВИПРАВЛЕННЯ: dialogId має формат "idProfile-idRegularUser" (наш профіль - співрозмовник)
 	const [idProfile, idRegularUser] = dialogId.split('-').map(Number);
+	console.log('🔢 Dialog parsing:', { dialogId, idProfile, idRegularUser });
 
 	// Функція для отримання стилів настрою
 	const getMoodStyles = (mood: string | null | undefined) => {
@@ -609,6 +615,32 @@ export default function DialogPage() {
 			setTtTier(undefined);
 		} finally {
 			setIsLoadingRestrictions(false);
+		}
+	};
+
+	const loadPostDetails = async (idPost: number) => {
+		try {
+			console.log('🎯 loadPostDetails called:', { idPost, dialogId, idProfile, idRegularUser });
+			setIsLoadingPost(true);
+			const response = await apiPost<{ success: boolean; data?: any; error?: string }>('/api/chats/tt-post-details', {
+				idPost,
+				idProfile: idProfile,
+				idInterlocutor: idRegularUser
+			});
+			console.log('📤 API request:', { idPost, idProfile, idInterlocutor: idRegularUser });
+
+			if (response.success && response.data) {
+				setSelectedPost(response.data);
+				setIsPostModalOpen(true);
+			} else {
+				console.error('Failed to load post details:', response.error);
+				console.error('Не вдалося завантажити інформацію про пост');
+			}
+		} catch (error) {
+			console.error('Error loading post details:', error);
+			console.error('Помилка при завантаженні поста');
+		} finally {
+			setIsLoadingPost(false);
 		}
 	};
 
@@ -1156,7 +1188,7 @@ export default function DialogPage() {
 				console.log('✅ Gift sent successfully:', response.data);
 
 				// Показуємо успішне повідомлення
-				toast.success(`🎁 Подарунок "${selectedGift.name}" відправлено!`);
+				console.log(`🎁 Подарунок "${selectedGift.name}" відправлено!`);
 
 				// Закриваємо діалог
 				setIsMessageModalOpen(false);
@@ -1168,12 +1200,12 @@ export default function DialogPage() {
 
 			} else {
 				console.error('❌ Failed to send gift:', response.error);
-				toast.error(`❌ Помилка відправки: ${response.error || 'Невідома помилка'}`);
+				console.error(`❌ Помилка відправки: ${response.error || 'Невідома помилка'}`);
 			}
 
 		} catch (error: any) {
 			console.error('❌ Error sending gift:', error);
-			toast.error(`❌ Помилка відправки: ${error.message || 'Невідома помилка'}`);
+			console.error(`❌ Помилка відправки: ${error.message || 'Невідома помилка'}`);
 		} finally {
 			setIsSendingGift(false);
 		}
@@ -1366,11 +1398,26 @@ export default function DialogPage() {
 		
 		return (
 			<div key={uniqueKey} className={`flex ${isFromProfile ? 'justify-end' : 'justify-start'} mb-4`}>
-				<div className={`max-w-xs lg:max-w-md ${message.type === 'photo_batch' ? 'px-0 pt-0 pb-1' : 'px-4 py-2'} rounded-lg ${
-					isFromProfile 
-						? 'bg-purple-500 text-white' 
-						: 'bg-gray-200 text-gray-800'
-				}`}
+				<div
+					className={`${message.type === 'post' ? 'w-[240px]' : message.type === 'virtual_gift' ? 'w-40' : 'max-w-xs lg:max-w-md'} ${(message.type === 'photo_batch' || message.type === 'photo') ? 'px-0 pt-0 pb-1' : message.type === 'virtual_gift' ? 'p-0' : message.type === 'post' ? 'p-0' : 'px-4 py-2'} rounded-lg ${
+						message.type === 'post' && (message as any).content?.isPurchased
+							? 'bg-purple-500 text-white'
+							: (message.type === 'like_newsfeed_post' || message.type === 'wink' || message.type === 'likephoto')
+							? 'bg-gray-200 text-gray-800'
+							: (message.type === 'photo_batch' || message.type === 'photo' || message.type === 'virtual_gift')
+							? isFromProfile
+								? 'bg-gray-200 text-gray-800'
+								: 'bg-purple-500 text-white'
+							: isFromProfile
+							? 'bg-gray-200 text-gray-800'
+							: 'bg-purple-500 text-white'
+					} ${message.type === 'post' ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
+					onClick={message.type === 'post' ? () => {
+						const content = (message as any).content;
+						if (content?.idPost) {
+							loadPostDetails(content.idPost);
+						}
+					} : undefined}
 				>
 					{/* Відображення різних типів повідомлень */}
 					{(message.type === 'message' || message.type === 'text') && message.content?.message && (
@@ -1384,11 +1431,53 @@ export default function DialogPage() {
 							)}
 						</div>
 					)}
-					{message.type === 'photo' && message.content?.url && (
+					{message.type === 'wink' && (
 						<div className="text-sm">
-							<img src={message.content.url} alt="Photo" className="rounded max-w-full h-auto" />
+							<p>😉 Підморгнув</p>
 						</div>
 					)}
+					{message.type === 'photo' && message.content?.url && (
+						<div className="text-sm">
+							<img
+								src={message.content.url}
+								alt="Photo"
+								className="rounded w-40 h-40 object-cover cursor-zoom-in"
+								onClick={() => message.content.url && openPhotoPreview(message.content.url)}
+							/>
+						</div>
+					)}
+					{message.type === 'virtual_gift' && (message as any).content && (() => {
+						const content = (message as any).content;
+						return (
+							<div className="text-sm p-4">
+								{/* Зображення подарунка */}
+								{content.imageSrc && (
+									<div className="mb-2 -mx-4 -mt-4">
+										<img
+											src={content.imageSrc}
+											alt={`Virtual gift ${content.id || ''}`}
+											className="rounded w-40 h-40 object-cover cursor-zoom-in"
+											onClick={() => content.imageSrc && openPhotoPreview(content.imageSrc)}
+										/>
+									</div>
+								)}
+
+								{/* Чіп "Віртуальний подарунок" */}
+								<div className={`inline-block text-xs px-2 py-1 rounded mb-2 ${
+									!isFromProfile ? 'bg-pink-500 text-white' : 'bg-pink-600 text-white'
+								}`}>
+									Віртуальний подарунок
+								</div>
+
+								{/* Повідомлення */}
+								{content.message && (
+									<p className="whitespace-pre-wrap break-words italic text-black">
+										{content.message}
+									</p>
+								)}
+							</div>
+						);
+					})()}
 					{message.type === 'photo_batch' && (message as any).content?.photos?.length > 0 && (() => {
 						const photos = (((message as any).content?.photos) || []) as Array<{ id: number; url: string }>;
 						if (photos.length === 1) {
@@ -1399,7 +1488,7 @@ export default function DialogPage() {
 										key={`${message.id}-${p.id || 0}`}
 										src={p.url}
 										alt={`Photo ${p.id || 0}`}
-										className="rounded max-w-full h-auto cursor-zoom-in"
+										className="rounded w-40 h-40 object-cover cursor-zoom-in"
 										onClick={() => openPhotoPreview(p.url)}
 									/>
 								</div>
@@ -1414,7 +1503,7 @@ export default function DialogPage() {
 										key={`${message.id}-${p.id || idx}`}
 										src={p.url}
 										alt={`Photo ${p.id || idx}`}
-										className="rounded max-w-full h-auto cursor-zoom-in"
+										className="rounded w-40 h-40 object-cover cursor-zoom-in"
 										onClick={() => openPhotoPreview(p.url)}
 									/>
 								))}
@@ -1450,14 +1539,151 @@ export default function DialogPage() {
 							)}
 						</div>
 					)}
+					{message.type === 'like_newsfeed_post' && (message as any).content && (() => {
+						const content = (message as any).content;
+						const photos = content.photos || [];
+						const hasPhotos = photos.length > 0;
+
+						return (
+							<div className="text-sm">
+								{/* Текст "Уподобав ваш пост" */}
+								<p className="mb-2">❤️ Уподобав ваш пост</p>
+
+								{/* Фото якщо є */}
+								{hasPhotos && photos.length > 0 && (
+									<div className="mb-2">
+										{photos.length === 1 ? (
+											<img
+												src={photos[0].url}
+												alt="Post photo"
+												className="rounded w-32 h-32 object-cover cursor-zoom-in"
+												onClick={() => openPhotoPreview(photos[0].url)}
+											/>
+										) : (
+											<div className="grid grid-cols-2 gap-1">
+												{photos.slice(0, 4).map((photo: any, idx: number) => (
+													<img
+														key={`${message.id}-photo-${idx}`}
+														src={photo.url}
+														alt={`Post photo ${idx + 1}`}
+														className="rounded w-16 h-16 object-cover cursor-zoom-in"
+														onClick={() => openPhotoPreview(photo.url)}
+													/>
+												))}
+												{photos.length > 4 && (
+													<div className="w-16 h-16 bg-gray-300 rounded flex items-center justify-center text-xs text-gray-600">
+														+{photos.length - 4}
+													</div>
+												)}
+											</div>
+										)}
+									</div>
+								)}
+
+								{/* Текст поста якщо є */}
+								{content.text && (
+									<p className="whitespace-pre-wrap break-words italic text-sm opacity-75">
+										{content.text}
+									</p>
+								)}
+							</div>
+						);
+					})()}
+					{message.type === 'post' && (message as any).content && (() => {
+						const content = (message as any).content;
+						const photos = content.photos || [];
+						const hasPhotos = photos.length > 0;
+
+						return (
+							<div className="text-sm p-4">
+								{/* Галерея фото */}
+								{hasPhotos && (
+									<div className="flex -mx-4 -mt-4 mb-2 overflow-hidden rounded-t-lg">
+										{/* Ліва колонка - перше фото 160x160 */}
+										<div className="flex-shrink-0">
+											<div className="relative w-40 h-40">
+												<img
+													src={photos[0].url}
+													alt={`Post photo 1`}
+													className="w-full h-full object-cover"
+												/>
+												{/* Чіп статусу */}
+												<div className={`absolute top-2 left-2 text-xs px-2 py-1 rounded ${
+													content.isPurchased
+														? 'bg-purple-500 text-white'
+														: 'bg-black/70 text-white'
+												}`}>
+													{content.isPurchased ? 'Переглянуто' : 'Не відкрито'}
+												</div>
+											</div>
+										</div>
+
+										{/* Права колонка - друге та третє фото 80x80 */}
+										{photos.length > 1 && (
+											<div className="flex flex-col">
+												{/* Друге фото */}
+												<div className="relative w-20 h-20">
+													<img
+														src={photos[1].url}
+														alt={`Post photo 2`}
+														className="w-full h-full object-cover"
+													/>
+												</div>
+
+												{/* Третє фото */}
+												{photos.length > 2 && (
+													<div className="relative w-20 h-20">
+														<img
+															src={photos[2].url}
+															alt={`Post photo 3`}
+															className="w-full h-full object-cover"
+														/>
+														{/* Індикатор додаткових фото */}
+														{photos.length > 3 && (
+															<div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+																<span className="text-white font-bold text-sm">
+																	+{photos.length - 3}
+																</span>
+															</div>
+														)}
+													</div>
+												)}
+											</div>
+										)}
+									</div>
+								)}
+
+								{/* Текст поста */}
+								{content.textPreview && (
+									<p className="mt-2 whitespace-pre-wrap break-words">{content.textPreview}</p>
+								)}
+
+								{/* Якщо немає фото, але є інші дані */}
+								{!hasPhotos && (
+									<div className="text-xs text-gray-400 mt-1">
+										{content.idPost && `Post ID: ${content.idPost}`}
+									</div>
+								)}
+							</div>
+						);
+					})()}
 					{/* Відображення невідомих типів повідомлень для дебагу */}
-					{!['message', 'text', 'likephoto', 'photo', 'photo_batch', 'sticker', 'system'].includes(message.type) && (
+					{!['message', 'text', 'likephoto', 'photo', 'photo_batch', 'sticker', 'system', 'post', 'virtual_gift', 'like_newsfeed_post', 'wink'].includes(message.type) && (
 						<div className="text-sm italic text-gray-500">
 							Тип повідомлення: {message.type}
 							{message.content?.message && <p className="mt-1">{message.content.message}</p>}
 						</div>
 					)}
-					<p className={`text-xs mt-1 ml-2 ${isFromProfile ? 'text-purple-200' : 'text-gray-500'}`}>
+					<p className={`text-xs mt-1 ml-2 ${
+						(message.type === 'post' && (message as any).content?.isPurchased) ||
+						((message.type === 'photo_batch' || message.type === 'photo' || message.type === 'virtual_gift') && !isFromProfile)
+							? 'text-white'
+							: (message.type === 'like_newsfeed_post' || message.type === 'wink' || message.type === 'likephoto')
+							? 'text-gray-500'
+							: isFromProfile
+							? 'text-gray-500'
+							: 'text-purple-200'
+					}`}>
 						{formatDateTime(message.dateCreated)}
 					</p>
 				</div>
@@ -2325,6 +2551,117 @@ export default function DialogPage() {
 				onClose={() => setIsMyProfileOpen(false)}
 				profileId={sourceProfile.id}
 			/>
+		)}
+
+		{/* Модальне вікно поста */}
+		{isPostModalOpen && selectedPost && (
+			<div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+				<div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+					{/* Хедер */}
+					<div className="flex items-center justify-between p-4 border-b border-gray-200">
+						<div className="flex items-center gap-3">
+							<h3 className="text-lg font-semibold text-gray-900">Пост</h3>
+							<div className={`px-3 py-1 rounded-full text-sm font-medium ${
+								selectedPost.isPurchased
+									? 'bg-green-100 text-green-800'
+									: 'bg-yellow-100 text-yellow-800'
+							}`}>
+								{selectedPost.isPurchased ? 'Переглянуто' : 'Не відкрито'}
+							</div>
+						</div>
+						<button
+							onClick={() => setIsPostModalOpen(false)}
+							className="text-gray-400 hover:text-gray-600 p-1"
+						>
+							<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						</button>
+					</div>
+
+					{/* Контент */}
+					<div className="flex-1 overflow-y-auto p-6">
+						{/* Дата відправки */}
+						{selectedPost.dateSent && (
+							<div className="mb-4 text-sm text-gray-600">
+								<strong>Дата відправки:</strong> {new Date(selectedPost.dateSent).toLocaleString('uk-UA')}
+							</div>
+						)}
+
+						{/* Текст поста */}
+						{selectedPost.text && (
+							<div className="mb-6">
+								<p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{selectedPost.text}</p>
+							</div>
+						)}
+
+						{/* Медіа */}
+						{(selectedPost.photos?.length > 0 || selectedPost.videos?.length > 0) && (
+							<div className="space-y-4">
+								{/* Фото */}
+								{selectedPost.photos?.length > 0 && (
+									<div>
+										<h4 className="text-sm font-medium text-gray-700 mb-3">Фото ({selectedPost.photos.length})</h4>
+										<div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+											{selectedPost.photos.map((photo: any, index: number) => (
+												<div key={photo.id || index} className="relative">
+													<img
+														src={photo.url}
+														alt={`Photo ${index + 1}`}
+														className="w-full h-32 object-cover rounded-lg cursor-zoom-in hover:opacity-90 transition-opacity"
+														onClick={() => openPhotoPreview(photo.url)}
+													/>
+												</div>
+											))}
+										</div>
+									</div>
+								)}
+
+								{/* Відео */}
+								{selectedPost.videos?.length > 0 && (
+									<div>
+										<h4 className="text-sm font-medium text-gray-700 mb-3">Відео ({selectedPost.videos.length})</h4>
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+											{selectedPost.videos.map((video: any, index: number) => (
+												<div key={video.id || index} className="relative">
+													<video
+														src={video.url}
+														className="w-full h-32 object-cover rounded-lg"
+														controls
+													/>
+												</div>
+											))}
+										</div>
+									</div>
+								)}
+							</div>
+						)}
+
+						{/* Інформація про оплату */}
+						{selectedPost.price && (
+							<div className="mt-6 pt-4 border-t border-gray-200">
+								<div className="flex items-center justify-between">
+									<span className="text-sm text-gray-600">Вартість:</span>
+									<div className="flex items-center gap-1">
+										<svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
+											<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+										</svg>
+										<span className="font-medium">{selectedPost.price}</span>
+										{selectedPost.priceWithDiscount && selectedPost.priceWithDiscount !== selectedPost.price && (
+											<span className="text-sm text-gray-500 ml-1">({selectedPost.priceWithDiscount})</span>
+										)}
+									</div>
+								</div>
+								{selectedPost.discountPercent > 0 && (
+									<div className="text-xs text-green-600 mt-1">
+										Знижка: {selectedPost.discountPercent}%
+									</div>
+								)}
+							</div>
+						)}
+					</div>
+				</div>
+			</div>
 		)}
 		</div>
 

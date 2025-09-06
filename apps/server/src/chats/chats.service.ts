@@ -29,13 +29,15 @@ export class ChatsService {
 		
 		if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL) {
 			console.log(`📋 Using cached accessible profiles for ${cacheKey}`);
+			console.log('🔍 Cached accessible profiles:', cached.profiles.map(p => ({ id: p.profileId, name: p.displayName })));
 			return cached.profiles;
 		}
 
 		console.log(`📋 Fetching fresh accessible profiles for ${cacheKey}`);
 		const profiles = await this.chatAccess.getAccessibleProfiles(auth);
+		console.log('🔍 Fresh accessible profiles:', profiles.map(p => ({ id: p.profileId, name: p.displayName })));
 		this.profilesCache.set(cacheKey, { profiles, timestamp: Date.now() });
-		
+
 		return profiles;
 	}
 
@@ -632,6 +634,29 @@ export class ChatsService {
 			return await this.provider.sendLetter(profileIdInput, idUserTo, { content: text, photoIds, videoIds });
 		} catch (error) {
 			console.error('💥 ПОМИЛКА в ChatsService.sendLetter:', error);
+			throw error;
+		}
+	}
+
+	async getPostDetails(auth: RequestAuthContext, idPost: number, idProfile: number, idInterlocutor: number) {
+		try {
+			console.log('📄 ChatsService.getPostDetails called:', { idPost, idProfile, idInterlocutor });
+
+			// Доступ до профілю
+			const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
+			console.log('🔍 Accessible profiles:', accessibleProfiles.map(p => ({ id: p.profileId, name: p.displayName })));
+			const targetProfile = accessibleProfiles.find(p => parseInt(p.profileId) === idProfile);
+			console.log('🎯 Target profile search:', { lookingFor: idProfile, found: !!targetProfile, profile: targetProfile });
+			if (!targetProfile) throw new ForbiddenException(`Access denied to profile ${idProfile}`);
+
+			// Викликаємо метод провайдера
+			if (!this.provider.getPostDetails) throw new Error('getPostDetails not supported by provider');
+			const result = await this.provider.getPostDetails(idPost, idProfile, idInterlocutor, this.toCtx(auth));
+
+			console.log('✅ ChatsService.getPostDetails success:', { idPost, hasPhotos: result.photos?.length || 0, hasVideos: result.videos?.length || 0 });
+			return result;
+		} catch (error) {
+			console.error('💥 ПОМИЛКА в ChatsService.getPostDetails:', error);
 			throw error;
 		}
 	}

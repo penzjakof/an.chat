@@ -43,7 +43,7 @@ export function MessageSkeleton({ isFromProfile = false }: { isFromProfile?: boo
 	return (
 		<div className={`flex ${isFromProfile ? 'justify-end' : 'justify-start'} mb-4`}>
 			<div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-				isFromProfile ? 'bg-purple-100' : 'bg-gray-100'
+				isFromProfile ? 'bg-gray-100' : 'bg-purple-100'
 			} animate-pulse`}>
 				<TextSkeleton width="w-48" className="mb-2" />
 				<TextSkeleton width="w-32" />

@@ -2448,4 +2448,41 @@ export class TalkyTimesProvider implements SiteProvider {
 			return { success: false, error: error.message || 'Unknown error' };
 		}
 	}
+
+	async getPostDetails(idPost: number, idProfile: number, idInterlocutor: number, ctx: ProviderRequestContext) {
+		try {
+			const session = await this.sessionService.getSession(String(idProfile));
+			if (!session) throw new Error(`Session not found for profile ${idProfile}`);
+
+			const url = `https://talkytimes.com/platform/chat/dialog/post`;
+			const headers = this.sessionService.getRequestHeaders(session);
+
+			// Додаємо referer з ід профілю та клієнта
+			headers['referer'] = `https://talkytimes.com/chat/${idProfile}_${idInterlocutor}/post/${idPost}`;
+
+			const response = await fetch(url, {
+				method: 'POST',
+				headers: {
+					...headers,
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					idPost,
+					idInterlocutor,
+					withoutTranslation: true
+				})
+			});
+
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
+
+			const data = await response.json();
+			console.log('✅ TalkyTimes getPostDetails success:', { idPost, idProfile, idInterlocutor, hasPhotos: data.photos?.length || 0, hasVideos: data.videos?.length || 0 });
+			return data;
+		} catch (error: any) {
+			console.error('❌ TalkyTimes getPostDetails error:', error);
+			throw error;
+		}
+	}
 }

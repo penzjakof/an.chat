@@ -164,6 +164,14 @@ export class ChatsController {
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post('tt-post-details')
+	async getPostDetails(@Req() req: Request, @Body() body: { idPost: number; idProfile: number; idInterlocutor: number }) {
+		console.log('📄 ChatsController.getPostDetails called:', { idPost: body.idPost, idProfile: body.idProfile, idInterlocutor: body.idInterlocutor });
+		console.log('🔐 Auth context:', { userId: req.auth?.userId, agencyCode: req.auth?.agencyCode, operatorCode: req.auth?.operatorCode });
+		return this.chats.getPostDetails(req.auth!, body.idPost, body.idProfile, body.idInterlocutor);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
 	@Post('photo-original')
 	getOriginalPhoto(@Req() req: Request, @Body() body: { profileId: string; idRegularUser: number; previewUrl: string }) {
 		return this.chats.getOriginalPhotoUrl(req.auth!, body.profileId, body.idRegularUser, body.previewUrl);
