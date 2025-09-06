@@ -133,6 +133,7 @@ export default function DialogPage() {
     const [imagePreviewLoading, setImagePreviewLoading] = useState(false);
 	const bottomRef = useRef<HTMLDivElement>(null);
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const lastScrollTop = useRef<number>(0);
 	const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1041,11 +1042,25 @@ export default function DialogPage() {
 		}
 	}, [isGiftModalOpen, isMessageModalOpen]);
 
+	// Автофокус на інпут поле після завантаження чату
+	useEffect(() => {
+		// Невелика затримка щоб компонент повністю завантажився
+		const timer = setTimeout(() => {
+			if (inputRef.current) {
+				inputRef.current.focus();
+				// Ініціалізація висоти textarea
+				autoResizeTextarea(inputRef.current);
+			}
+		}, 100);
+
+		return () => clearTimeout(timer);
+	}, []);
+
 	// Глобальний cleanup при unmount компонента
 	useEffect(() => {
 		return () => {
 			console.log('🧹 Component unmounting, cleaning up all resources...');
-			
+
 			// Очищуємо всі timeouts
 			if (loadingTimeoutRef.current) {
 				clearTimeout(loadingTimeoutRef.current);
@@ -1167,6 +1182,15 @@ export default function DialogPage() {
 	// Функція для додавання емодзі до тексту
 	const handleEmojiSelect = (emoji: string) => {
 		setText(prev => prev + emoji);
+	};
+
+	// Функція для автоматичного розширення textarea
+	const autoResizeTextarea = (textarea: HTMLTextAreaElement) => {
+		textarea.style.height = 'auto';
+		const scrollHeight = textarea.scrollHeight;
+		const maxHeight = 120; // Максимальна висота в пікселях
+		const newHeight = Math.min(scrollHeight, maxHeight);
+		textarea.style.height = newHeight + 'px';
 	};
 
 	// Функція для додавання емодзі до тексту постів
@@ -2050,12 +2074,26 @@ export default function DialogPage() {
 					)}
 
 					<div className="flex-1 relative">
-						<input
-							className="w-full border border-gray-300 rounded-lg px-4 py-2 pr-12 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+						{/* Лічильник символів над інпутом */}
+						<div className={`absolute top-0 right-2 text-xs z-10 ${
+							text.length > 250 ? 'text-red-500' :
+							text.length > 200 ? 'text-yellow-500' : 'text-gray-400'
+						}`}>
+							{text.length}/300
+						</div>
+						<textarea
+							ref={inputRef}
+							className="w-full border border-gray-300 rounded-lg px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none overflow-hidden"
 							placeholder="Напишіть повідомлення..."
 							value={text}
-							onChange={(e) => setText(e.target.value)}
-							onKeyPress={(e) => e.key === 'Enter' && send()}
+							onChange={(e) => {
+								setText(e.target.value);
+								autoResizeTextarea(e.target);
+							}}
+							onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && send()}
+							maxLength={300}
+							rows={1}
+							style={{ minHeight: '48px', maxHeight: '120px' }}
 						/>
 						{/* Кнопка емодзі */}
 						<div className="absolute right-2 top-1/2 transform -translate-y-1/2">
@@ -2076,10 +2114,13 @@ export default function DialogPage() {
 						</div>
 					</div>
 					<button
-						className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded-lg transition-colors"
+						className="bg-purple-500 hover:bg-purple-600 text-white w-10 h-10 rounded-lg transition-colors flex items-center justify-center"
 						onClick={send}
+						title="Надіслати повідомлення"
 					>
-						Надіслати
+						<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+						</svg>
 					</button>
 				</div>
 				)}
