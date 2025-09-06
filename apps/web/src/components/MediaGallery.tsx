@@ -1835,7 +1835,7 @@ export function MediaGallery({
             {/* Photos Grid */}
             <div 
               ref={scrollContainerRef}
-              className="overflow-y-auto flex-1 p-2"
+              className="overflow-y-auto flex-1 p-2 custom-scroll"
             >
               <div 
                 className="grid grid-cols-5 gap-2"
@@ -2072,7 +2072,7 @@ export function MediaGallery({
               {/* Videos Grid */}
               <div 
                 ref={scrollContainerRef}
-                className="overflow-y-auto flex-1 p-2"
+                className="overflow-y-auto flex-1 p-2 custom-scroll"
               >
                 <div 
                   className="grid grid-cols-5 gap-2"
@@ -2265,7 +2265,7 @@ export function MediaGallery({
               {/* Audios List */}
               <div 
                 ref={scrollContainerRef}
-                className="overflow-y-auto flex-1 p-2"
+                className="overflow-y-auto flex-1 p-2 custom-scroll"
               >
                 <div className="space-y-2">
                   {filteredAudios.map((audio) => (

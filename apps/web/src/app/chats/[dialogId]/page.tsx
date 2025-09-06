@@ -1918,7 +1918,7 @@ export default function DialogPage() {
 			{/* Область повідомлень */}
 			<div 
 				ref={scrollContainerRef}
-				className="flex-1 overflow-auto p-4 bg-gray-50 flex flex-col-reverse"
+				className="flex-1 overflow-auto p-4 bg-gray-50 flex flex-col-reverse custom-scroll"
 				onScroll={handleScroll}
 			>
 				{isLoadingMessages ? (
@@ -2246,7 +2246,7 @@ export default function DialogPage() {
 							) : (
 								<>
 									{/* Бокова панель з категоріями */}
-									<div className="w-20 bg-gray-50 border-r border-gray-200 overflow-y-auto">
+									<div className="w-20 bg-gray-50 border-r border-gray-200 overflow-y-auto custom-scroll">
 										<div className="p-2 space-y-2">
 											{stickerCategories.map((category, categoryIndex) => (
 												<div
@@ -2273,7 +2273,7 @@ export default function DialogPage() {
 									</div>
 
 									{/* Основна область з стікерами */}
-									<div ref={stickerScrollRef} className="flex-1 overflow-y-auto">
+									<div ref={stickerScrollRef} className="flex-1 overflow-y-auto custom-scroll">
 										<div className="p-3">
 											{stickerCategories.map((category, categoryIndex) => (
 												<div
@@ -2327,7 +2327,7 @@ export default function DialogPage() {
 						</div>
 
 						{/* Контент */}
-						<div className="flex-1 overflow-y-auto p-4">
+						<div className="flex-1 overflow-y-auto p-4 custom-scroll">
 
 
 							{isLoadingGifts && giftItems.length === 0 ? (
@@ -2673,7 +2673,7 @@ export default function DialogPage() {
 					</div>
 
 					{/* Контент */}
-					<div className="flex-1 overflow-y-auto p-6">
+					<div className="flex-1 overflow-y-auto p-6 custom-scroll">
 						{/* Дата відправки */}
 						{selectedPost.dateSent && (
 							<div className="mb-4 text-sm text-gray-600">

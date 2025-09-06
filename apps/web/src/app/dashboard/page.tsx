@@ -110,7 +110,7 @@ export default function DashboardPage() {
       />
 
       {/* Основний контент */}
-      <div className="flex-1 bg-white overflow-y-auto">
+      <div className="flex-1 bg-white overflow-y-auto custom-scroll">
 
         <div className="max-w-xl mx-auto p-6 space-y-6">
           <h1 className="text-2xl font-bold">Особистий дашборд</h1>

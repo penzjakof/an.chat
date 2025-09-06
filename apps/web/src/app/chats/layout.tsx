@@ -8,6 +8,7 @@ import { apiGet, apiPost } from '@/lib/api';
 import { getSession, getAccessToken, clearSession, getUserId } from '@/lib/session';
 import { ProfileAuthenticator } from '@/components/ProfileAuthenticator';
 import { DialogSkeleton } from '@/components/SkeletonLoader';
+import { CustomSelect } from '@/components/CustomSelect';
 import { useToast } from '@/contexts/ToastContext';
 
 type ChatDialog = {
@@ -700,16 +701,17 @@ export default function ChatsLayout({
 						{/* Фільтри діалогів */}
 						<div className="p-4 border-b border-gray-200">
 							<div className="flex items-center gap-3">
-							<select
+							<CustomSelect
 								value={filters.status}
-								onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-								className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
-							>
-								<option value="active">Активні</option>
-								<option value="unanswered">Вхідні</option>
-								<option value="bookmarked">Збережені</option>
-								<option value="all">Усі діалоги</option>
-							</select>
+								onChange={(value) => setFilters({ ...filters, status: value })}
+								options={[
+									{ value: "active", label: "Активні" },
+									{ value: "unanswered", label: "Вхідні" },
+									{ value: "bookmarked", label: "Збережені" },
+									{ value: "all", label: "Усі діалоги" }
+								]}
+								className="flex-1"
+							/>
 							
 							{/* Кнопка онлайн фільтра */}
 							<button
@@ -745,18 +747,18 @@ export default function ChatsLayout({
 							<div className="space-y-3">
 								{/* Випадаючий список профілів */}
 								<div>
-									<select
+									<CustomSelect
 										value={searchProfileId}
-										onChange={(e) => setSearchProfileId(e.target.value)}
-										className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
-									>
-										<option value="">ІД профілю</option>
-										{sourceProfiles.map((profile) => (
-											<option key={profile.id} value={profile.profileId || ''}>
-												{profile.displayName || profile.profileId} ({profile.profileId})
-											</option>
-										))}
-									</select>
+										onChange={(value) => setSearchProfileId(value)}
+										options={[
+											{ value: "", label: "ІД профілю" },
+											...sourceProfiles.map((profile) => ({
+												value: profile.profileId || '',
+												label: `${profile.displayName || profile.profileId} (${profile.profileId})`
+											}))
+										]}
+										className="w-full"
+									/>
 								</div>
 								
 								{/* Інпут для ІД клієнта */}
@@ -794,7 +796,7 @@ export default function ChatsLayout({
 					)}
 					
 					{/* Список діалогів */}
-					<div className="flex-1 overflow-y-auto" onScroll={searchResult ? undefined : handleDialogsScroll}>
+					<div className="flex-1 overflow-y-auto custom-scroll" onScroll={searchResult ? undefined : handleDialogsScroll}>
 						{searchResult ? (
 							// Показуємо результат пошуку
 							<ul className="divide-y divide-gray-100">

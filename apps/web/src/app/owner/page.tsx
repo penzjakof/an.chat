@@ -64,7 +64,7 @@ export default function OwnerPage() {
 			/>
 
 			{/* Основний контент */}
-			<div className="flex-1 overflow-y-auto p-6 space-y-4">
+			<div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scroll">
 				<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 					<Link className="border rounded p-3 hover:bg-gray-50" href="/chats">Чати</Link>
 					<Link className="border rounded p-3 hover:bg-gray-50" href="/operators">Оператори</Link>

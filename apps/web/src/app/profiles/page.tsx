@@ -185,7 +185,7 @@ export default function ProfilesPage() {
       <Header title="Управління Профілями" showChatsButton={true} isActive={active} currentPath="/profiles" />
 
       {/* Основний контент */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6 custom-scroll">
 
       <button
         onClick={() => setShowCreateForm(!showCreateForm)}

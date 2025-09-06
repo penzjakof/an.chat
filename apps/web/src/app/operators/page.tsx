@@ -145,7 +145,7 @@ export default function OperatorsPage() {
       <Header showBackButton={true} showChatsButton={true} isActive={active} currentPath="/operators" />
 
       {/* Основний контент */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6 custom-scroll">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Управління операторами</h1>
           <button

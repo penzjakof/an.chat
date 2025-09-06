@@ -359,7 +359,7 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
           {/* Content */}
           <div
             ref={messagesContainerRef}
-            className="flex-1 overflow-y-auto p-4"
+            className="flex-1 overflow-y-auto p-4 custom-scroll"
             onScroll={handleScroll}
           >
             {/* Індикатор завантаження вгорі */}

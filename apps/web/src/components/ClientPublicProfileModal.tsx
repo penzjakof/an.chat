@@ -309,7 +309,7 @@ export function ClientPublicProfileModal({
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto custom-scroll">
 
         {loading ? (
           <div className="p-6 text-sm text-gray-500">Завантаження…</div>
