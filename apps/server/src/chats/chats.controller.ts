@@ -176,4 +176,10 @@ export class ChatsController {
 	getOriginalPhoto(@Req() req: Request, @Body() body: { profileId: string; idRegularUser: number; previewUrl: string }) {
 		return this.chats.getOriginalPhotoUrl(req.auth!, body.profileId, body.idRegularUser, body.previewUrl);
 	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post('connections')
+	getConnections(@Req() req: Request, @Body() body: { profileId: number; idsInterlocutor: number[] }) {
+		return this.chats.getConnections(req.auth!, body.profileId, body.idsInterlocutor);
+	}
 }

@@ -1013,6 +1013,66 @@ export class TalkyTimesProvider implements SiteProvider {
 		}
 	}
 
+	/**
+	 * Отримати статус з'єднання/блокування з боку співрозмовників
+	 */
+	async getConnections(profileId: string, idsInterlocutor: number[]): Promise<{ success: boolean; data?: any; error?: string }> {
+		if (this.isMock()) {
+			// У mock режимі випадково відмічаємо як заблокованого
+			const data = (idsInterlocutor || []).map((id) => ({
+				idUser: parseInt(profileId),
+				idInterlocutor: id,
+				likedByMe: false,
+				visitedByMe: false,
+				winkedByMe: false,
+				followedByMe: false,
+				blockedByMe: false,
+				blockedByInterlocutor: Math.random() < 0.2
+			}));
+			return { success: true, data };
+		}
+
+		const session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+		}
+
+		try {
+			const url = 'https://talkytimes.com/platform/connection/get';
+			const headers = this.sessionService.getRequestHeaders(session);
+			// Мінімально необхідні додаткові заголовки
+			headers['origin'] = 'https://talkytimes.com';
+			headers['referer'] = `https://talkytimes.com/chat/${profileId}_${idsInterlocutor?.[0] ?? ''}`;
+			await this.applyOperatorRefHeader(headers, { profileId });
+
+			const body = {
+				idsInterlocutor: idsInterlocutor
+			};
+
+			const res = await this.fetchWithConnectionPool(url, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(body),
+				timeoutMs: 15000,
+				maxRetries: 1,
+				baseDelayMs: 1000
+			});
+
+			if (!res.ok) {
+				const text = await res.text();
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+				}
+				return { success: false, error: `HTTP ${res.status}: ${text}` };
+			}
+
+			const data = await res.json();
+			return { success: true, data };
+		} catch (error: any) {
+			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
+
 	async validateCredentials(email: string, password: string): Promise<{ success: boolean; error?: string; profileId?: string }> {
 		if (this.isMock()) {
 			// В mock режимі створюємо фейковий profileId та сесію

@@ -1,6 +1,6 @@
 ## DOCUMENTATION
 
-Цей документ синхронізований зі станом коду. Після кожної зміни — оновлюємо. ОСТАННЄ ОНОВЛЕННЯ: 06.09.2025 14:00
+Цей документ синхронізований зі станом коду. Після кожної зміни — оновлюємо. ОСТАННЄ ОНОВЛЕННЯ: 06.09.2025 15:15
 
 ### Архітектура
 
@@ -46,8 +46,11 @@
 - **REST API**: `/api/chats/dialogs`, `/api/chats/dialogs/:id/messages`.
 - **WebSocket**: Socket.io з JWT перевіркою у handshake `auth.token`. Pool підключень для кожного профілю.
 - **RTM Інтеграція**: Підключення до TalkyTimes RTM для real-time повідомлень.
-- **Фільтрація діалогів**: за статусом (активні, без відповіді, збережені, всі) та онлайн статусом.
+- **Фільтрація діалогів**: за статусом (активні, вхідні, збережені, всі) та онлайн статусом.
 - **Пагінація**: cursor-based з автоматичним знаходженням `idLastMessage`.
+- **Перевірка блокування**: перед відкриттям діалогу перевіряється статус користувача через `/api/chats/connections`.
+- **Фільтрація заблокованих**: у списку "вхідні" автоматично приховуються діалоги з заблокованими користувачами (`is_blocked = true`).
+- **UI блокування**: якщо користувач заблокований (`blockedByInterlocutor = true`), замість поля вводу показується повідомлення "Вас було заблоковано".
 - **Реальна інтеграція**: TalkyTimes API з fallback на mock режим.
 - **Toast сповіщення**: Автоматичні сповіщення про нові повідомлення з навігацією до діалогу.
 - **Підтримка типів повідомлень**: Повна підтримка всіх типів TalkyTimes повідомлень:
@@ -583,6 +586,7 @@ Protobuf поле:  [08] + varint(dialogId)  // тег 1 + ID діалогу
 - `POST /api/chats/dialogs/:id/text` — надіслати текст
 - `POST /api/chats/stickers` — отримати список стікерів
 - `POST /api/chats/send-sticker` — відправити стікер
+- `POST /api/chats/connections` — перевірка статусу підключення/блокування
 - `POST /api/tt/emails-history` — історія листування з пагінацією
 - `POST /api/chats/tt-forbidden-tags` — заборонені категорії для листів (proxy до TT forbidden-tags)
 - `POST /api/chats/send-letter` — відправка листа (proxy до TT send-letter)
@@ -701,6 +705,10 @@ Protobuf поле:  [08] + varint(dialogId)  // тег 1 + ID діалогу
 - Оптимізація продуктивності через мемоізацію та умовне завантаження
 
 **Backend:**
+- `POST /api/chats/connections` — перевірка статусу підключення/блокування користувачів.
+  - Body: `{ profileId: number, idsInterlocutor: number[] }`
+  - Відповідь: `{ success: boolean, data?: Array<{ blockedByInterlocutor?: boolean }> }`
+  - Proxy до `https://talkytimes.com/platform/connection/get` з коректними cookies і referer
 - `POST /api/chats/tt-forbidden-tags` — повертає `{ success, tags?: string[] }`. Proxy до `https://talkytimes.com/platform/correspondence/video/forbidden-tags` з `idInterlocutor` і коректним `referer`/cookies.
 - `POST /api/chats/send-letter` — приймає `{ profileId, idUserTo, content, photoIds?: number[], videoIds?: number[] }`.
   - Валідація: `content` 300–3000 символів.

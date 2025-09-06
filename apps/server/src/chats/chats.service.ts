@@ -177,6 +177,21 @@ export class ChatsService {
 			}
 		}
 
+
+		// Якщо користувач переглядає список "без відповіді" (unanswered),
+		// відфільтровуємо діалоги, де співрозмовник заблокований (is_blocked = true)
+		if (filters?.status === 'unanswered' && Object.keys(profilesMap).length > 0) {
+			const before = allDialogs.length;
+			allDialogs.splice(0, allDialogs.length, ...allDialogs.filter(d => {
+				const p = profilesMap[d.idInterlocutor];
+				return !(p && p.is_blocked === true);
+			}));
+			const after = allDialogs.length;
+			if (before !== after) {
+				console.log(`🧹 Filtered blocked dialogs for unanswered: ${before - after} removed`);
+			}
+		}
+
 		const finalCursor = Object.keys(profileCursors).length > 0 ? JSON.stringify(profileCursors) : '';
 		console.log(`📤 ChatsService.fetchDialogs returning:`, {
 			dialogsCount: allDialogs.length,
@@ -657,6 +672,25 @@ export class ChatsService {
 			return result;
 		} catch (error) {
 			console.error('💥 ПОМИЛКА в ChatsService.getPostDetails:', error);
+			throw error;
+		}
+	}
+
+	async getConnections(auth: RequestAuthContext, profileIdInput: number, idsInterlocutor: number[]) {
+		try {
+			// Доступ до профілю
+			const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
+			const targetProfile = accessibleProfiles.find(p => parseInt(p.profileId) === profileIdInput);
+			if (!targetProfile) throw new ForbiddenException(`Access denied to profile ${profileIdInput}`);
+
+			if (!(this.provider as any).getConnections) {
+				throw new Error('getConnections not supported by provider');
+			}
+
+			const result = await (this.provider as any).getConnections(targetProfile.profileId, idsInterlocutor);
+			return result;
+		} catch (error) {
+			console.error('💥 ПОМИЛКА в ChatsService.getConnections:', error);
 			throw error;
 		}
 	}

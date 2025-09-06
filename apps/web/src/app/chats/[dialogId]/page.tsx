@@ -139,6 +139,7 @@ export default function DialogPage() {
 	const [isAttachGalleryOpen, setIsAttachGalleryOpen] = useState(false);
 	const [isStickerModalOpen, setIsStickerModalOpen] = useState(false);
 	const [isEmailHistoryOpen, setIsEmailHistoryOpen] = useState(false);
+	const [isBlockedByInterlocutor, setIsBlockedByInterlocutor] = useState(false);
 	const [stickerCategories, setStickerCategories] = useState<StickerCategory[]>([]);
 	const [isLoadingStickers, setIsLoadingStickers] = useState(false);
 	const [activeCategoryIndex, setActiveCategoryIndex] = useState<number>(0);
@@ -429,8 +430,26 @@ export default function DialogPage() {
 			unlockTimeoutRef.current = null;
 		}
 		
-		// Завантажуємо повідомлення
-		loadMessages();
+		// Перевіряємо статус підключення/блокування перед завантаженням повідомлень
+		(async () => {
+			try {
+				const [idProfileStr, idRegularStr] = dialogId.split('-');
+				const profileNum = parseInt(idProfileStr);
+				const interlocutorNum = parseInt(idRegularStr);
+				if (Number.isFinite(profileNum) && Number.isFinite(interlocutorNum)) {
+					const res = await apiPost<{ success: boolean; data?: Array<{ blockedByInterlocutor?: boolean }> }>(
+						'/api/chats/connections',
+						{ profileId: profileNum, idsInterlocutor: [interlocutorNum] }
+					);
+					const blocked = !!res?.data?.[0]?.blockedByInterlocutor;
+					if (typeof setIsBlockedByInterlocutor === 'function') {
+						setIsBlockedByInterlocutor(blocked);
+					}
+				}
+			} catch {}
+			// Після перевірки завантажуємо повідомлення
+			loadMessages();
+		})();
 		
 		// Завантажуємо дані користувача та профілю
 		loadUserAndProfileData();
@@ -1865,6 +1884,9 @@ export default function DialogPage() {
 
 			{/* Поле вводу */}
 			<div className="bg-white border-t border-gray-200 p-4">
+				{isBlockedByInterlocutor ? (
+					<div className="text-center text-red-600 font-medium">Вас було заблоковано</div>
+				) : (
 				<div className="flex gap-2 items-center">
 					{/* Кнопка атачменту */}
 					<button
@@ -1952,6 +1974,7 @@ export default function DialogPage() {
 						Надіслати
 					</button>
 				</div>
+				)}
 			</div>
 
 			{/* Медіа галерея */}
