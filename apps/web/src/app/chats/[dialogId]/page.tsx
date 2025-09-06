@@ -1423,6 +1423,10 @@ export default function DialogPage() {
 							? 'bg-purple-500 text-white'
 							: (message.type === 'like_newsfeed_post' || message.type === 'wink' || message.type === 'likephoto')
 							? 'bg-gray-200 text-gray-800'
+							: message.type === 'reply_newsfeed_post'
+							? isFromProfile
+								? 'bg-gray-200 text-gray-800'
+								: 'bg-purple-500 text-white'
 							: (message.type === 'photo_batch' || message.type === 'photo' || message.type === 'virtual_gift')
 							? isFromProfile
 								? 'bg-gray-200 text-gray-800'
@@ -1608,6 +1612,53 @@ export default function DialogPage() {
 							</div>
 						);
 					})()}
+					{message.type === 'reply_newsfeed_post' && (message as any).content && (() => {
+						const content = (message as any).content;
+						const photos = content.photos || [];
+						const hasPhotos = photos.length > 0;
+
+						return (
+							<div className="text-sm">
+								{/* Заголовок "Відповів на пост" */}
+								<p className={`text-xs mb-2 ${isFromProfile ? 'text-gray-500' : 'text-white'}`}>Відповів на пост</p>
+
+								{/* Цитата посту з фото */}
+								{(content.text || hasPhotos) && (
+									<div className="mb-3 p-3 bg-gray-100 rounded-lg border-l-4 border-blue-500">
+										<div className="flex gap-3">
+											{/* Маленьке прев'ю фото якщо є */}
+											{hasPhotos && photos.length > 0 && (
+												<div className="flex-shrink-0">
+													<img
+														src={photos[0].url}
+														alt="Post preview"
+														className="rounded w-16 h-16 object-cover cursor-zoom-in"
+														onClick={() => openPhotoPreview(photos[0].url)}
+													/>
+												</div>
+											)}
+
+											{/* Текст посту профіля */}
+											{content.text && (
+												<div className="flex-1">
+													<p className="whitespace-pre-wrap break-words text-sm italic text-gray-700">
+														{content.text}
+													</p>
+												</div>
+											)}
+										</div>
+									</div>
+								)}
+
+								{/* Текст відповіді клієнта - звичайний текст без контейнера */}
+								{content.replyText && (
+									<p className="whitespace-pre-wrap break-words text-sm font-medium">
+										{content.replyText}
+									</p>
+								)}
+							</div>
+						);
+					})()}
 					{message.type === 'post' && (message as any).content && (() => {
 						const content = (message as any).content;
 						const photos = content.photos || [];
@@ -1687,7 +1738,7 @@ export default function DialogPage() {
 						);
 					})()}
 					{/* Відображення невідомих типів повідомлень для дебагу */}
-					{!['message', 'text', 'likephoto', 'photo', 'photo_batch', 'sticker', 'system', 'post', 'virtual_gift', 'like_newsfeed_post', 'wink'].includes(message.type) && (
+					{!['message', 'text', 'likephoto', 'photo', 'photo_batch', 'sticker', 'system', 'post', 'virtual_gift', 'like_newsfeed_post', 'wink', 'reply_newsfeed_post'].includes(message.type) && (
 						<div className="text-sm italic text-gray-500">
 							Тип повідомлення: {message.type}
 							{message.content?.message && <p className="mt-1">{message.content.message}</p>}
@@ -1699,6 +1750,10 @@ export default function DialogPage() {
 							? 'text-white'
 							: (message.type === 'like_newsfeed_post' || message.type === 'wink' || message.type === 'likephoto')
 							? 'text-gray-500'
+							: message.type === 'reply_newsfeed_post'
+							? isFromProfile
+								? 'text-gray-500'
+								: 'text-purple-200'
 							: isFromProfile
 							? 'text-gray-500'
 							: 'text-purple-200'
