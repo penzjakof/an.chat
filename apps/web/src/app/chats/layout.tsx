@@ -72,7 +72,7 @@ export default function ChatsLayout({
 		onlineOnly: false
 	});
 	const [active, setActive] = useState<boolean>(true);
-	
+
 	// Перевірка активної зміни: якщо немає – редірект на /dashboard
 	useEffect(() => {
 		(async () => {
@@ -842,8 +842,8 @@ export default function ChatsLayout({
 															{/* Аватар профілю в правому нижньому куті */}
 															{profileAvatarUrl && (
 																<div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full overflow-hidden bg-white border border-gray-300">
-																	<img 
-																		src={profileAvatarUrl} 
+																	<img
+																		src={profileAvatarUrl}
 																		alt={profileName}
 																		className="w-full h-full object-cover"
 																		onError={(e) => {

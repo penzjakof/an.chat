@@ -2310,4 +2310,142 @@ export class TalkyTimesProvider implements SiteProvider {
 		}
 		return result;
 	}
+
+	/**
+	 * Отримати власний публічний профіль
+	 */
+	async fetchMyPublicProfile(profileId: string): Promise<{ success: boolean; profileData?: any; error?: string }> {
+		if (this.isMock()) {
+			// В mock режимі повертаємо фейковий власний профіль
+			return {
+				success: true,
+				profileData: {
+					personal: {
+						name: 'Мій профіль',
+						age: 28,
+						city: 'Київ',
+						country: 'Україна',
+						gender: 'male',
+						description: 'Це мій профіль для тестування',
+						avatar_xl: 'https://picsum.photos/592/538?random=myprofile'
+					},
+					preferences: {
+						gender: 'female',
+						age_from: 20,
+						age_to: 35
+					},
+					is_online: true,
+					last_visit: new Date().toISOString(),
+					date_created: new Date().toISOString()
+				}
+			};
+		}
+
+		const session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+		}
+
+		try {
+			const url = 'https://talkytimes.com/platform/private/personal-profile';
+			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
+			headers['referer'] = 'https://talkytimes.com/my/profile';
+			headers['origin'] = 'https://talkytimes.com';
+
+			const res = await this.fetchWithConnectionPool(url, {
+				method: 'POST',
+				headers,
+				timeoutMs: 15000,
+				maxRetries: 2
+			});
+
+			if (!res.ok) {
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+				}
+				const text = await res.text();
+				return { success: false, error: `HTTP ${res.status}: ${text}` };
+			}
+
+			const data = await res.json();
+			return { success: true, profileData: data };
+		} catch (error: any) {
+			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
+
+	/**
+	 * Отримати власні фото профілю
+	 */
+	async fetchMyPhotos(profileId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+		if (this.isMock()) {
+			// Спрощена мок-відповідь для власних фото
+			return {
+				success: true,
+				data: {
+					public: [
+						{
+							id: 1,
+							url_xl: 'https://picsum.photos/300/300?random=my1',
+							url_large: 'https://picsum.photos/200/200?random=my1',
+							url_medium: 'https://picsum.photos/150/150?random=my1',
+							url_small: 'https://picsum.photos/100/100?random=my1',
+							url_xs: 'https://picsum.photos/50/50?random=my1',
+							url_original: 'https://picsum.photos/800/600?random=my1',
+							is_main: 1,
+							isMain: 1,
+							is_hidden: false
+						},
+						{
+							id: 2,
+							url_xl: 'https://picsum.photos/300/300?random=my2',
+							url_large: 'https://picsum.photos/200/200?random=my2',
+							url_medium: 'https://picsum.photos/150/150?random=my2',
+							url_small: 'https://picsum.photos/100/100?random=my2',
+							url_xs: 'https://picsum.photos/50/50?random=my2',
+							url_original: 'https://picsum.photos/800/600?random=my2',
+							is_main: 0,
+							isMain: 0,
+							is_hidden: false
+						}
+					],
+					private: []
+				}
+			};
+		}
+
+		const session = await this.sessionService.getSession(profileId);
+		if (!session) {
+			return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+		}
+
+		try {
+			const url = 'https://talkytimes.com/platform/private/my-photos';
+			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
+			headers['referer'] = 'https://talkytimes.com/my/photos';
+			headers['origin'] = 'https://talkytimes.com';
+
+			const res = await this.fetchWithConnectionPool(url, {
+				method: 'POST',
+				headers,
+				timeoutMs: 15000,
+				maxRetries: 2
+			});
+
+			if (!res.ok) {
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+				}
+				const text = await res.text();
+				return { success: false, error: `HTTP ${res.status}: ${text}` };
+			}
+
+			const data = await res.json();
+			return { success: true, data: data?.data ?? data };
+		} catch (error: any) {
+			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
 }

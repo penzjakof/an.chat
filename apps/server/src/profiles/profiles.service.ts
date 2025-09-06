@@ -304,6 +304,30 @@ export class ProfilesService {
 		return this.talkyTimesProvider.fetchClientPhotos(profile.profileId, clientId);
 	}
 
+	async getMyPublicProfile(profileId: string, agencyCode: string) {
+		const profile = await this.prisma.profile.findFirst({
+			where: { id: profileId, group: { agency: { code: agencyCode } } }
+		});
+
+		if (!profile || !profile.profileId) {
+			return { success: false, error: 'Profile not found or not authenticated' };
+		}
+
+		return this.talkyTimesProvider.fetchMyPublicProfile(profile.profileId);
+	}
+
+	async getMyPhotos(profileId: string, agencyCode: string) {
+		const profile = await this.prisma.profile.findFirst({
+			where: { id: profileId, group: { agency: { code: agencyCode } } }
+		});
+
+		if (!profile || !profile.profileId) {
+			return { success: false, error: 'Profile not found or not authenticated' };
+		}
+
+		return this.talkyTimesProvider.fetchMyPhotos(profile.profileId);
+	}
+
 	async getClientPublicProfile(profileId: string, clientId: number, agencyCode: string) {
 		const profile = await this.prisma.profile.findFirst({
 			where: { id: profileId, group: { agency: { code: agencyCode } } }

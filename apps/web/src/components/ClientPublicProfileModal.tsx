@@ -331,6 +331,7 @@ export function ClientPublicProfileModal({
               )}
 
               <div className="flex flex-wrap gap-1">
+                {/* Публічні фото */}
                 {publicShown.map(p => (
                   <img key={p.id}
                     src={p.url_xl || p.url_large || p.url_medium || p.url_small || p.url_xs || ''}
@@ -339,26 +340,20 @@ export function ClientPublicProfileModal({
                     onClick={() => setFullImage(p.url_original || '')}
                   />
                 ))}
-              </div>
 
-              {photosPrivate.length > 0 && (
-                <div>
-                  <div className="mb-2 font-medium text-gray-900">Приватні фото</div>
-                  <div className="flex flex-wrap gap-1">
-                    {privateShown.map(p => (
-                      <div key={p.id} className="relative">
-                        <img
-                          src={p.url_xl || p.url_large || p.url_medium || p.url_small || p.url_xs || ''}
-                          alt={`priv-${p.id}`}
-                          className="w-[80px] h-[80px] object-cover rounded filter blur-sm contrast-75"
-                          onClick={() => setFullImage(p.url_original || '')}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center text-white font-semibold">ПРИВАТНЕ</div>
-                      </div>
-                    ))}
+                {/* Приватні фото */}
+                {privateShown.map(p => (
+                  <div key={p.id} className="relative">
+                    <img
+                      src={p.url_xl || p.url_large || p.url_medium || p.url_small || p.url_xs || ''}
+                      alt={`priv-${p.id}`}
+                      className="w-[80px] h-[80px] object-cover rounded cursor-zoom-in hover:opacity-80 transition-opacity"
+                      onClick={() => setFullImage(p.url_original || '')}
+                    />
+                    <div className="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1 py-0.5 rounded">Приватне</div>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
 
             {/* Права колонка з інформацією */}
@@ -493,7 +488,7 @@ export function ClientPublicProfileModal({
                     )}
 
                     {/* Чіп з цілями */}
-                    {personal?.goal && (
+                    {personal?.goal && Array.isArray(personal.goal) && personal.goal.length > 0 && (
                       <div className="flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-full w-fit">
                         <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />

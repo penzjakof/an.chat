@@ -13,6 +13,7 @@ import EmailHistory from '@/components/EmailHistory';
 import { useResourceManager, cleanupLottieAnimations } from '@/utils/memoryCleanup';
 import { checkDialogRestrictions, logRestrictionsCheck } from '@/utils/grpcUtils';
 import { ClientPublicProfileModal } from '@/components/ClientPublicProfileModal';
+import { MyPublicProfileModal } from '@/components/MyPublicProfileModal';
 
 // Типи для Lottie
 declare global {
@@ -1465,6 +1466,7 @@ export default function DialogPage() {
 	};
 
 	const [isClientProfileOpen, setIsClientProfileOpen] = useState(false);
+	const [isMyProfileOpen, setIsMyProfileOpen] = useState(false);
 
 	return (
 		<div className="flex flex-col h-full">
@@ -1522,7 +1524,10 @@ export default function DialogPage() {
 							
 							{/* Аватар профілю */}
 							<div className="relative flex-shrink-0">
-								<div className="w-11 h-11 rounded-full overflow-hidden bg-gray-200">
+								<div
+									className="w-11 h-11 rounded-full overflow-hidden bg-gray-200 cursor-pointer"
+									onClick={() => setIsMyProfileOpen(true)}
+								>
 									{profileAvatar ? (
 										<img
 											src={profileAvatar}
@@ -2312,6 +2317,13 @@ export default function DialogPage() {
 				onClose={() => setIsClientProfileOpen(false)}
 				profileId={sourceProfile.id}
 				clientId={idRegularUser}
+			/>
+		)}
+		{sourceProfile?.id && (
+			<MyPublicProfileModal
+				isOpen={isMyProfileOpen}
+				onClose={() => setIsMyProfileOpen(false)}
+				profileId={sourceProfile.id}
 			/>
 		)}
 		</div>

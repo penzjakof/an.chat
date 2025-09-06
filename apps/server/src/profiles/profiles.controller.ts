@@ -82,6 +82,18 @@ export class ProfilesController {
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post(':id/my-public-profile')
+	getMyPublicProfile(@Param('id') id: string, @Req() req: Request) {
+		return this.profiles.getMyPublicProfile(id, req.auth!.agencyCode);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Post(':id/my-photos')
+	getMyPhotos(@Param('id') id: string, @Req() req: Request) {
+		return this.profiles.getMyPhotos(id, req.auth!.agencyCode);
+	}
+
+	@Roles(Role.OWNER, Role.OPERATOR)
 	@Post(':id/gift-limits')
 	getGiftLimits(@Param('id') id: string, @Body() body: { clientId: number }, @Req() req: Request) {
 		return this.profiles.getGiftLimits(id, body.clientId, req.auth!.agencyCode);
