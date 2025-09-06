@@ -79,6 +79,8 @@
 - Діалоги сортуються за датою оновлення (найновіші спочатку)
 - Повертається `profilesMap` з інформацією про користувачів
 - Підтримується JSON-based cursor для кожного профілю окремо
+ - Для статусу «Вхідні» додатково підвантажуються непрочитані листи з TalkyTimes `connections/mails` (type: `inbox/unanswered`), кожен лист додається окремим email-айтемом у загальний список діалогів з прапорцями `__email`, `__emailBadge` та `__correspondenceId`.
+ - Email-айтеми фільтруються на бекенді: пропускаємо лише ті, де `isTrustedUserAbused !== true`.
 
 **Фронтенд-фільтрація заблокованих:**
 ```typescript
@@ -94,6 +96,18 @@ const filterUnanswered = (list: ChatDialog[]) => {
   });
 };
 ```
+
+**Автовідкриття історії листів (EmailHistory):**
+- У списку діалогів клік по email-айтему веде на URL з query: `?openEmailHistory=1&corrId=<id>`;
+- На сторінці `app/chats/[dialogId]/page.tsx` `useEffect` читає `openEmailHistory`/`corrId` і автоматично відкриває модалку історії листування для відповідної кореспонденції.
+
+**Динамічні заголовки TalkyTimes:**
+- Всі нові запити (emails-history, send-letter, forbidden-tags, unanswered mails) використовують cookies активної сесії профілю з БД і операторський реф-код через `applyOperatorRefHeader`.
+- Правильний `referer` для кожного типу запиту:
+  - Emails history: `https://talkytimes.com/mails/view/<profileId>_<clientId>`
+  - Unanswered mails: `https://talkytimes.com/mails/inbox/unanswered`
+  - Forbidden tags: `https://talkytimes.com/user/<clientId>`
+  - Send letter: `https://talkytimes.com/mails/view/<profileId>_<clientId>`
 
 **Кешування профілів:**
 - `accessibleProfiles` кешується на 5 хвилин в бекенді

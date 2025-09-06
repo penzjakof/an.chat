@@ -133,6 +133,43 @@ export class ChatsService {
 							}
 						}
 					}
+
+					// Додатково: для фільтру "Вхідні" підвантажуємо непрочитані листи
+					if ((filters?.status === 'unanswered') && (this.provider as any).getUnansweredMails) {
+						try {
+							const mailsRes = await (this.provider as any).getUnansweredMails(profile.profileId, 0, 15);
+							if (mailsRes?.success && mailsRes.data?.data?.mails && Array.isArray(mailsRes.data.data.mails)) {
+								const mails = mailsRes.data.data.mails as any[];
+								// Фільтруємо абьюз
+								const safeMails = mails.filter(m => m?.isTrustedUserAbused !== true);
+								for (const mail of safeMails) {
+									const idUser = parseInt(profile.profileId);
+									const idInterlocutor = mail?.idRegularUser;
+									if (!idUser || !idInterlocutor) continue;
+
+									// Дата з TT може бути у секундах — нормалізуємо в ISO
+									const last = mail?.correspondence?.last || {};
+									const ts = Number(last?.date_created);
+									const dateUpdated = ts ? new Date((ts > 2_000_000_000 ? ts : ts * 1000)).toISOString() : new Date().toISOString();
+
+									const emailDialog: any = {
+										idUser,
+										idInterlocutor,
+										dateUpdated,
+										lastMessage: { content: { message: last?.title || 'Новий лист' } },
+										__email: true,
+										__emailBadge: true,
+										__correspondenceId: mail?.id,
+										messagesLeft: mail?.messagesLeft
+									};
+
+									allDialogs.push(emailDialog);
+								}
+							}
+						} catch (err) {
+							console.warn(`⚠️ Failed to fetch unanswered mails for profile ${profile.profileId}:`, err instanceof Error ? err.message : 'Unknown error');
+						}
+					}
 				} catch (error) {
 					console.warn(`Failed to fetch dialogs for profile ${profile.profileId}:`, error instanceof Error ? error.message : 'Unknown error');
 				}

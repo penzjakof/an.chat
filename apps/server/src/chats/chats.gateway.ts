@@ -12,6 +12,8 @@ export class ChatsGateway implements OnModuleInit {
 	// Дедублікація RTM повідомлень (messageId -> timestamp)
 	private processedMessageIds = new Map<number, number>();
 	private readonly MESSAGE_DEDUP_TTL_MS = 30_000; // 30 секунд
+	// Дедублікація email (emailId -> timestamp)
+	private processedEmailIds = new Map<number, number>();
 
 	@WebSocketServer()
 	server!: Server;
@@ -116,6 +118,46 @@ export class ChatsGateway implements OnModuleInit {
 				dateCreated: data.dateCreated
 			});
 		}
+	}
+
+	// Нові листи: емісія тосту та службового айтема у список діалогів
+	@OnEvent('rtm.email.new')
+	handleRTMEmailNew(data: any) {
+		this.logger.log(`✉️ RTM New Email: ${data.idUserFrom} -> ${data.idUserTo}`);
+
+		// Дедублікація за emailId
+		const emailId = Number(data.emailId);
+		const now = Date.now();
+		if (!isNaN(emailId)) {
+			for (const [eid, ts] of this.processedEmailIds) {
+				if (now - ts > this.MESSAGE_DEDUP_TTL_MS) this.processedEmailIds.delete(eid);
+			}
+			const last = this.processedEmailIds.get(emailId);
+			if (last && now - last <= this.MESSAGE_DEDUP_TTL_MS) {
+				this.logger.log(`🧹 DEDUP EMAIL: Skipping duplicate emailId=${emailId}`);
+				return;
+			}
+			this.processedEmailIds.set(emailId, now);
+		}
+
+		// Формуємо dialogId у форматі `${profileId}-${interlocutorId}`
+		const profileId = Number(data.profileId);
+		const interlocutorId = data.idUserFrom === profileId ? data.idUserTo : data.idUserFrom;
+		const dialogId = `${profileId}-${interlocutorId}`;
+
+		// 1) Тост про новий лист
+		this.server.emit('message_toast', {
+			messageId: data.emailId,
+			idUserFrom: data.idUserFrom,
+			idUserTo: data.idUserTo,
+			dateCreated: data.dateCreated,
+			type: 'new_email',
+			dialogId,
+			correspondenceId: data.correspondenceId,
+			title: data.title
+		});
+
+		// 2) В кімнату діалогу не шлемо вміст листа; відображення відбудеться у списку
 	}
 
 	@OnEvent('rtm.message.read')

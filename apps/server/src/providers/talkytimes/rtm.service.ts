@@ -293,6 +293,26 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 				});
 				this.logger.log(`🆕 RTM: New message event emitted for profile ${profileId}, from: ${messageData?.idUserFrom}, to: ${messageData?.idUserTo}`);
 			}
+			else if (messageType === 'email') {
+				// Структура згідно логів: data.email містить лист
+				const emailData = (data as any)?.email || (data as any)?.data?.email || (data as any)?.data;
+				if (emailData) {
+					this.eventEmitter.emit('rtm.email.new', {
+						profileId,
+						idUserFrom: emailData.id_user_from,
+						idUserTo: emailData.id_user_to,
+						emailId: emailData.id,
+						correspondenceId: emailData.id_correspondence,
+						title: emailData.title,
+						contentHtml: emailData.content,
+						dateCreated: emailData.dateCreated || timestamp,
+						timestamp
+					});
+					this.logger.log(`✉️ RTM: New email event emitted for profile ${profileId}, from: ${emailData.id_user_from}, to: ${emailData.id_user_to}`);
+				} else {
+					this.logger.warn(`✉️ RTM: Email event received but email data missing for profile ${profileId}`);
+				}
+			}
 			else if (messageType === 'chat_DialogLimitChanged' || messageType === 'platform_CorrespondenceLimitChanged') {
 				// Уніфікуємо подію ліміту діалогу
 				const limitData = data.data || data;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { apiGet, apiPost } from '@/lib/api';
 import { getAccessToken, getSession } from '@/lib/session';
 import { ChatHeaderSkeleton, MessageSkeleton } from '@/components/SkeletonLoader';
@@ -107,6 +107,7 @@ type VirtualGiftListResponse = {
 
 export default function DialogPage() {
 	const router = useRouter();
+	const searchParams = useSearchParams();
 	const params = useParams();
 	const dialogId = params.dialogId as string;
 	
@@ -154,6 +155,20 @@ export default function DialogPage() {
 
 	// Стан для модального вікна поста
 	const [isPostModalOpen, setIsPostModalOpen] = useState(false);
+
+	// Автовідкриття EmailHistory за query-параметрами
+	useEffect(() => {
+		try {
+			const open = searchParams?.get('openEmailHistory');
+			const corrId = searchParams?.get('corrId');
+			if (open === '1') {
+				setIsEmailHistoryOpen(true);
+				if (corrId && corrId !== dialogId) {
+					(window as any).__emailCorrOverride = corrId;
+				}
+			}
+		} catch {}
+	}, [searchParams, dialogId]);
 	const [selectedPost, setSelectedPost] = useState<any>(null);
 	const [isLoadingPost, setIsLoadingPost] = useState(false);
 
@@ -2075,7 +2090,7 @@ export default function DialogPage() {
 				onClose={() => setIsEmailHistoryOpen(false)}
 				profileId={idProfile.toString()}
 				clientId={idRegularUser.toString()}
-				correspondenceId={dialogId}
+				correspondenceId={(typeof window !== 'undefined' && (window as any).__emailCorrOverride) || dialogId}
 				lettersLeft={lettersLeft}
 			/>
 

@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 
 export interface ToastData {
   id: string;
-  type: 'new_message' | 'success' | 'error' | 'info';
+  type: 'new_message' | 'new_email' | 'success' | 'error' | 'info';
   // Загальні поля
   title?: string;
   message?: string;
@@ -67,6 +67,7 @@ export function Toast({ toast, onClose }: ToastProps) {
   // Відмінні стилі для різних типів
   const bgByType: Record<NonNullable<ToastData['type']>, { bg: string; border: string; icon: string; label: string }> = {
     new_message: { bg: '#1e40af', border: '#1d4ed8', icon: '💬', label: 'Нове повідомлення' },
+    new_email: { bg: '#0b3a6f', border: '#2563eb', icon: '✉️', label: 'Новий лист' },
     success: { bg: '#065f46', border: '#059669', icon: '✅', label: 'Успіх' },
     error: { bg: '#7f1d1d', border: '#dc2626', icon: '❌', label: 'Помилка' },
     info: { bg: '#1f2937', border: '#374151', icon: 'ℹ️', label: 'Інфо' },
@@ -106,7 +107,7 @@ export function Toast({ toast, onClose }: ToastProps) {
             </div>
           </div>
           <div style={{ flex: 1 }}>
-            {toast.type === 'new_message' ? (
+            {(toast.type === 'new_message' || toast.type === 'new_email') ? (
               <>
                 <p style={{ color: 'white', fontSize: '14px', fontWeight: 'bold', margin: 0, lineHeight: '1.4' }}>
                   {colors.icon} {colors.label}!

@@ -39,4 +39,6 @@ export interface SiteProvider {
 	sendExclusivePost?(profileId: number, idRegularUser: number, payload: { idsGalleryPhotos: number[]; idsGalleryVideos: number[]; text: string }): Promise<{ success: boolean; data?: any; error?: string }>;
 	/** Отримання деталей поста */
 	getPostDetails?(idPost: number, idProfile: number, idInterlocutor: number, ctx: ProviderRequestContext): Promise<any>;
+	/** Отримати непрочитані листи (inbox/unanswered) для профілю */
+	getUnansweredMails?(profileId: string, offset?: number, limit?: number): Promise<{ success: boolean; data?: any; error?: string }>;
 }

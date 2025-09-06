@@ -3,6 +3,10 @@ import { useWebSocketPool } from '@/contexts/WebSocketPoolContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Socket } from 'socket.io-client';
 
+// Дедублікація тостів на фронтенді (ключ -> timestamp)
+const processedToasts = new Map<string, number>();
+const TOAST_DEDUP_TTL_MS = 30_000;
+
 interface UseDialogWebSocketOptions {
   profileId: string;
   dialogId: string;
@@ -66,17 +70,34 @@ export function useDialogWebSocket({
 
     const handleMessageToast = (data: any) => {
       // Показуємо toast тільки якщо повідомлення не від нас
-      if (data.idUserFrom.toString() !== profileId) {
-        console.log('🍞 Showing toast for message:', data);
-        showToast({
-          messageId: data.messageId,
-          idUserFrom: data.idUserFrom,
-          idUserTo: data.idUserTo,
-          dateCreated: data.dateCreated,
-          type: 'new_message',
-          dialogId: data.dialogId // Передаємо dialogId для навігації
-        });
+      if (data.idUserFrom?.toString?.() === profileId) return;
+
+      // Ключ для дедублікації (покриває і email, і message)
+      const toastType = data.type || 'new_message';
+      const idPart = data.messageId || data.emailId || data.id || data.dialogId || '';
+      const timePart = data.dateCreated || '';
+      const key = `${toastType}:${idPart}:${timePart}`;
+
+      const now = Date.now();
+      // Очистка старих записів
+      for (const [k, ts] of processedToasts) {
+        if (now - ts > TOAST_DEDUP_TTL_MS) processedToasts.delete(k);
       }
+      const last = processedToasts.get(key);
+      if (last && now - last <= TOAST_DEDUP_TTL_MS) {
+        // дубль — ігноруємо
+        return;
+      }
+      processedToasts.set(key, now);
+
+      showToast({
+        messageId: data.messageId,
+        idUserFrom: data.idUserFrom,
+        idUserTo: data.idUserTo,
+        dateCreated: data.dateCreated,
+        type: toastType === 'new_email' ? 'new_email' : 'new_message',
+        dialogId: data.dialogId
+      });
     };
 
     // Підписуємося на події

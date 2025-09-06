@@ -846,6 +846,60 @@ export class TalkyTimesProvider implements SiteProvider {
 		}
 	}
 
+	/**
+	 * Отримати список непрочитаних листів (inbox/unanswered)
+	 */
+	async getUnansweredMails(profileId: string, offset: number = 0, limit: number = 15): Promise<{ success: boolean; data?: any; error?: string }> {
+		try {
+			console.log(`📧 TalkyTimes.getUnansweredMails: profileId=${profileId}, offset=${offset}, limit=${limit}, isMock=${this.isMock()}`);
+
+			if (this.isMock()) {
+				return { success: true, data: { data: { counters: { countTotal: 0, countNew: 0 }, inboxCounters: { countTotal: 0, countNew: 0 }, mails: [], profiles: [] } } };
+			}
+
+			const session = await this.sessionService.getSession(profileId);
+			if (!session) {
+				return { success: false, error: `No active session for profile ${profileId}. Please authenticate first.` };
+			}
+
+			const url = 'https://talkytimes.com/platform/connections/mails';
+			const payload = {
+				type: 'inbox/unanswered',
+				offset,
+				limit,
+				femaleIds: [parseInt(profileId)],
+				idRegularUser: ''
+			};
+
+			const headers = this.sessionService.getRequestHeaders(session);
+			await this.applyOperatorRefHeader(headers, { profileId });
+			headers['origin'] = 'https://talkytimes.com';
+			headers['referer'] = 'https://talkytimes.com/mails/inbox/unanswered';
+
+			console.log(`📧 Requesting unanswered mails for profile ${profileId}`);
+			const res = await fetchWithTimeout(url, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(payload),
+				timeoutMs: 15000
+			});
+
+			if (!res.ok) {
+				const text = await res.text();
+				if (res.status === 401) {
+					await this.sessionService.removeSession(profileId);
+				}
+				return { success: false, error: `HTTP ${res.status}: ${text}` };
+			}
+
+			const data = await res.json();
+			return { success: true, data };
+		} catch (error: any) {
+			console.error('TalkyTimes.getUnansweredMails error:', error);
+			return { success: false, error: error.message || 'Unknown error' };
+		}
+	}
+
 
 
 	async fetchProfileData(profileId: string): Promise<{ success: boolean; profileData?: any; error?: string }> {

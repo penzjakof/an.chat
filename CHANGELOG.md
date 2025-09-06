@@ -23,6 +23,28 @@
 #### 📚 Документація
 - `DOCUMENTATION.md`: новий розділ «Зміни операторів (Shifts)». 
 
+### ✉️ Inbox/Unanswered інтеграція листів (TT connections/mails) — 2025-09-06
+
+#### ✨ Нове
+- Backend: `TalkyTimesProvider.getUnansweredMails(profileId)` — proxy до `https://talkytimes.com/platform/connections/mails` з `type: "inbox/unanswered"`, динамічні cookies і операторський реф-код.
+- Backend: `ChatsService.fetchDialogs` — для статусу `unanswered` підвантажує непрочитані листи і додає їх як email-айтеми у загальний список діалогів.
+- Фільтрація: елементи з `isTrustedUserAbused = true` не додаються у результат.
+
+#### 🎨 Frontend
+- `apps/web/src/app/chats/layout.tsx`: клік по email-айтему веде на `/chats/{pid-iid}?openEmailHistory=1&corrId=...`, що тригерить автівідкриття модалки історії листів.
+- Email-айтеми мають спеціальний бейдж «Новий лист» (`__emailBadge`).
+
+#### 🔧 Backend
+- `apps/server/src/providers/site-provider.interface.ts`: додано контракт `getUnansweredMails`.
+- `apps/server/src/providers/talkytimes/talkytimes.provider.ts`: реалізація `getUnansweredMails` з коректними headers (`origin`, `referer`) і `applyOperatorRefHeader`.
+- `apps/server/src/chats/chats.service.ts`: інтеграція в `fetchDialogs` (агрегація з діалогами, нормалізація дати з `date_created`).
+
+#### 🐛 Виправлення
+- Виправлено навігацію: для email-айтемів додається `openEmailHistory` і `corrId`, щоб модалка відкривалась автоматично.
+
+#### 📚 Документація
+- `DOCUMENTATION.md`: додано секцію про Inbox/Unanswered, автівідкриття модалки, динамічні заголовки TT і referer.
+
 ### ✉️ Листи з вкладеннями (MediaGallery attach) + Заборонені категорії
 
 #### ✨ Нове

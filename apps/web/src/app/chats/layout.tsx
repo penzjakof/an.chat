@@ -366,8 +366,8 @@ export default function ChatsLayout({
 			}));
 		});
 
-		// Отримуємо toast про нове повідомлення: оновлюємо або створюємо діалог і піднімаємо його вгору
-		socket.on('message_toast', (payload: { messageId: number; idUserFrom: number; idUserTo: number; dateCreated: string; type: string; dialogId: string }) => {
+		// Отримуємо toast про нове повідомлення або лист: оновлюємо/створюємо діалоги
+		socket.on('message_toast', (payload: { messageId: number; idUserFrom: number; idUserTo: number; dateCreated: string; type: string; dialogId: string; correspondenceId?: string; title?: string }) => {
 			console.log('🍞 RTM: Message toast in dialogs list', payload);
 			setDialogs(prev => {
 				// Парсимо dialogId у форматі `${profileId}-${interlocutorId}` (profileId завжди перший)
@@ -378,22 +378,28 @@ export default function ChatsLayout({
 				// Фолбек: якщо dialogId некоректний, використовуємо напрямок з payload
 				const pid = !isNaN(profileId) ? profileId : payload.idUserFrom;
 				const iid = !isNaN(interlocutorId) ? interlocutorId : payload.idUserTo;
-				
-				const matchesDialog = (dlg: ChatDialog) => (
-					dlg.idUser === pid && dlg.idInterlocutor === iid
-				);
-				
-				const index = prev.findIndex(matchesDialog);
-				if (index !== -1) {
-					const updatedDialog: ChatDialog = {
-						...prev[index],
-						dateUpdated: payload.dateCreated
-					};
-					// Переміщаємо оновлений діалог на верх
-					return [updatedDialog, ...prev.filter((_, i) => i !== index)];
+
+				// Якщо це email (або є correspondenceId) — ЗАВЖДА додаємо новий айтем
+				if (payload.type === 'new_email' || payload.correspondenceId) {
+					const emailDialog: ChatDialog = {
+						idUser: pid,
+						idInterlocutor: iid,
+						dateUpdated: payload.dateCreated,
+						lastMessage: { content: { message: payload.title || 'Новий лист' } },
+						__email: true,
+						__emailBadge: true,
+						__correspondenceId: payload.correspondenceId
+					} as any;
+					return [emailDialog, ...prev];
 				}
-				
-				// Діалог відсутній — створюємо мінімальний запис і додаємо на верх
+				// Для чат-повідомлень: якщо існує НЕ email-айтем — оновлюємо його; якщо є лише email-айтем — створюємо новий
+				const matchesDialog = (dlg: ChatDialog) => (dlg.idUser === pid && dlg.idInterlocutor === iid);
+				const nonEmailIndex = prev.findIndex(dlg => matchesDialog(dlg) && !(dlg as any).__email);
+				if (nonEmailIndex !== -1) {
+					const updatedDialog: ChatDialog = { ...prev[nonEmailIndex], dateUpdated: payload.dateCreated };
+					return [updatedDialog, ...prev.filter((_, i) => i !== nonEmailIndex)];
+				}
+				// Створюємо новий звичайний айтем діалогу
 				const newDialog: ChatDialog = {
 					idUser: pid,
 					idInterlocutor: iid,
@@ -418,24 +424,42 @@ export default function ChatsLayout({
 		// Обробляємо нові повідомлення для оновлення списку діалогів
 		socket.on('message', (payload: any) => {
 			console.log('📨 RTM: New message in dialogs list', payload);
-			
-			// Оновлюємо останнє повідомлення в діалозі
-			setDialogs(prev => prev.map(dialog => {
-				const dialogMatches = 
-					(dialog.idUser === payload.idUserFrom && dialog.idInterlocutor === payload.idUserTo) ||
-					(dialog.idUser === payload.idUserTo && dialog.idInterlocutor === payload.idUserFrom);
-				
-				if (dialogMatches) {
-					return {
-						...dialog,
-						lastMessage: {
-							content: payload.content
-						},
+			setDialogs(prev => {
+				// Визначаємо пару idUser/idInterlocutor незалежно від напрямку
+				const pid = payload.idUserFrom;
+				const iid = payload.idUserTo;
+				const matches = (d: ChatDialog) => (
+					(d.idUser === pid && d.idInterlocutor === iid) || (d.idUser === iid && d.idInterlocutor === pid)
+				);
+				const nonEmailIndex = prev.findIndex(d => matches(d) && !(d as any).__email);
+				if (nonEmailIndex !== -1) {
+					const updated: ChatDialog = {
+						...prev[nonEmailIndex],
+						lastMessage: { content: payload.content },
 						dateUpdated: payload.dateCreated
 					};
+					return [updated, ...prev.filter((_, i) => i !== nonEmailIndex)];
 				}
-				return dialog;
-			}));
+				// Якщо є тільки email-айтем, створюємо новий звичайний айтем
+				const emailIndex = prev.findIndex(d => matches(d) && (d as any).__email);
+				if (emailIndex !== -1) {
+					const newDialog: ChatDialog = {
+						idUser: pid,
+						idInterlocutor: iid,
+						dateUpdated: payload.dateCreated,
+						lastMessage: { content: payload.content }
+					};
+					return [newDialog, ...prev];
+				}
+				// Інакше просто додаємо новий звичайний айтем
+				const newDialog: ChatDialog = {
+					idUser: pid,
+					idInterlocutor: iid,
+					dateUpdated: payload.dateCreated,
+					lastMessage: { content: payload.content }
+				};
+				return [newDialog, ...prev];
+			});
 		});
 
 		// Слухаємо завершення зміни — редіректимо на дашборд
@@ -929,7 +953,9 @@ export default function ChatsLayout({
 										return (
 											<li key={`${dlg.idUser}-${dlg.idInterlocutor}-${index}`}>
 												<Link 
-													href={`/chats/${encodeURIComponent(dialogId)}`} 
+													href={((dlg as any).__email && (dlg as any).__correspondenceId)
+														? `/chats/${encodeURIComponent(dialogId)}?openEmailHistory=1&corrId=${encodeURIComponent(String((dlg as any).__correspondenceId))}`
+														: `/chats/${encodeURIComponent(dialogId)}`} 
 													className={`block p-3 transition-colors ${
 														isActive 
 															? 'bg-purple-50 border-r-2 border-purple-500' 
@@ -999,13 +1025,14 @@ export default function ChatsLayout({
 																		{profileName}
 																	</div>
 																</div>
-																<div className={`text-xs ml-2 flex-shrink-0 ${
-																	isActive ? 'text-purple-500' : 'text-gray-400'
-																}`}>
-																	{timeDisplay}
-																</div>
-															</div>
+																<div className="flex items-center gap-2 ml-2 flex-shrink-0">
+														<span className={`text-xs ${isActive ? 'text-purple-500' : 'text-gray-400'}`}>{timeDisplay}</span>
+														{(dlg as any).__emailBadge && (
+															<span className="text-[11px] text-blue-600 font-medium">Новий лист</span>
+														)}
+													</div>
 														</div>
+													</div>
 													</div>
 												</Link>
 											</li>
