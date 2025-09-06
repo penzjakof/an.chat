@@ -1025,10 +1025,15 @@ export default function ChatsLayout({
 																		{profileName}
 																	</div>
 																</div>
-																<div className="flex items-center gap-2 ml-2 flex-shrink-0">
+																<div className="flex flex-col items-end justify-between gap-1 ml-2 flex-shrink-0 min-h-[2rem]">
 														<span className={`text-xs ${isActive ? 'text-purple-500' : 'text-gray-400'}`}>{timeDisplay}</span>
 														{(dlg as any).__emailBadge && (
-															<span className="text-[11px] text-blue-600 font-medium">Новий лист</span>
+															<span className="flex items-center gap-1 text-[11px] text-blue-600 font-bold">
+																<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+																</svg>
+																Новий лист
+															</span>
 														)}
 													</div>
 														</div>
