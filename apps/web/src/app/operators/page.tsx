@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../lib/api';
 import { getRole, getAgencyCode } from '../../lib/session';
+import { Header } from '@/components/Header';
 
 interface Operator {
   id: string;
@@ -29,6 +30,7 @@ export default function OperatorsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [active, setActive] = useState<boolean>(false);
   const [editingOperator, setEditingOperator] = useState<Operator | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -53,12 +55,14 @@ export default function OperatorsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [operatorsData, groupsData] = await Promise.all([
+      const [operatorsData, groupsData, shiftStatus] = await Promise.all([
         apiGet<Operator[]>('/users/operators'),
-        apiGet<Group[]>('/groups')
+        apiGet<Group[]>('/groups'),
+        apiGet<{ active: boolean }>('/api/shifts/is-active')
       ]);
       setOperators(operatorsData);
       setGroups(groupsData);
+      setActive(!!shiftStatus?.active);
     } catch (err) {
       setError('Помилка завантаження даних');
       console.error(err);
@@ -137,16 +141,20 @@ export default function OperatorsPage() {
   if (error) return <div className="p-6 text-red-600">{error}</div>;
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Управління операторами</h1>
-        <button
-          onClick={() => setShowCreateForm(true)}
-          className="bg-primary text-white px-4 py-2 rounded hover:opacity-90"
-        >
-          Додати оператора
-        </button>
-      </div>
+    <div className="flex flex-col h-screen">
+      <Header showBackButton={true} showChatsButton={true} isActive={active} currentPath="/operators" />
+
+      {/* Основний контент */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Управління операторами</h1>
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="bg-primary text-white px-4 py-2 rounded hover:opacity-90"
+          >
+            Додати оператора
+          </button>
+        </div>
 
       {/* Форма створення/редагування */}
       {(showCreateForm || editingOperator) && (
@@ -286,11 +294,12 @@ export default function OperatorsPage() {
         </table>
       </div>
 
-      {operators.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          Операторів не знайдено
-        </div>
-      )}
+        {operators.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            Операторів не знайдено
+          </div>
+        )}
+      </div>
     </div>
   );
 }

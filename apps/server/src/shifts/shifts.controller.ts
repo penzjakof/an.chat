@@ -23,9 +23,13 @@ export class ShiftsController {
     return this.shifts.canStartShiftForOperator(req.auth!.userId);
   }
 
-  @Roles(Role.OPERATOR)
+  @Roles(Role.OPERATOR, Role.OWNER)
   @Get('is-active')
   async isActive(@Req() req: Request) {
+    // Для власника завжди повертаємо false, оскільки власник не має активних змін
+    if (req.auth!.role === 'OWNER') {
+      return { active: false };
+    }
     return this.shifts.hasActiveShift(req.auth!.userId);
   }
 

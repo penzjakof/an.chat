@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../lib/api';
 import { getRole } from '../../lib/session';
 import { useRouter } from 'next/navigation';
+import { Header } from '@/components/Header';
 
 interface Group {
   id: string;
@@ -39,6 +40,7 @@ export default function ProfilesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [active, setActive] = useState<boolean>(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
@@ -66,10 +68,14 @@ export default function ProfilesPage() {
     setLoading(true);
     setError(null);
     try {
-      const fetchedProfiles = await apiGet<Profile[]>('/profiles');
+      const [fetchedProfiles, fetchedGroups, shiftStatus] = await Promise.all([
+        apiGet<Profile[]>('/profiles'),
+        apiGet<Group[]>('/groups'),
+        apiGet<{ active: boolean }>('/api/shifts/is-active')
+      ]);
       setProfiles(fetchedProfiles);
-      const fetchedGroups = await apiGet<Group[]>('/groups');
       setGroups(fetchedGroups);
+      setActive(!!shiftStatus?.active);
     } catch (err) {
       setError('Не вдалося завантажити дані');
       console.error(err);
@@ -175,8 +181,11 @@ export default function ProfilesPage() {
   if (userRole !== 'OWNER') return <div className="p-6 text-red-500">Доступ заборонено</div>;
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Управління Профілями</h1>
+    <div className="flex flex-col h-screen">
+      <Header title="Управління Профілями" showChatsButton={true} isActive={active} currentPath="/profiles" />
+
+      {/* Основний контент */}
+      <div className="flex-1 overflow-y-auto p-6">
 
       <button
         onClick={() => setShowCreateForm(!showCreateForm)}
@@ -395,6 +404,7 @@ export default function ProfilesPage() {
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );
