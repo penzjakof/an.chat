@@ -23,6 +23,7 @@ AnChat V1 implements a hybrid real-time architecture combining:
 - **Message deduplication**: TTL-based deduplication to prevent duplicate toasts (30s)
 - **Full message type support**: All TalkyTimes message types with proper content
 - **Client profile fetching**: Automatic loading of client names/avatars for new dialogs
+ - **Email events**: New email toasts with separate list item (“Новий лист”) even if dialog exists
 
 ## 📁 Key Files
 
@@ -49,6 +50,8 @@ TalkyTimes RTM → RTMService → ChatsGateway → WebSocket → Frontend → To
 4. **Frontend receives** message_toast and:
    - Shows toast notification if not from self
    - Updates existing dialog or creates new one in list
+   - For emails: always create a separate email item with a blue “Новий лист” badge
+   - For chat messages: if only an email item exists for that pair, create a normal chat item
    - Fetches client profile data (name/avatar) if needed
 5. **Toast displays** with animation and auto-closes after 5 seconds
 6. **Dialog list updates** in real-time with proper sorting by dateUpdated
