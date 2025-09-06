@@ -1177,6 +1177,10 @@ export default function DialogPage() {
 		if (!text.trim()) return;
 		await apiPost(`/api/chats/dialogs/${encodeURIComponent(dialogId)}/text`, { text });
 		setText('');
+		// Сповіщаємо список «Вхідні» про вихідне повідомлення цього діалогу
+		try {
+			window.dispatchEvent(new CustomEvent('dialog:sent', { detail: { profileId: idProfile, clientId: idRegularUser, kind: 'text' } }));
+		} catch {}
 	}
 
 	// Функція для додавання емодзі до тексту
@@ -1275,6 +1279,11 @@ export default function DialogPage() {
 				// Можливо оновити ліміт подарунків
 				loadGiftLimits();
 
+				// Сповіщаємо список «Вхідні» про вихідне відправлення
+				try {
+					window.dispatchEvent(new CustomEvent('dialog:sent', { detail: { profileId: idProfile, clientId: idRegularUser, kind: 'gift' } }));
+				} catch {}
+
 			} else {
 				console.error('❌ Failed to send gift:', response.error);
 				console.error(`❌ Помилка відправки: ${response.error || 'Невідома помилка'}`);
@@ -1347,6 +1356,10 @@ export default function DialogPage() {
 						? { ...msg, isSending: false }
 						: msg
 				));
+				// Сповіщаємо список «Вхідні» про вихідне повідомлення
+				try {
+					window.dispatchEvent(new CustomEvent('dialog:sent', { detail: { profileId: idProfile, clientId: idRegularUser, kind: 'sticker' } }));
+				} catch {}
 			} else {
 				console.error('Failed to send sticker:', response.error);
 				// Позначаємо повідомлення як помилкове
@@ -2285,6 +2298,9 @@ export default function DialogPage() {
 												setExclusiveText('');
 												setAttachedPhotos([]);
 												setAttachedVideos([]);
+												try {
+													window.dispatchEvent(new CustomEvent('dialog:sent', { detail: { profileId: idProfile, clientId: idRegularUser, kind: 'post' } }));
+												} catch {}
 											}
 										} catch {}
 									}}

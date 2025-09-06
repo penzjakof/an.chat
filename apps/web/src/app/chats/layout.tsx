@@ -74,6 +74,10 @@ export default function ChatsLayout({
 	});
 	const [active, setActive] = useState<boolean>(true);
 
+	// Актуальний стан фільтрів у ref для доступу в колбеках сокета/інтервалів
+	const filtersRef = useRef(filters);
+	useEffect(() => { filtersRef.current = filters; }, [filters]);
+
 	// Перевірка активної зміни: якщо немає – редірект на /dashboard
 	useEffect(() => {
 		(async () => {
@@ -299,6 +303,38 @@ export default function ChatsLayout({
 		};
 	}, [router, filters]);
 
+	// Локальне видалення зі «Вхідні» відразу після відправки (будь-який тип)
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const detail = (e as CustomEvent).detail as { profileId: number; clientId: number; kind?: string } | undefined;
+			if (!detail) return;
+			if (filtersRef.current?.status !== 'unanswered') return;
+			setDialogs(prev => prev.filter(d => {
+				const matchPair = d.idUser === detail.profileId && d.idInterlocutor === detail.clientId;
+				if (!matchPair) return true;
+				const isEmailItem = (d as any).__email === true;
+				// Якщо відправлено лист — видаляємо ТІЛЬКИ email-айтем («Новий лист»), залишаємо звичайний діалог
+				if (detail.kind === 'email') {
+					return !isEmailItem; // прибираємо лише email-айтем
+				}
+				// Для інших типів (чат) — прибираємо тільки звичайний діалог, не чіпаємо email-айтем
+				return isEmailItem; // залишаємо email-айтем, якщо він є
+			}));
+		};
+		window.addEventListener('dialog:sent', handler as EventListener);
+		return () => window.removeEventListener('dialog:sent', handler as EventListener);
+	}, []);
+
+	// Автооновлення списку «Вхідні» кожні 60 сек, тільки коли активний саме цей фільтр
+	useEffect(() => {
+		if (filters.status !== 'unanswered') return;
+		const intervalId = setInterval(() => {
+			// Виконуємо повне перезавантаження списку за поточними фільтрами
+			loadDialogs(filters, true);
+		}, 60000);
+		return () => clearInterval(intervalId);
+	}, [filters]);
+
 	// Функція для завантаження більше діалогів
 	const loadMoreDialogs = async () => {
 		if (!hasMoreDialogs || isLoadingMoreDialogs || isLoadingDialogs || !dialogsCursor) return;
@@ -380,6 +416,18 @@ export default function ChatsLayout({
 				const pid = !isNaN(profileId) ? profileId : payload.idUserFrom;
 				const iid = !isNaN(interlocutorId) ? interlocutorId : payload.idUserTo;
 
+				// Якщо відкрито «Вхідні» і прийшов тост про НАШЕ вихідне повідомлення —
+				// видаляємо діалог із списку «Вхідні» (він більше не «без відповіді»)
+				if (filtersRef.current?.status === 'unanswered' && payload.type !== 'new_email') {
+					const isOutgoingFromProfile = payload.idUserFrom === pid;
+					if (isOutgoingFromProfile) {
+						const next = prev.filter(d => !(d.idUser === pid && d.idInterlocutor === iid));
+						if (next.length !== prev.length) {
+							return next;
+						}
+					}
+				}
+
 				// Якщо це email (або є correspondenceId) — ЗАВЖДА додаємо новий айтем
 				if (payload.type === 'new_email' || payload.correspondenceId) {
 					const emailDialog: ChatDialog = {
@@ -432,6 +480,15 @@ export default function ChatsLayout({
 				const matches = (d: ChatDialog) => (
 					(d.idUser === pid && d.idInterlocutor === iid) || (d.idUser === iid && d.idInterlocutor === pid)
 				);
+
+				// Якщо активний фільтр «Вхідні» і повідомлення надійшло ВІД профіля для цього діалогу —
+				// прибираємо діалог зі списку (він більше не «без відповіді»)
+				if (filtersRef.current?.status === 'unanswered') {
+					const hasDialogFromProfile = prev.some(d => d.idUser === pid && d.idInterlocutor === iid);
+					if (hasDialogFromProfile) {
+						return prev.filter(d => !(d.idUser === pid && d.idInterlocutor === iid));
+					}
+				}
 				const nonEmailIndex = prev.findIndex(d => matches(d) && !(d as any).__email);
 				if (nonEmailIndex !== -1) {
 					const updated: ChatDialog = {

@@ -585,6 +585,10 @@ export default function EmailHistory({ isOpen, onClose, profileId, clientId, cor
                         setAttachedPhotos([]);
                         setAttachedVideos([]);
                         showToast({ title: 'Лист надіслано', message: 'Ваш лист успішно відправлено', type: 'success' });
+                        // Сповіщаємо список «Вхідні», щоб прибрати email-айтем
+                        try {
+                          window.dispatchEvent(new CustomEvent('dialog:sent', { detail: { profileId: parseInt(profileId), clientId: parseInt(clientId), kind: 'email' } }));
+                        } catch {}
                       } else {
                         console.error('❌ Send letter failed:', resp.error);
                         showToast({ title: 'Помилка відправки', message: resp.error || 'Невідома помилка', type: 'error' });

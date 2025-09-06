@@ -1449,6 +1449,7 @@ export function MediaGallery({
         const typedResponse = response as { success: boolean; error?: string };
         if (typedResponse.success) {
           setSelectedPhotos([]);
+          try { window.dispatchEvent(new CustomEvent('dialog:sent', { detail: { profileId: parseInt(profileId), clientId: idRegularUser, kind: 'photos' } })); } catch {}
         } else {
           setError('Помилка відправки фото');
         }
@@ -1482,6 +1483,7 @@ export function MediaGallery({
         if (typedResponse.success) {
           onClose();
           setSelectedVideos([]);
+          try { window.dispatchEvent(new CustomEvent('dialog:sent', { detail: { profileId: parseInt(profileId), clientId: idRegularUser, kind: 'videos' } })); } catch {}
         } else {
           setError('Помилка відправки відео');
         }
@@ -1514,6 +1516,7 @@ export function MediaGallery({
         if (typedResponse.success) {
           onClose();
           setSelectedAudios([]);
+          try { window.dispatchEvent(new CustomEvent('dialog:sent', { detail: { profileId: parseInt(profileId), clientId: idRegularUser, kind: 'audios' } })); } catch {}
         } else {
           setError('Помилка відправки аудіо');
         }
