@@ -68,7 +68,7 @@ export default function ChatsLayout({
 	const [hasMoreDialogs, setHasMoreDialogs] = useState(true);
 	const [dialogsCursor, setDialogsCursor] = useState<string>('');
 	const [filters, setFilters] = useState<{ status: string; onlineOnly: boolean }>({
-		status: 'active',
+		status: 'unanswered',
 		onlineOnly: false
 	});
 	const [active, setActive] = useState<boolean>(true);
@@ -206,14 +206,26 @@ export default function ChatsLayout({
 			});
 			
 			if (response && Array.isArray(response.dialogs)) {
+				// Додаткова фронтенд-фільтрація для «Вхідні»: виключаємо діалоги з isBlocked/is_blocked=true
+				const filterUnanswered = (list: ChatDialog[], profilesMap?: Record<number, any>) => {
+					if (currentFilters.status !== 'unanswered') return list;
+					return list.filter((d: any) => {
+						if (d?.isBlocked === true || d?.is_blocked === true) return false;
+						const p = profilesMap?.[d.idInterlocutor];
+						if (p && p.is_blocked === true) return false;
+						return true;
+					});
+				};
+
+				const safeDialogs = filterUnanswered(response.dialogs, response.profiles);
 				if (isInitial) {
-					setDialogs(response.dialogs);
+					setDialogs(safeDialogs);
 					setProfiles(response.profiles || {});
 					setSourceProfiles(response.sourceProfiles || []);
 				} else {
 					// Додаємо нові діалоги до кінця списку, виключаючи дублікати
 					const existingIds = new Set(dialogs.map(dlg => `${dlg.idUser}-${dlg.idInterlocutor}`));
-					const newDialogs = response.dialogs.filter(dlg => 
+					const newDialogs = safeDialogs.filter(dlg => 
 						!existingIds.has(`${dlg.idUser}-${dlg.idInterlocutor}`)
 					);
 					
@@ -229,7 +241,7 @@ export default function ChatsLayout({
 					}
 					
 					// Якщо завантажили менше ніж очікували - можливо досягли кінця
-					if (response.dialogs.length < 15) {
+					if (safeDialogs.length < 15) {
 						console.log(`📉 Received ${response.dialogs.length} dialogs (less than 15), might be end of data`);
 						setHasMoreDialogs(false);
 					}

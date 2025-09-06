@@ -139,6 +139,8 @@ export class ChatsService {
 			}
 		}
 
+		// Примусово не звужуємо список до статусу — віддаємо як є, фронт сам відфільтрує за потреби
+
 		// Сортуємо діалоги за датою оновлення (найновіші спочатку)
 		allDialogs.sort((a, b) => {
 			const dateA = new Date(a.dateUpdated || 0).getTime();
@@ -178,19 +180,7 @@ export class ChatsService {
 		}
 
 
-		// Якщо користувач переглядає список "без відповіді" (unanswered),
-		// відфільтровуємо діалоги, де співрозмовник заблокований (is_blocked = true)
-		if (filters?.status === 'unanswered' && Object.keys(profilesMap).length > 0) {
-			const before = allDialogs.length;
-			allDialogs.splice(0, allDialogs.length, ...allDialogs.filter(d => {
-				const p = profilesMap[d.idInterlocutor];
-				return !(p && p.is_blocked === true);
-			}));
-			const after = allDialogs.length;
-			if (before !== after) {
-				console.log(`🧹 Filtered blocked dialogs for unanswered: ${before - after} removed`);
-			}
-		}
+		// Бекенд не фільтрує заблокованих у «Вхідні» — це робиться на фронтенді
 
 		const finalCursor = Object.keys(profileCursors).length > 0 ? JSON.stringify(profileCursors) : '';
 		console.log(`📤 ChatsService.fetchDialogs returning:`, {
