@@ -285,6 +285,8 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 					idUserFrom: messageData?.idUserFrom,
 					idUserTo: messageData?.idUserTo,
 					content: messageData?.content,
+					type: messageData?.type,
+					message: messageData,
 					messageId: messageData?.id || data.id,
 					dateCreated: messageData?.dateCreated || timestamp,
 					timestamp

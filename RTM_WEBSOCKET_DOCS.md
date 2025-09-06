@@ -14,11 +14,15 @@ AnChat V1 implements a hybrid real-time architecture combining:
 - **Resource cleanup** with 30-second inactivity timers
 - **Multi-profile support** for switching between accounts
 
-### RTM Integration  
+### RTM Integration
 - **Real-time message reception** from TalkyTimes
 - **Event processing** for MessageSent, MessageRead, DialogLimitChanged
 - **Toast notifications** for incoming messages
 - **Robust reconnection** with working cookies
+- **Dialog auto-update**: Automatic update of dialog list when receiving RTM messages
+- **Message deduplication**: TTL-based deduplication to prevent duplicate toasts (30s)
+- **Full message type support**: All TalkyTimes message types with proper content
+- **Client profile fetching**: Automatic loading of client names/avatars for new dialogs
 
 ## 📁 Key Files
 
@@ -36,14 +40,18 @@ AnChat V1 implements a hybrid real-time architecture combining:
 ## 🔄 Data Flow
 
 ```
-TalkyTimes RTM → RTMService → ChatsGateway → WebSocket → Frontend → Toast
+TalkyTimes RTM → RTMService → ChatsGateway → WebSocket → Frontend → Toast + Dialog Update
 ```
 
-1. **RTM receives** MessageSent from TalkyTimes
-2. **RTMService processes** and emits rtm.message.new event  
-3. **ChatsGateway handles** event and broadcasts message_toast to all clients
-4. **Frontend receives** message_toast and shows toast if not from self
+1. **RTM receives** MessageSent/MessageNew from TalkyTimes
+2. **RTMService processes** and emits rtm.message.new event with full message data
+3. **ChatsGateway handles** event, deduplicates by messageId (30s TTL), broadcasts message_toast
+4. **Frontend receives** message_toast and:
+   - Shows toast notification if not from self
+   - Updates existing dialog or creates new one in list
+   - Fetches client profile data (name/avatar) if needed
 5. **Toast displays** with animation and auto-closes after 5 seconds
+6. **Dialog list updates** in real-time with proper sorting by dateUpdated
 
 ## 🧪 Testing
 
@@ -67,10 +75,14 @@ Run tests: `./test-rtm-websocket.sh`
 ## 🚀 Key Optimizations Applied
 
 1. **Removed excessive logging** from browser console
-2. **Implemented exponential backoff** for RTM reconnections  
+2. **Implemented exponential backoff** for RTM reconnections
 3. **Added proper resource cleanup** in RTM service
 4. **Optimized WebSocket Pool** for better performance
 5. **Created comprehensive test suite** for reliability
 6. **Fixed toast visibility issues** with explicit styling
+7. **Dialog auto-update system** with real-time list synchronization
+8. **RTM message deduplication** with 30-second TTL to prevent duplicate toasts
+9. **Client profile caching** with fallback to API for missing data
+10. **Full message type support** with proper content parsing and display
 
 The system is now production-ready with robust real-time messaging! 🎉

@@ -125,7 +125,7 @@ export default function ChatsLayout({
 			params.set('profileId', searchProfileId);
 			params.set('clientId', searchClientId);
 			
-			const response = await apiGet(`/api/chats/search-dialog?${params.toString()}`);
+			const response = await apiGet<{ dialog?: ChatDialog; profiles?: Record<number, UserProfile> }>(`/api/chats/search-dialog?${params.toString()}`);
 			
 			if (response && response.dialog) {
 				setSearchResult(response.dialog);
@@ -366,6 +366,55 @@ export default function ChatsLayout({
 			}));
 		});
 
+		// Отримуємо toast про нове повідомлення: оновлюємо або створюємо діалог і піднімаємо його вгору
+		socket.on('message_toast', (payload: { messageId: number; idUserFrom: number; idUserTo: number; dateCreated: string; type: string; dialogId: string }) => {
+			console.log('🍞 RTM: Message toast in dialogs list', payload);
+			setDialogs(prev => {
+				// Парсимо dialogId у форматі `${profileId}-${interlocutorId}` (profileId завжди перший)
+				const parts = (payload.dialogId || '').split('-');
+				const profileId = Number(parts[0]);
+				const interlocutorId = Number(parts[1]);
+				
+				// Фолбек: якщо dialogId некоректний, використовуємо напрямок з payload
+				const pid = !isNaN(profileId) ? profileId : payload.idUserFrom;
+				const iid = !isNaN(interlocutorId) ? interlocutorId : payload.idUserTo;
+				
+				const matchesDialog = (dlg: ChatDialog) => (
+					dlg.idUser === pid && dlg.idInterlocutor === iid
+				);
+				
+				const index = prev.findIndex(matchesDialog);
+				if (index !== -1) {
+					const updatedDialog: ChatDialog = {
+						...prev[index],
+						dateUpdated: payload.dateCreated
+					};
+					// Переміщаємо оновлений діалог на верх
+					return [updatedDialog, ...prev.filter((_, i) => i !== index)];
+				}
+				
+				// Діалог відсутній — створюємо мінімальний запис і додаємо на верх
+				const newDialog: ChatDialog = {
+					idUser: pid,
+					idInterlocutor: iid,
+					dateUpdated: payload.dateCreated,
+					lastMessage: { content: {} }
+				};
+				return [newDialog, ...prev];
+			});
+			
+			// Підвантажуємо ім'я та аватар клієнта в список, якщо їх ще немає (з резолвером внутрішнього profile.id)
+			(async () => {
+				const parts = (payload.dialogId || '').split('-');
+				const ttPidNum = Number(parts[0]);
+				const iidNum = Number(parts[1]);
+				const internalProfileId = !isNaN(ttPidNum) ? await resolveInternalProfileId(ttPidNum) : null;
+				if (internalProfileId && !isNaN(iidNum)) {
+					await ensureClientProfileInState(internalProfileId, iidNum);
+				}
+			})();
+		});
+
 		// Обробляємо нові повідомлення для оновлення списку діалогів
 		socket.on('message', (payload: any) => {
 			console.log('📨 RTM: New message in dialogs list', payload);
@@ -399,6 +448,7 @@ export default function ChatsLayout({
 
 		return () => {
 			socket.off('shift_ended');
+			socket.off('message_toast');
 			socket.disconnect();
 		};
 	}, []);
@@ -406,6 +456,72 @@ export default function ChatsLayout({
 	// Функція для знаходження профілю за idUser (profileId)
 	const getSourceProfileByIdUser = (idUser: number) => {
 		return sourceProfiles.find(p => p.profileId === idUser.toString());
+	};
+	
+	// Мапінг TT profileId (idUser) -> внутрішній profile.id
+	const getInternalProfileIdByTT = (ttProfileId: number): string | null => {
+		const found = sourceProfiles.find(p => p.profileId === String(ttProfileId));
+		return found?.id || null;
+	};
+	
+	// Резолвер внутрішнього profile.id за TT profileId з fallback на /profiles/my
+	const resolveInternalProfileId = async (ttProfileId: number): Promise<string | null> => {
+		const fromLocal = getInternalProfileIdByTT(ttProfileId);
+		if (fromLocal) return fromLocal;
+		try {
+			const list = await apiGet<Array<{ id: string; profileId: string | null }>>('/profiles/my');
+			const match = Array.isArray(list) ? list.find((p) => p.profileId === String(ttProfileId)) : null;
+			return match?.id || null;
+		} catch {
+			return null;
+		}
+	};
+
+	// Завантаження публічного профілю клієнта для підстановки імені та аватару в списку діалогів
+	const ensureClientProfileInState = async (profileId: string, clientId: number) => {
+		if (profiles[clientId]) return;
+		try {
+			const resp = await apiGet<{ success?: boolean; profile?: any }>(`/profiles/${profileId}/client/${clientId}/public`);
+			const personal = resp?.profile?.personal;
+			let avatarSmall = personal?.avatar_small || personal?.avatar_large || personal?.avatar_xl || '';
+			let avatarLarge = personal?.avatar_large || personal?.avatar_xl || personal?.avatar_small || '';
+			let avatarXL = personal?.avatar_xl || personal?.avatar_large || personal?.avatar_small || '';
+			// Якщо аватар відсутній у публічному профілі — пробуємо фотки
+			if (!avatarSmall) {
+				try {
+					const photos = await apiPost<any>(`/profiles/${profileId}/client/${clientId}/photos`, {});
+					const data = photos?.data || photos;
+					const allPhotos = [
+						...(Array.isArray(data?.public) ? data.public : []),
+						...(Array.isArray(data?.private) ? data.private : [])
+					];
+					const main = allPhotos.find((x: any) => x?.isMain === 1 || x?.is_main === 1) || allPhotos[0];
+					if (main) {
+						avatarSmall = main.url_small || main.url_medium || main.url_large || main.url_xl || main.url_xs || '';
+						avatarLarge = main.url_large || main.url_xl || main.url_medium || main.url_small || '';
+						avatarXL = main.url_xl || main.url_large || main.url_medium || main.url_small || '';
+					}
+				} catch {}
+			}
+			if (personal || avatarSmall) {
+				setProfiles(prev => ({
+					...prev,
+					[clientId]: {
+						id: clientId,
+						id_user: clientId,
+						name: (personal?.name ? personal.name : `Користувач ${clientId}`),
+						personal: {
+							avatar_small: avatarSmall,
+							avatar_large: avatarLarge,
+							avatar_xl: avatarXL,
+							age: typeof personal?.age === 'number' ? personal!.age : (personal?.age ? parseInt(String(personal.age)) || 0 : 0)
+						},
+						is_online: Boolean(resp?.profile?.is_online),
+						last_visit: resp?.profile?.last_visit || ''
+					}
+				}));
+			}
+		} catch {}
 	};
 
 	// Кешування даних профілю в localStorage
@@ -703,8 +819,8 @@ export default function ChatsLayout({
 												}`}
 												onClick={() => {
 													// Зберігаємо messagesLeft в localStorage для доступу на сторінці діалогу
-													if (typeof dialog.messagesLeft === 'number') {
-														localStorage.setItem(`messagesLeft_${dialogId}`, dialog.messagesLeft.toString());
+													if (typeof dlg.messagesLeft === 'number') {
+														localStorage.setItem(`messagesLeft_${dialogId}`, dlg.messagesLeft.toString());
 													}
 												}}
 											>

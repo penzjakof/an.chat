@@ -9,6 +9,9 @@ import { TalkyTimesRTMService } from '../providers/talkytimes/rtm.service';
 export class ChatsGateway implements OnModuleInit {
 	private readonly logger = new Logger(ChatsGateway.name);
 	private userSockets = new Map<number, Set<string>>(); // userId -> socketIds
+	// Дедублікація RTM повідомлень (messageId -> timestamp)
+	private processedMessageIds = new Map<number, number>();
+	private readonly MESSAGE_DEDUP_TTL_MS = 30_000; // 30 секунд
 
 	@WebSocketServer()
 	server!: Server;
@@ -58,10 +61,31 @@ export class ChatsGateway implements OnModuleInit {
 		this.logger.log(`🍞 RTM New Message Toast: ${data.idUserFrom} -> ${data.idUserTo}`);
 		this.logger.log('🍞 RTM New Message data:', JSON.stringify(data, null, 2));
 
+		// Дедублікація за messageId з коротким TTL
+		const messageId = Number(data.messageId);
+		const now = Date.now();
+		if (!isNaN(messageId)) {
+			// Очистка застарілих записів
+			for (const [mid, ts] of this.processedMessageIds) {
+				if (now - ts > this.MESSAGE_DEDUP_TTL_MS) {
+					this.processedMessageIds.delete(mid);
+				}
+			}
+
+			const lastTs = this.processedMessageIds.get(messageId);
+			if (lastTs && (now - lastTs) <= this.MESSAGE_DEDUP_TTL_MS) {
+				this.logger.log(`🧹 DEDUP: Skipping duplicate messageId=${messageId}`);
+				return;
+			}
+			this.processedMessageIds.set(messageId, now);
+		}
+
 		// 1) Тост усім (як і було)
 		// Формат dialogId у фронті: `${idProfile}-${idRegularUser}`
-		// де idProfile = відправник (наш профіль), idRegularUser = співрозмовник
-		const dialogId = `${data.idUserFrom}-${data.idUserTo}`;
+		// ВАЖЛИВО: завжди ставимо НАШ профіль (data.profileId) першим
+		const profileId = Number(data.profileId);
+		const interlocutorId = data.idUserFrom === profileId ? data.idUserTo : data.idUserFrom;
+		const dialogId = `${profileId}-${interlocutorId}`;
 		const toastPayload = {
 			messageId: data.messageId,
 			idUserFrom: data.idUserFrom,
@@ -77,14 +101,18 @@ export class ChatsGateway implements OnModuleInit {
 		const roomSize = this.server.sockets?.adapter?.rooms?.get(room)?.size || 0;
 		if (roomSize > 0) {
 			this.logger.log(`💬 Emitting message to active dialog room ${room} (clients: ${roomSize})`);
-			const text = data.content?.message ?? data.content?.text ?? '';
+			const content = data.content || {};
+			const fullMessage = data.message || {};
+			const msgType: string = data.type || (fullMessage as any).type || (content as any).type || 'message';
+
+			const plainText = (content as any).message ?? (content as any).text ?? '';
 			this.server.to(room).emit('message', {
 				id: data.messageId,
 				idUserFrom: data.idUserFrom,
 				idUserTo: data.idUserTo,
-				type: 'message',
-				content: { message: text },
-				message: text,
+				type: msgType,
+				content: (fullMessage as any).content || content,
+				message: plainText,
 				dateCreated: data.dateCreated
 			});
 		}
