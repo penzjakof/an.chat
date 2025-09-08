@@ -13,7 +13,19 @@ console.log('  PORT:', process.env.PORT || 'Not set');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: '*', credentials: false });
+
+  // CORS налаштування тільки для HTTP, WebSocket налаштовується окремо
+  const allowedOrigins = process.env.NODE_ENV === 'production'
+    ? ['https://anchat.me', 'https://www.anchat.me'] // Тільки дозволені домени на продакшені
+    : ['http://localhost:3000', 'http://localhost:4000', 'http://127.0.0.1:3000']; // Для розробки
+
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  });
+
   await app.listen(process.env.PORT ?? 4000);
 }
 bootstrap().catch((error: unknown) => {

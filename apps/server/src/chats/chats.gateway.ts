@@ -5,7 +5,23 @@ import { JwtService } from '@nestjs/jwt';
 import { OnEvent } from '@nestjs/event-emitter';
 import { TalkyTimesRTMService } from '../providers/talkytimes/rtm.service';
 
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({
+  cors: {
+    origin: process.env.NODE_ENV === 'production'
+      ? ['https://anchat.me', 'https://www.anchat.me']
+      : ['http://localhost:3000', 'http://localhost:4000', 'http://127.0.0.1:3000'],
+    credentials: true,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  },
+  // Додаткові налаштування Socket.IO для кращої стабільності
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  maxHttpBufferSize: 1e6, // 1MB
+  allowEIO3: true,
+  cookie: false
+})
 export class ChatsGateway implements OnModuleInit {
 	private readonly logger = new Logger(ChatsGateway.name);
 	private userSockets = new Map<number, Set<string>>(); // userId -> socketIds
