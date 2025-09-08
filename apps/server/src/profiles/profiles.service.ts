@@ -329,9 +329,11 @@ export class ProfilesService {
 	}
 
 	async getClientPublicProfile(profileId: string, clientId: number, agencyCode: string) {
+        console.log(`🔍 DEBUG getClientPublicProfile: profileId=${profileId}, clientId=${clientId}, agencyCode=${agencyCode}`);
 		const profile = await this.prisma.profile.findFirst({
 			where: { id: profileId, group: { agency: { code: agencyCode } } }
 		});
+        console.log(`🔍 DEBUG profile found:`, profile ? {id: profile.id, profileId: profile.profileId, groupId: profile.groupId} : null);
 
 		if (!profile || !profile.profileId) {
 			return { success: false, error: 'Profile not found or not authenticated' };

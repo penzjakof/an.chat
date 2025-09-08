@@ -78,6 +78,7 @@ export class ProfilesController {
 	@Roles(Role.OWNER, Role.OPERATOR)
 	@Get(':id/client/:clientId/public')
 	getClientPublicProfile(@Param('id') id: string, @Param('clientId') clientId: string, @Req() req: Request) {
+console.log(`🔍 DEBUG Controller getClientPublicProfile called: id=${id}, clientId=${clientId}`);
 		return this.profiles.getClientPublicProfile(id, parseInt(clientId), req.auth!.agencyCode);
 	}
 
