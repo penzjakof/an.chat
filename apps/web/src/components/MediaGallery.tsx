@@ -1316,7 +1316,8 @@ export function MediaGallery({
           case 'accessed':
             return status === 'accessed'; // Тільки переглянуті
           case 'sent':
-            return status === 'sent'; // Тільки надіслані
+            // TT для аудіо повертає 'accessed' замість 'sent' — враховуємо обидва як «надіслані»
+            return status === 'sent' || status === 'accessed';
           default:
             return true;
         }
