@@ -31,7 +31,8 @@ export default function LoginPage() {
 		e.preventDefault();
 		setError(null);
 		try {
-			const res = await fetch((process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000') + '/auth/login', {
+			const base = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000');
+			const res = await fetch(base + '/api/auth/login', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ username, password }),

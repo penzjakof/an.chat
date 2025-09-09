@@ -8,12 +8,14 @@ import { TalkyTimesRTMService } from '../providers/talkytimes/rtm.service';
 @WebSocketGateway({
   cors: {
     origin: process.env.NODE_ENV === 'production'
-      ? ['https://anchat.me', 'https://www.anchat.me']
+      ? ['https://anchat.me', 'https://www.anchat.me', 'http://91.98.138.1', 'http://localhost:3000']
       : ['http://localhost:3000', 'http://localhost:4000', 'http://127.0.0.1:3000'],
     credentials: true,
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization']
   },
+  // Явно фіксуємо шлях Socket.IO, щоб збігався з Nginx location /socket.io/
+  path: '/socket.io/',
   // Додаткові налаштування Socket.IO для кращої стабільності
   transports: ['websocket', 'polling'],
   pingTimeout: 60000,

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { apiGet, apiPost } from '@/lib/api';
 import { getAccessToken, getSession } from '@/lib/session';
 import { ChatHeaderSkeleton, MessageSkeleton } from '@/components/SkeletonLoader';
-import { useWebSocketContext } from '@/contexts/WebSocketContext';
+import { useWebSocketPool } from '@/contexts/WebSocketPoolContext';
 
 type ChatMessage = {
 	id: number;
@@ -89,15 +89,15 @@ export default function DialogPage() {
 		}
 	};
 
-	const { socket, joinDialog, leaveDialog } = useWebSocketContext();
+	const { getSocketForProfile, joinDialog, leaveDialog } = useWebSocketPool();
 
 	useEffect(() => {
-		// Підключаємося до діалогу через глобальний WebSocket
-		joinDialog(dialogId);
-		
+		// Підключаємося до діалогу через WebSocket pool
+		joinDialog(profileId, dialogId);
+
 		return () => {
 			// Виходимо з діалогу при unmount
-			leaveDialog(dialogId);
+			leaveDialog(profileId, dialogId);
 			
 			// Очищуємо timeouts при unmount
 			if (loadingTimeoutRef.current) {
@@ -110,6 +110,7 @@ export default function DialogPage() {
 	}, [dialogId, joinDialog, leaveDialog]);
 
 	useEffect(() => {
+		const socket = getSocketForProfile(profileId);
 		if (!socket) return;
 
 		// Обробляємо нові повідомлення з RTM
@@ -158,7 +159,7 @@ export default function DialogPage() {
 			socket.off('message', handleMessage);
 			socket.off('user_online_status', handleUserOnlineStatus);
 		};
-	}, [socket, idProfile, idRegularUser]);
+	}, [getSocketForProfile, profileId, idProfile, idRegularUser]);
 
 	// Завантажуємо повідомлення при зміні діалогу
 	useEffect(() => {

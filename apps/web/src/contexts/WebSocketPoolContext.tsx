@@ -31,7 +31,9 @@ export function WebSocketPoolProvider({ children }: { children: React.ReactNode 
     }
 
     const token = getAccessToken();
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const socketBaseUrl = typeof window !== 'undefined'
+      ? window.location.origin
+      : (process.env.NEXT_PUBLIC_SOCKET_BASE || 'http://localhost:4000');
     
     if (!token) {
       console.warn(`🔌 No token available for profile ${profileId}`);
@@ -40,8 +42,12 @@ export function WebSocketPoolProvider({ children }: { children: React.ReactNode 
 
 
     
-    const socket = io(`${apiUrl}`, {
-      transports: ['websocket'],
+    const socket = io(`${socketBaseUrl}`, {
+      // Використовуємо лише polling, щоб уникнути помилок WS у браузері та Mixed Content
+      transports: ['polling'],
+      upgrade: false,
+      // Явно вказуємо шлях Socket.IO, щоб збігався з бекендом і Nginx
+      path: '/socket.io/',
       auth: { token, profileId }, // Передаємо profileId в auth
       timeout: 10000,
       reconnection: true,

@@ -384,9 +384,12 @@ export default function ChatsLayout({
 		const token = getAccessToken();
 		if (!token) return;
 
-		const socket = io('http://localhost:4000', { 
-			transports: ['websocket'], 
-			auth: { token } 
+		const base = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SOCKET_BASE || 'http://localhost:4000');
+		const socket = io(base, {
+			transports: ['polling'],
+			upgrade: false,
+			path: '/socket.io/',
+			auth: { token }
 		});
 
 		// Обробляємо зміни онлайн статусу

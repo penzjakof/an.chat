@@ -7,7 +7,7 @@ import { ShiftsService } from './shifts.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('api/shifts')
+@Controller('shifts')
 export class ShiftsController {
   constructor(private readonly shifts: ShiftsService, private readonly prisma: PrismaService) {}
 

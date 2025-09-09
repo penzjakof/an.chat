@@ -10,7 +10,7 @@ import { ActiveShiftGuard } from '../common/auth/auth.guard';
 
 @UseGuards(JwtAuthGuard, RolesGuard, ActiveShiftGuard)
 @Throttle({ default: { limit: 60, ttl: 60000 } }) // 60 запитів до чатів за хвилину
-@Controller('api/chats')
+@Controller('chats')
 export class ChatsController {
 	constructor(private readonly chats: ChatsService) {}
 

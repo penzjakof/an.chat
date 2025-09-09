@@ -1,6 +1,8 @@
 import { clearSession, getAccessToken } from './session';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+const API_BASE = typeof window !== 'undefined'
+  ? window.location.origin
+  : (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000');
 
 function authz(): HeadersInit {
 	const token = getAccessToken();
@@ -44,14 +46,18 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T
 	};
 
 	// Логуємо тільки в development і тільки важливі запити (не photo-statuses)
+	// Нормалізуємо шлях: якщо не починається з /api, додаємо префікс
+	const normalizedPath = path.startsWith('/api')
+		? path
+		: (path.startsWith('/') ? `/api${path}` : `/api/${path}`);
+
 	if (process.env.NODE_ENV === 'development') {
 		const method = options.method || 'GET';
-		const isPhotoStatusRequest = path.includes('photo-statuses');
+		const isPhotoStatusRequest = normalizedPath.includes('photo-statuses');
 		const shouldLog = (method !== 'GET' || !headers.Authorization) && !isPhotoStatusRequest;
-		
 		if (shouldLog) {
 			console.log('🌐 API Request:', {
-				url: `${API_BASE}${path}`,
+				url: `${API_BASE}${normalizedPath}`,
 				method,
 				hasAuth: !!headers.Authorization,
 				hasBody: !!options.body
@@ -71,7 +77,7 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T
 	let attempt = 0;
 
 	while (true) {
-		const res = await fetch(`${API_BASE}${path}`, {
+		const res = await fetch(`${API_BASE}${normalizedPath}`, {
 			...options,
 			headers,
 			cache: 'no-store',
