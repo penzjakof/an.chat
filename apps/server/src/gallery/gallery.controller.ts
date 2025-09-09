@@ -3,7 +3,7 @@ import { GalleryService } from './gallery.service';
 import type { GalleryRequest, GalleryResponse, VideoGalleryRequest, VideoGalleryResponse, AudioGalleryRequest, AudioGalleryResponse } from './gallery.service';
 import { Public } from '../common/auth/public.decorator';
 
-@Controller('api/gallery')
+@Controller(['api/gallery', 'gallery'])
 @Public() // Галерея використовує TalkyTimes API напряму, не потребує JWT
 export class GalleryController {
   private readonly logger = new Logger(GalleryController.name);
