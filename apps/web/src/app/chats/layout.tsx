@@ -227,6 +227,28 @@ export default function ChatsLayout({
 					setDialogs(safeDialogs);
 					setProfiles(response.profiles || {});
 					setSourceProfiles(response.sourceProfiles || []);
+
+					// У бекграунді підвантажуємо відсутні профілі для діалогів (ім'я/аватар)
+					(async () => {
+						try {
+							const currentMap = response.profiles || {};
+							const missing: Array<{ ttProfileId: number; clientId: number }> = [];
+							for (const d of safeDialogs) {
+								const cid = (d as any)?.idInterlocutor;
+								const pid = (d as any)?.idUser;
+								if (typeof cid === 'number' && typeof pid === 'number' && !currentMap[cid]) {
+									missing.push({ ttProfileId: pid, clientId: cid });
+								}
+							}
+							// Обмежимо кількість запитів, щоб не створювати спайк
+							for (const item of missing.slice(0, 25)) {
+								const internalId = await resolveInternalProfileId(item.ttProfileId);
+								if (internalId) {
+									await ensureClientProfileInState(internalId, item.clientId);
+								}
+							}
+						} catch {}
+					})();
 				} else {
 					// Додаємо нові діалоги до кінця списку, виключаючи дублікати
 					const existingIds = new Set(dialogs.map(dlg => `${dlg.idUser}-${dlg.idInterlocutor}`));

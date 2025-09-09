@@ -196,22 +196,55 @@ export class ChatsService {
 		// Отримуємо профілі користувачів асинхронно
 		const profilesMap: Record<number, any> = {};
 		if (userIds.size > 0 && this.provider.fetchProfiles && accessibleProfiles.length > 0) {
-			// Використовуємо перший доступний профіль для автентифікації
-			const firstProfile = accessibleProfiles.find(p => p.profileId);
-			if (firstProfile?.profileId) {
-				try {
-					const profilesResult = await this.provider.fetchProfiles(
-						firstProfile.profileId,
-						Array.from(userIds)
-					);
-					
-					if (profilesResult.success && profilesResult.profiles) {
-						profilesResult.profiles.forEach(profile => {
-							profilesMap[profile.id] = profile;
-						});
+			// Збираємо всі унікальні ідентифікатори співрозмовників
+			const remaining = new Set<number>(Array.from(userIds));
+			const MAX_CHUNK = 50; // обережний розмір пакету для TT
+
+			// Пробуємо послідовно сесії всіх доступних профілів
+			for (const candidate of accessibleProfiles) {
+				if (remaining.size === 0) break;
+				const candidateProfileId = candidate?.profileId;
+				if (!candidateProfileId) continue;
+
+				// Ідемо чанками по решті ID
+				const idsArray = Array.from(remaining);
+				for (let i = 0; i < idsArray.length; i += MAX_CHUNK) {
+					const chunk = idsArray.slice(i, i + MAX_CHUNK);
+					try {
+						const result = await this.provider.fetchProfiles(candidateProfileId, chunk);
+						if (result?.success && Array.isArray(result.profiles)) {
+							for (const raw of result.profiles) {
+								const rawId: unknown = (raw as any).id ?? (raw as any).id_user;
+								const id = typeof rawId === 'number' ? rawId : parseInt(String(rawId));
+								if (Number.isNaN(id)) continue;
+
+								const personal = (raw as any).personal || {};
+								profilesMap[id] = {
+									id,
+									id_user: (raw as any).id_user ?? id,
+									name: (raw as any).name ?? personal?.name ?? `User ${id}`,
+									personal: {
+										avatar_small: personal?.avatar_small || '',
+										avatar_large: personal?.avatar_large || '',
+										avatar_xl: personal?.avatar_xl || '',
+										age: typeof personal?.age === 'number' ? personal.age : (personal?.age ? parseInt(String(personal.age)) || 0 : 0)
+									},
+									is_online: Boolean((raw as any).is_online),
+									is_blocked: (raw as any).is_blocked === true, // важливо для фронт-фільтрації
+									last_visit: (raw as any).last_visit || ''
+								};
+								remaining.delete(id);
+							}
+							console.log(`✅ Loaded profiles chunk (${chunk.length}) using session ${candidateProfileId}. Remaining: ${remaining.size}`);
+						} else {
+							console.warn(`⚠️ fetchProfiles returned no profiles for chunk (${chunk.length}) using ${candidateProfileId}`);
+						}
+					} catch (err: any) {
+						console.warn(`⚠️ fetchProfiles failed for session ${candidateProfileId} (chunk size ${chunk.length}):`, err?.message || String(err));
+						// На цю сесію chunk не вдалось — спробуємо іншу сесію для решти ID
+						continue;
 					}
-				} catch (error) {
-					console.warn('Failed to fetch user profiles:', error instanceof Error ? error.message : 'Unknown error');
+					if (remaining.size === 0) break;
 				}
 			}
 		}
