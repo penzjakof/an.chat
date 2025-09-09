@@ -219,15 +219,11 @@ export class ProfilesService {
 			throw new BadRequestException('Profile credentials not found');
 		}
 
-		// Розшифровуємо пароль
+		// Розшифровуємо збережений пароль (для діагностики). Не блокуємо автентифікацію при невідповідності —
+		// використовуємо введений пароль і за успіху оновлюємо збережений.
 		const decryptedPassword = this.encryption.decrypt(profile.credentialPassword);
-		console.log(`🔓 Decrypted password matches provided: ${decryptedPassword === password}`);
-		
-		// Перевіряємо пароль
-		if (decryptedPassword !== password) {
-			console.log(`❌ Password mismatch for profile ${profileId}`);
-			throw new BadRequestException('Invalid password');
-		}
+		const passwordsMatch = decryptedPassword === password;
+		console.log(`🔓 Stored TT password matches provided? ${passwordsMatch}`);
 
 		// Автентифікуємо профіль через провайдер
 		console.log(`🚀 Calling TalkyTimes validateCredentials for ${profile.credentialLogin}`);
@@ -240,13 +236,17 @@ export class ProfilesService {
 			throw new BadRequestException(result.error || 'Authentication failed');
 		}
 
-		// Оновлюємо профіль з новим profileId якщо потрібно
+		// Оновлюємо профіль з новими даними (profileId/пароль)
+		const updateData: any = {};
 		if (result.profileId && result.profileId !== profile.profileId) {
 			console.log(`🔄 Updating profileId from ${profile.profileId} to ${result.profileId}`);
-			await this.prisma.profile.update({
-				where: { id: profileId },
-				data: { profileId: result.profileId }
-			});
+			updateData.profileId = result.profileId;
+		}
+		if (!passwordsMatch) {
+			updateData.credentialPassword = this.encryption.encrypt(password);
+		}
+		if (Object.keys(updateData).length > 0) {
+			await this.prisma.profile.update({ where: { id: profileId }, data: updateData });
 		}
 
 		console.log(`✅ Profile authenticated successfully: ${result.profileId || profile.profileId}`);
