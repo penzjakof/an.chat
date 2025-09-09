@@ -122,7 +122,8 @@ export class GalleryService {
       // Перевіряємо чи є активна сесія для профілю
       const session = await this.sessionService.getActiveSession(profileId);
       if (!session) {
-        throw new Error(`No active session found for profile ${profileId}`);
+        // М'яка відповідь: повертаємо порожні дані замість помилки
+        return { cursor: '', photos: [] } as GalleryResponse;
       }
 
       // Підготовуємо параметри запиту
@@ -156,7 +157,8 @@ export class GalleryService {
 
       if (!response.success) {
         this.logger.error(`❌ TalkyTimes API failed:`, response.error);
-        throw new Error(`Failed to fetch photos: ${response.error}`);
+        // Повертаємо порожні дані при помилці
+        return { cursor: '', photos: [] } as GalleryResponse;
       }
 
       return response.data as GalleryResponse;
@@ -165,11 +167,7 @@ export class GalleryService {
       this.logger.error(`❌ Failed to fetch photos for profile ${profileId}:`, error);
       
       // Повертаємо пусту відповідь замість викидання помилки для кращого UX
-      if (error instanceof Error && error.message.includes('Network')) {
-        throw new Error('Мережева помилка. Перевірте з\'єднання з інтернетом.');
-      }
-      
-      throw error;
+      return { cursor: '', photos: [] } as GalleryResponse;
     }
   }
 
@@ -251,7 +249,7 @@ export class GalleryService {
       // Перевіряємо чи є активна сесія для профілю
       const session = await this.sessionService.getActiveSession(profileId);
       if (!session) {
-        throw new Error(`No active session found for profile ${profileId}`);
+        return { cursor: '', videos: [] } as VideoGalleryResponse;
       }
 
       // Підготовуємо параметри запиту
@@ -283,7 +281,7 @@ export class GalleryService {
 
       if (!response.success) {
         this.logger.error(`❌ TalkyTimes video API failed:`, response.error);
-        throw new Error(`Failed to fetch videos: ${response.error}`);
+        return { cursor: '', videos: [] } as VideoGalleryResponse;
       }
 
       return response.data as VideoGalleryResponse;
@@ -292,11 +290,7 @@ export class GalleryService {
       this.logger.error(`❌ Failed to fetch videos for profile ${profileId}:`, error);
       
       // Повертаємо пусту відповідь замість викидання помилки для кращого UX
-      if (error instanceof Error && error.message.includes('Network')) {
-        throw new Error('Мережева помилка. Перевірте з\'єднання з інтернетом.');
-      }
-      
-      throw error;
+      return { cursor: '', videos: [] } as VideoGalleryResponse;
     }
   }
 
@@ -400,7 +394,7 @@ export class GalleryService {
     this.logger.log(`📊 Getting photo statuses for user ${idUser}, photos: ${idsPhotos.length}, profile: ${profileId}`);
 
     if (!this.talkyTimesProvider.makeRequest) {
-      throw new Error('makeRequest method is not available on TalkyTimes provider');
+      return { cursor: '', items: [] } as AudioGalleryResponse;
     }
 
     const response = await this.talkyTimesProvider.makeRequest({
@@ -484,7 +478,7 @@ export class GalleryService {
 
     if (!response.success) {
       this.logger.error(`❌ TalkyTimes get audios failed:`, response.error);
-      throw new Error(`Failed to get audios: ${response.error}`);
+      return { cursor: '', items: [] } as AudioGalleryResponse;
     }
 
     return response.data;
