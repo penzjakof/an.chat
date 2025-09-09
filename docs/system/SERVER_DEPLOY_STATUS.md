@@ -11,7 +11,7 @@
   - `/api/` → 127.0.0.1:4000/ (Nest API)
 - PM2:
   - `anchat-web` — ONLINE (порт 3000 слухає)
-  - `anchat-api` — НЕ ЗАПУЩЕНО (порт 4000 не слухає → 502 на `/api/*`).
+  - `anchat-api` — ONLINE (порт 4000 слухає через PM2).
 - БД: SQLite `file:/opt/anchat/db/anchat.db`, міграції застосовані, сид запущено (є користувачі `owner/owner123`, `operator/operator123`).
 
 ---
@@ -67,7 +67,7 @@ server {
 
 ### PM2 процеси
 - `anchat-web` — ONLINE (Next.js `next start -p 3000 -H 0.0.0.0`).
-- `anchat-api` — відсутній/зупинений (через це 502 від Nginx на `/api/*`).
+- `anchat-api` — ONLINE (NestJS API `node dist/src/main.js`).
 
 Команди управління:
 ```bash

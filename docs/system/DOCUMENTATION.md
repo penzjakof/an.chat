@@ -6,7 +6,7 @@
 
 - **Моно-репозиторій** (npm workspaces): `apps/*`, `packages/*`.
 - **Frontend**: `apps/web` — Next.js 15 (App Router, TailwindCSS 4).
-- **Backend**: `apps/server` — NestJS 11 (порт 4000), глобальні `JwtAuthGuard` і `RolesGuard`.
+- **Backend**: `apps/server` — NestJS 11 (порт 4000), Guard'и застосовуються на рівні контролерів; глобально увімкнено лише Throttler.
 - **База даних**: Prisma + SQLite (локально), добові бекапи через `@nestjs/schedule`.
 - **Інтеграція**: TalkyTimes API з fallback на mock режим.
 
@@ -665,7 +665,7 @@ Protobuf поле:  [08] + varint(dialogId)  // тег 1 + ID діалогу
 ### Ендпоінти
 
 **Публічні:**
-- `POST /auth/login` — отримати `{ accessToken }`
+- `POST /api/auth/login` — отримати `{ accessToken }`
 
 **Захищені (JWT):**
 - `GET /api/chats/dialogs?status=active&onlineOnly=true` — список діалогів з фільтрами

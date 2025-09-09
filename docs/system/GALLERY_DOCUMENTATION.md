@@ -114,23 +114,20 @@ apps/server/src/gallery/
 }
 ```
 
-### GET `/api/gallery/:profileId/photo-statuses`
-Отримання статусів фото (accessed/sent)
+### POST `/api/gallery/photo-statuses`
+Отримання статусів фото (accessed/sent/null)
 
-**Параметри:**
-- `photoIds` (string) - Кома-розділені ID фото
-- `profileId` (string) - ID профілю
-
-**Відповідь:**
+**Body:**
 ```json
 {
-  "success": true,
-  "statuses": {
-    "51496050": "accessed",
-    "51496049": "sent"
-  }
+  "idUser": 117326723,
+  "idsPhotos": [51496050, 51496049],
+  "profileId": 7162437
 }
 ```
+
+**Відповідь:**
+Проксі-відповідь TalkyTimes `/platform/gallery/photo/connection/list`.
 
 
 
@@ -320,10 +317,10 @@ interface PhotoConnectionStatus {
 - Використовує TalkyTimes сесії напряму через cookies
 - Не потребує внутрішнього JWT токена
 - `@Public()` декоратор на галерея endpoints
-- Автоматичне поновлення сесій при 401 помилці
+- При 401 повертається порожня/помилкова відповідь; потрібна повторна автентифікація профілю в UI
 
 ### Обробка помилок:
-- **401 Unauthorized:** автоматичне поновлення сесії
+- **401 Unauthorized:** повертається помилка/порожня відповідь; користувачу пропонується перев-автентифікація профілю
 - **429 Rate Limit:** експоненціальна затримка повторних спроб
 - **500 Server Error:** fallback на кешовані дані
 - **Network Error:** retry з прогресивною затримкою
