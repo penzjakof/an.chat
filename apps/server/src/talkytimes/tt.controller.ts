@@ -11,7 +11,7 @@ import { TalkyTimesRTMService } from '../providers/talkytimes/rtm.service';
 
 //@UseGuards(JwtAuthGuard, RolesGuard) // Тимчасово відключили для тестування
 @Throttle({ default: { limit: 30, ttl: 60000 } }) // 30 запитів до TT API за хвилину
-@Controller('api/tt')
+@Controller('tt')
 export class TTController {
 	constructor(
 		@Inject(TALKY_TIMES_PROVIDER) private readonly tt: SiteProvider,
