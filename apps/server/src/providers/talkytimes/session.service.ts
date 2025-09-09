@@ -118,9 +118,12 @@ export class TalkyTimesSessionService {
 			return false;
 		}
 
-		// Перевіряємо наявність tld-token в cookies
-		if (!session.cookies.includes('tld-token=')) {
-			console.log(`❌ No tld-token found in cookies for profile ${profileId}`);
+		// Перевіряємо базову валідність cookies (без прив'язки до конкретної назви куки)
+		// На боці TT інколи змінюється ім'я cookie (наприклад, 'tld-token', 'tl-token', тощо).
+		// Вважаємо сесію валідною, якщо cookie-рядок не порожній і містить принаймні один запис виду name=value.
+		const hasAnyCookiePair = /\w+=/.test(session.cookies);
+		if (!hasAnyCookiePair) {
+			console.log(`❌ No cookie pairs found in cookies for profile ${profileId}`);
 			return false;
 		}
 
