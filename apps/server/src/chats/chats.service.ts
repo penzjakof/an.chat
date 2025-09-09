@@ -66,6 +66,16 @@ export class ChatsService {
 		// ВИПРАВЛЕННЯ: Використовуємо кешовану версію
 		const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
 		
+		// Динамічний ліміт діалогів на профіль залежно від кількості профілів оператора
+		const profilesCount = accessibleProfiles.filter(p => p?.profileId).length;
+		let perProfileLimit = 15;
+		if (profilesCount > 15) {
+			perProfileLimit = 5;
+		} else if (profilesCount > 10) {
+			perProfileLimit = 10;
+		}
+		console.log('📊 Per-profile dialogs limit:', { profilesCount, perProfileLimit });
+		
 		if (accessibleProfiles.length === 0) {
 			return {
 				dialogs: [],
@@ -80,6 +90,9 @@ export class ChatsService {
 			const dialogs = await this.provider.fetchDialogs(this.toCtx(auth), filters);
 			return this.chatAccess.filterDialogsByAccess(dialogs, auth);
 		}
+
+		// На цьому етапі метод існує — зручно зберігаємо посилання для типобезпечного виклику
+		const fetchDialogsByProfile = this.provider.fetchDialogsByProfile!.bind(this.provider);
 
 		// Збираємо діалоги з усіх доступних профілів
 		const allDialogs: any[] = [];
@@ -101,77 +114,94 @@ export class ChatsService {
 		const criteria = this.processCriteria(filters);
 		console.log(`ChatsService.fetchDialogs: filters=`, filters, 'criteria=', criteria, 'inputCursors=', inputCursors);
 		
-		for (const profile of accessibleProfiles) {
-			if (profile.profileId) {
+		// Асинхронно підвантажуємо діалоги для кожного профілю (паралельно)
+		const fetchPromises = accessibleProfiles
+			.filter(p => p?.profileId)
+			.map(async (profile) => {
+				const profileCursor = inputCursors[profile.profileId] || '';
+				console.log(`🔄 Fetching dialogs for profile ${profile.profileId} with cursor: "${profileCursor}"`);
 				try {
-					// Використовуємо cursor для конкретного профілю
-					const profileCursor = inputCursors[profile.profileId] || '';
-					console.log(`🔄 Fetching dialogs for profile ${profile.profileId} with cursor: "${profileCursor}"`);
-					
-					const profileDialogs = await this.provider.fetchDialogsByProfile(
-						profile.profileId, 
-						criteria, 
-						profileCursor, // cursor для конкретного профілю
-						15  // limit
+					const profileDialogs = await fetchDialogsByProfile(
+						profile.profileId,
+						criteria,
+						profileCursor,
+						perProfileLimit
 					);
-					
-					// Додаємо діалоги до загального списку
-					if (profileDialogs && typeof profileDialogs === 'object' && 'dialogs' in profileDialogs) {
-						const dialogsData = profileDialogs as { dialogs: any[]; cursor?: string; hasMore?: boolean };
-						if (Array.isArray(dialogsData.dialogs)) {
-							console.log(`📄 Profile ${profile.profileId}: loaded ${dialogsData.dialogs.length} dialogs, cursor: "${dialogsData.cursor}", hasMore: ${dialogsData.hasMore}`);
-							allDialogs.push(...dialogsData.dialogs);
-							
-							// Зберігаємо cursor для конкретного профілю
-							if (dialogsData.cursor) {
-								profileCursors[profile.profileId] = dialogsData.cursor;
-							}
-							
-							// Якщо хоча б один профіль має ще діалоги
-							if (dialogsData.hasMore !== false) {
-								hasMoreAny = true;
-							}
+					return { profileId: profile.profileId, ok: true as const, data: profileDialogs };
+				} catch (error: any) {
+					return { profileId: profile.profileId, ok: false as const, error };
+				}
+			});
+
+		const results = await Promise.allSettled(fetchPromises);
+		for (const r of results) {
+			if (r.status === 'fulfilled') {
+				const { profileId, ok, data, error } = r.value as any;
+				if (!ok) {
+					console.warn(`Failed to fetch dialogs for profile ${profileId}:`, error instanceof Error ? error.message : 'Unknown error');
+					continue;
+				}
+				if (data && typeof data === 'object' && 'dialogs' in data) {
+					const dialogsData = data as { dialogs: any[]; cursor?: string; hasMore?: boolean };
+					if (Array.isArray(dialogsData.dialogs)) {
+						console.log(`📄 Profile ${profileId}: loaded ${dialogsData.dialogs.length} dialogs, cursor: "${dialogsData.cursor}", hasMore: ${dialogsData.hasMore}`);
+						allDialogs.push(...dialogsData.dialogs);
+						if (dialogsData.cursor) {
+							profileCursors[profileId] = dialogsData.cursor;
+						}
+						if (dialogsData.hasMore !== false) {
+							hasMoreAny = true;
 						}
 					}
+				}
+			} else {
+				console.warn('Failed to fetch dialogs for a profile:', r.reason);
+			}
+		}
 
-					// Додатково: для фільтру "Вхідні" підвантажуємо непрочитані листи
-					if ((filters?.status === 'unanswered') && (this.provider as any).getUnansweredMails) {
-						try {
-							const mailsRes = await (this.provider as any).getUnansweredMails(profile.profileId, 0, 15);
-							if (mailsRes?.success && mailsRes.data?.data?.mails && Array.isArray(mailsRes.data.data.mails)) {
-								const mails = mailsRes.data.data.mails as any[];
-								// Фільтруємо абьюз
-								const safeMails = mails.filter(m => m?.isTrustedUserAbused !== true);
-								for (const mail of safeMails) {
-									const idUser = parseInt(profile.profileId);
-									const idInterlocutor = mail?.idRegularUser;
-									if (!idUser || !idInterlocutor) continue;
-
-									// Дата з TT може бути у секундах — нормалізуємо в ISO
-									const last = mail?.correspondence?.last || {};
-									const ts = Number(last?.date_created);
-									const dateUpdated = ts ? new Date((ts > 2_000_000_000 ? ts : ts * 1000)).toISOString() : new Date().toISOString();
-
-									const emailDialog: any = {
-										idUser,
-										idInterlocutor,
-										dateUpdated,
-										lastMessage: { content: { message: last?.title || 'Новий лист' } },
-										__email: true,
-										__emailBadge: true,
-										__correspondenceId: mail?.id,
-										messagesLeft: mail?.messagesLeft
-									};
-
-									allDialogs.push(emailDialog);
-								}
-							}
-						} catch (err) {
-							console.warn(`⚠️ Failed to fetch unanswered mails for profile ${profile.profileId}:`, err instanceof Error ? err.message : 'Unknown error');
-						}
+		// Додатково: для фільтру "Вхідні" підвантажуємо непрочитані листи (паралельно)
+		if ((filters?.status === 'unanswered') && (this.provider as any).getUnansweredMails) {
+			const mailPromises = accessibleProfiles
+				.filter(p => p?.profileId)
+				.map(async (profile) => {
+					try {
+						const mailsRes = await (this.provider as any).getUnansweredMails(profile.profileId, 0, perProfileLimit);
+						return { profileId: profile.profileId, ok: true as const, mailsRes };
+					} catch (err: any) {
+						return { profileId: profile.profileId, ok: false as const, error: err };
 					}
-				} catch (error) {
-					console.warn(`Failed to fetch dialogs for profile ${profile.profileId}:`, error instanceof Error ? error.message : 'Unknown error');
+				});
+
+			const mailResults = await Promise.allSettled(mailPromises);
+			for (const mr of mailResults) {
+				if (mr.status !== 'fulfilled') continue;
+				const { profileId, ok, mailsRes, error } = mr.value as any;
+				if (!ok) {
+					console.warn(`⚠️ Failed to fetch unanswered mails for profile ${profileId}:`, error instanceof Error ? error.message : 'Unknown error');
+					continue;
+				}
+				if (mailsRes?.success && mailsRes.data?.data?.mails && Array.isArray(mailsRes.data.data.mails)) {
+					const mails = mailsRes.data.data.mails as any[];
+					const safeMails = mails.filter(m => m?.isTrustedUserAbused !== true);
+					for (const mail of safeMails) {
+						const idUser = parseInt(profileId);
+						const idInterlocutor = mail?.idRegularUser;
+						if (!idUser || !idInterlocutor) continue;
+						const last = mail?.correspondence?.last || {};
+						const ts = Number(last?.date_created);
+						const dateUpdated = ts ? new Date((ts > 2_000_000_000 ? ts : ts * 1000)).toISOString() : new Date().toISOString();
+						const emailDialog: any = {
+							idUser,
+							idInterlocutor,
+							dateUpdated,
+							lastMessage: { content: { message: last?.title || 'Новий лист' } },
+							__email: true,
+							__emailBadge: true,
+							__correspondenceId: mail?.id,
+							messagesLeft: mail?.messagesLeft
+						};
+						allDialogs.push(emailDialog);
+					}
 				}
 			}
 		}

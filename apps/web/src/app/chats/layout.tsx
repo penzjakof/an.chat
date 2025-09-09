@@ -267,11 +267,8 @@ export default function ChatsLayout({
 						return; // Виходимо без оновлення cursor
 					}
 					
-					// Якщо завантажили менше ніж очікували - можливо досягли кінця
-					if (safeDialogs.length < 15) {
-						console.log(`📉 Received ${response.dialogs.length} dialogs (less than 15), might be end of data`);
-						setHasMoreDialogs(false);
-					}
+					// Видаляємо жорстку евристику за кількістю (15)
+					// Покладаємось лише на server-side hasMore
 					
 					// Обмежуємо загальну кількість діалогів (захист від безкінечного завантаження)
 					const totalAfterAdd = dialogs.length + newDialogs.length;
@@ -286,11 +283,9 @@ export default function ChatsLayout({
 					setSourceProfiles(prev => [...prev, ...(response.sourceProfiles || [])]);
 				}
 				
-				// Оновлюємо cursor та hasMore тільки якщо є нові діалоги
-				if (response.cursor) {
-					setDialogsCursor(response.cursor);
-				}
-				setHasMoreDialogs(response.hasMore !== false && response.dialogs.length > 0);
+				// Оновлюємо cursor та hasMore згідно відповіді сервера
+				setDialogsCursor(response.cursor || '');
+				setHasMoreDialogs(Boolean(response.hasMore));
 			} else {
 				if (isInitial) {
 					setDialogs([]);
