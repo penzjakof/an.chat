@@ -326,3 +326,55 @@ ssh root@91.98.138.1 "cd /opt/anchat/app && pm2 logs anchat-api --lines 5"
 8) Перевірити Git:
    - `git status` має показувати clean working tree
    - `git log --oneline` має показувати commits
+
+---
+
+### Автоочистка «осиротілих» bash-сесій (guard)
+
+Інколи на сервері можуть «зависати» інтерактивні `-bash` сесії (осиротілі: `PPID=1`, `TTY=?`), які починають споживати багато CPU. Щоб автоматично їх завершувати, можна увімкнути systemd guard.
+
+1) Створити сервіс:
+```bash
+cat > /etc/systemd/system/kill-orphan-bash.service << 'EOF'
+[Unit]
+Description=Kill orphaned high-CPU bash sessions
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -lc 'ps -C bash -o pid=,ppid=,tty=,%cpu= | awk '\''$2==1 && $3=="?" && int($4)>=50 {print $1}'\'' | while read pid; do logger -t kill-orphan-bash "killing $pid"; kill -TERM "$pid" || true; sleep 1; kill -KILL "$pid" || true; done'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+2) Створити таймер (кожні 5 хвилин):
+```bash
+cat > /etc/systemd/system/kill-orphan-bash.timer << 'EOF'
+[Unit]
+Description=Run kill-orphan-bash every 5 minutes
+
+[Timer]
+OnUnitActiveSec=5min
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
+EOF
+```
+
+3) Активувати та перевірити:
+```bash
+systemctl daemon-reload
+systemctl enable --now kill-orphan-bash.timer
+systemctl start kill-orphan-bash.service
+systemctl status --no-pager kill-orphan-bash.timer
+systemctl status --no-pager kill-orphan-bash.service
+journalctl -u kill-orphan-bash.service -n 50 --no-pager
+```
+
+4) Налаштування:
+- Поріг CPU можна змінити у рядку `int($4)>=50` (наприклад, `>=30`).
+- Для одноразового запуску без таймера: `systemctl start kill-orphan-bash.service`.
+- Вимкнути таймер: `systemctl disable --now kill-orphan-bash.timer`.
