@@ -4,6 +4,8 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { OnEvent } from '@nestjs/event-emitter';
 import { TalkyTimesRTMService } from '../providers/talkytimes/rtm.service';
+import { ChatAccessService } from './chat-access.service';
+import { Role } from '@prisma/client';
 
 @WebSocketGateway({
   cors: {
@@ -38,11 +40,30 @@ export class ChatsGateway implements OnModuleInit {
 
 	constructor(
 		private readonly jwt: JwtService,
-		private readonly rtmService: TalkyTimesRTMService
+		private readonly rtmService: TalkyTimesRTMService,
+		private readonly chatAccess: ChatAccessService
 	) {}
 
 	onModuleInit(): void {
 		this.logger.log('🔌 WebSocket Gateway initialized');
+	}
+
+	async handleConnection(client: Socket): Promise<void> {
+		try {
+			const token = (client.handshake.auth as any)?.token as string | undefined;
+			if (!token) return;
+			const payload = await this.jwt.verifyAsync<{ sub: string; role: Role; agencyCode: string; operatorCode?: string }>(token);
+			const authCtx = { agencyCode: payload.agencyCode, role: payload.role, userId: payload.sub, operatorCode: payload.operatorCode } as any;
+			const accessible = await this.chatAccess.getAccessibleProfiles(authCtx);
+			for (const p of accessible) {
+				if (p?.profileId) {
+					client.join(`profile:${p.profileId}`);
+				}
+			}
+			this.logger.log(`👥 Socket ${client.id} joined ${accessible.length} profile rooms`);
+		} catch (e) {
+			this.logger.warn(`⚠️ handleConnection failed: ${(e as any)?.message || e}`);
+		}
 	}
 
 	// Обробка RTM подій
@@ -114,7 +135,8 @@ export class ChatsGateway implements OnModuleInit {
 			type: 'new_message',
 			dialogId
 		};
-		this.server.emit('message_toast', toastPayload);
+		// Розсилаємо тост лише у кімнату профілю, щоб отримали тільки користувачі з доступом
+		this.server.to(`profile:${profileId}`).emit('message_toast', toastPayload);
 
 		// 2) Якщо у кімнаті діалогу є клієнти — відправляємо реальне повідомлення в кімнату
 		const room = `dlg:${dialogId}`;
@@ -163,8 +185,8 @@ export class ChatsGateway implements OnModuleInit {
 		const interlocutorId = data.idUserFrom === profileId ? data.idUserTo : data.idUserFrom;
 		const dialogId = `${profileId}-${interlocutorId}`;
 
-		// 1) Тост про новий лист
-		this.server.emit('message_toast', {
+		// 1) Тост про новий лист лише для кімнати профілю
+		this.server.to(`profile:${profileId}`).emit('message_toast', {
 			messageId: data.emailId,
 			idUserFrom: data.idUserFrom,
 			idUserTo: data.idUserTo,

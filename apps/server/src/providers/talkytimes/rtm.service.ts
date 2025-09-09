@@ -363,6 +363,18 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 		await this.connect();
 	}
 
+	// Від'єднати конкретний профіль (викликаємо при видаленні профілю)
+	public disconnectProfile(profileId: string | number) {
+		const id = typeof profileId === 'string' ? parseInt(profileId) : profileId;
+		if (!this.connections.has(id)) return;
+		this.logger.log(`🔌 RTM: Disconnecting profile ${id}`);
+		const connection = this.connections.get(id)!;
+		try { connection.ws.close(); } catch {}
+		clearInterval(connection.heartbeatInterval);
+		if (connection.reconnectTimeout) clearTimeout(connection.reconnectTimeout);
+		this.connections.delete(id);
+	}
+
 	public async subscribeToUser(userId: string) {
 		// Цей метод залишається для сумісності, але тепер не потрібен
 		// оскільки кожен профіль автоматично підписується на свій канал

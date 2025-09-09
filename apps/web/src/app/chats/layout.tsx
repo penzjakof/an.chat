@@ -489,6 +489,8 @@ export default function ChatsLayout({
 				const ttPidNum = Number(parts[0]);
 				const iidNum = Number(parts[1]);
 				const internalProfileId = !isNaN(ttPidNum) ? await resolveInternalProfileId(ttPidNum) : null;
+				// Якщо профіль недоступний (видалений/не в доступі оператора) — не догружаємо, залишаємо плейсхолдер
+				if (!internalProfileId) return;
 				if (internalProfileId && !isNaN(iidNum)) {
 					await ensureClientProfileInState(internalProfileId, iidNum);
 				}

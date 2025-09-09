@@ -20,6 +20,7 @@ import { EncryptionValidatorService } from './profiles/encryption-validator.serv
 import { HttpModule } from './common/http/http.module';
 import { EncryptionModule } from './common/encryption/encryption.module';
 import { ShiftsModule } from './shifts/shifts.module';
+import { TalkyTimesRTMService } from './providers/talkytimes/rtm.service';
 
 @Module({
 	imports: [
@@ -73,6 +74,13 @@ export class AppModule implements OnModuleInit {
 		try {
 			// Автоматично перевіряємо і виправляємо шифрування при старті
 			await this.encryptionValidator.validateAndFixProfiles();
+			// Зберігаємо глобальне посилання на RTM сервіс для відключення при видаленні профілю
+			try {
+				const rtm = (this as any).rtmService as TalkyTimesRTMService | undefined;
+				if (rtm) {
+					(global as any).rtmServiceInstance = rtm;
+				}
+			} catch {}
 		} catch (error) {
 			console.error('💥 Помилка при ініціалізації модуля:', error);
 			// Не кидаємо помилку далі, щоб додаток міг запуститись

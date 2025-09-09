@@ -181,9 +181,17 @@ export class ProfilesService {
 			throw new NotFoundException('Profile not found');
 		}
 
-		return this.prisma.profile.delete({
-			where: { id: profileId }
-		});
+		const res = await this.prisma.profile.delete({ where: { id: profileId } });
+		// Від'єднуємо RTM для цього профілю, якщо активний
+		try {
+			// Ліниве імпорт-інжект через require, щоб уникнути циклічних залежностей
+			const { TalkyTimesRTMService } = require('../providers/talkytimes/rtm.service');
+			const rtm: InstanceType<typeof TalkyTimesRTMService> | undefined = (global as any)?.rtmServiceInstance;
+			if (rtm && res.profileId) {
+				rtm.disconnectProfile(res.profileId);
+			}
+		} catch {}
+		return res;
 	}
 
 	async authenticateProfile(profileId: string, password: string, agencyCode: string) {
