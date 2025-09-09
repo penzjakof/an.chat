@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Put, Delete, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ProfilesService } from './profiles.service';
 import { ProviderSite, Role } from '@prisma/client';
 import { Roles, RolesGuard } from '../common/auth/roles.guard';
@@ -61,6 +62,25 @@ export class ProfilesController {
 	@Post(':id/session/status')
 	getSessionStatus(@Param('id') id: string, @Req() req: Request) {
 		return this.profiles.getProfileSessionStatus(id, req.auth!.agencyCode);
+	}
+
+	// Батчова перевірка статусів сесій, щоб уникнути 429 при великій кількості профілів
+	@Roles(Role.OWNER, Role.OPERATOR)
+	@Throttle({ default: { limit: 100, ttl: 1000 } })
+	@Post('session/status/batch')
+	async getSessionStatusBatch(@Body() body: { ids: string[] }, @Req() req: Request) {
+		const ids = Array.isArray(body?.ids) ? body.ids : [];
+		if (ids.length === 0) return { results: {} };
+		const results: Record<string, { authenticated: boolean; message: string; profileId?: string }> = {};
+		await Promise.all(ids.map(async (pid) => {
+			try {
+				const res = await this.profiles.getProfileSessionStatus(pid, req.auth!.agencyCode);
+				results[pid] = { authenticated: !!res.authenticated, message: res.message, profileId: res.profileId };
+			} catch (e) {
+				results[pid] = { authenticated: false, message: 'Error checking status' };
+			}
+		}));
+		return { results };
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)

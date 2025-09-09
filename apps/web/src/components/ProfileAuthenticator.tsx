@@ -70,44 +70,33 @@ export function ProfileAuthenticator() {
 			console.log('✅ Loaded profiles:', userProfiles.length);
 			setProfiles(userProfiles);
 
-			// Перевіряємо статус автентифікації для кожного профілю
+			// Батчова перевірка статусів, щоб уникнути 429
 			const statuses: Record<string, AuthStatus> = {};
 			let needsAuth = false;
-
-			for (const profile of userProfiles) {
-				if (!profile.profileId) {
-					statuses[profile.id] = {
-						profileId: profile.id,
-						status: 'no-session',
-						message: 'Профіль не має profileId'
-					};
-					continue;
-				}
-
-				try {
-					const sessionStatus = await apiPost<{ authenticated: boolean; message: string }>(`/profiles/${profile.id}/session/status`, {});
-					if (sessionStatus.authenticated) {
-						statuses[profile.id] = {
-							profileId: profile.id,
-							status: 'authenticated',
-							message: 'Автентифіковано'
-						};
+			const ids = userProfiles.map(p => p.id);
+			try {
+				const res = await apiPost<{ results: Record<string, { authenticated: boolean; message: string }> }>(
+					'/profiles/session/status/batch',
+					{ ids }
+				);
+				for (const profile of userProfiles) {
+					const r = res.results?.[profile.id];
+					if (!profile.profileId) {
+						statuses[profile.id] = { profileId: profile.id, status: 'no-session', message: 'Профіль не має profileId' };
+						continue;
+					}
+					if (r?.authenticated) {
+						statuses[profile.id] = { profileId: profile.id, status: 'authenticated', message: r.message || 'Автентифіковано' };
 					} else {
-						statuses[profile.id] = {
-							profileId: profile.id,
-							status: 'failed',
-							message: 'Потрібна автентифікація'
-						};
+						statuses[profile.id] = { profileId: profile.id, status: 'failed', message: r?.message || 'Потрібна автентифікація' };
 						needsAuth = true;
 					}
-				} catch {
-					statuses[profile.id] = {
-						profileId: profile.id,
-						status: 'failed',
-						message: 'Помилка перевірки сесії'
-					};
-					needsAuth = true;
 				}
+			} catch {
+				for (const profile of userProfiles) {
+					statuses[profile.id] = { profileId: profile.id, status: 'failed', message: 'Помилка перевірки сесії' };
+				}
+				needsAuth = true;
 			}
 
 			setAuthStatuses(statuses);

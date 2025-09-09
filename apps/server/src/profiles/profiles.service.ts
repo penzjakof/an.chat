@@ -29,14 +29,23 @@ export class ProfilesService {
 			throw new NotFoundException('Group not found');
 		}
 
-		// Валідація облікових даних для TalkyTimes
+		// Валідація TalkyTimes (м'який режим): створюємо профіль навіть без успішної автентифікації
 		let platformProfileId: string | undefined;
-		if (provider === ProviderSite.TALKYTIMES && credentialLogin && credentialPassword) {
-			const validation = await this.talkyTimesProvider.validateCredentials(credentialLogin, credentialPassword);
-			if (!validation.success) {
-				throw new BadRequestException(`Не вдалось залогінитись на TalkyTimes: ${validation.error || 'Невірні облікові дані'}`);
+		let targetStatus: ProfileStatus = ProfileStatus.INACTIVE;
+		if (provider === ProviderSite.TALKYTIMES) {
+			if (credentialLogin && credentialPassword) {
+				const validation = await this.talkyTimesProvider.validateCredentials(credentialLogin, credentialPassword);
+				if (validation.success) {
+					platformProfileId = validation.profileId;
+					targetStatus = ProfileStatus.ACTIVE;
+				} else {
+					// залишаємо INACTIVE, щоб власник міг доредагувати і повторити автентифікацію пізніше
+					targetStatus = ProfileStatus.INACTIVE;
+				}
+			} else {
+				// Без креденшелів — створюємо як INACTIVE
+				targetStatus = ProfileStatus.INACTIVE;
 			}
-			platformProfileId = validation.profileId;
 		}
 
 		// Генеруємо унікальний externalId для профілю
@@ -51,7 +60,7 @@ export class ProfilesService {
 				credentialLogin,
 				credentialPassword: this.encryption.encrypt(credentialPassword),
 				profileId: platformProfileId,
-				status: ProfileStatus.ACTIVE,
+				status: targetStatus,
 			},
 			include: {
 				group: true
