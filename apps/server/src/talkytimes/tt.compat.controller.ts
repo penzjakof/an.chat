@@ -1,9 +1,10 @@
-import { Controller, Post, Body, Req } from '@nestjs/common';
+import { Controller, Post, Body, Req, Get } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { Inject } from '@nestjs/common';
 import { TALKY_TIMES_PROVIDER } from '../providers/providers.module';
 import type { SiteProvider } from '../providers/site-provider.interface';
+import { TalkyTimesRTMService } from '../providers/talkytimes/rtm.service';
 
 // Сумісний контролер для середовищ, де /api префікс не зрізається Nginx-ом
 @Throttle({ default: { limit: 30, ttl: 60000 } })
@@ -11,7 +12,20 @@ import type { SiteProvider } from '../providers/site-provider.interface';
 export class TTCompatController {
   constructor(
     @Inject(TALKY_TIMES_PROVIDER) private readonly tt: SiteProvider,
+    private readonly rtmService: TalkyTimesRTMService
   ) {}
+
+  @Get('rtm-status')
+  async getRtmStatus() {
+    const status = this.rtmService.getConnectionStatus();
+    const connectedProfiles = Object.keys(status).filter(profileId => status[parseInt(profileId)]);
+    return {
+      status: connectedProfiles.length > 0 ? 'connected' : 'disconnected',
+      connectedProfiles: connectedProfiles.map(id => parseInt(id)),
+      totalProfiles: Object.keys(status).length,
+      timestamp: new Date().toISOString()
+    };
+  }
 
   @Post('emails-history')
   async emailsHistory(
