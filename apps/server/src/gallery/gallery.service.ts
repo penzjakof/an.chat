@@ -590,6 +590,15 @@ export class GalleryService {
       throw new Error(`Failed to get audio statuses: ${response.error}`);
     }
 
-    return response.data;
+    // Нормалізуємо уніфікований формат для фронтенда
+    const raw = response.data as any;
+    const list: Array<{ idAudio: number; status: 'accessed' | 'sent' | null }> = (raw?.audios || raw?.items || raw?.data?.audios || raw?.data?.items || [])
+      .map((x: any) => ({
+        idAudio: Number(x?.idAudio ?? x?.id ?? x?.idGalleryAudio),
+        status: (x?.status ?? null) as 'accessed' | 'sent' | null,
+      }))
+      .filter((x: any) => Number.isFinite(x.idAudio));
+
+    return { audios: list };
   }
 }
