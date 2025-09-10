@@ -405,7 +405,7 @@ export class GalleryService {
       'Origin': 'https://talkytimes.com',
       'Referer': referer,
     };
-    if (operatorRef) headers['x-requested-with'] = operatorRef;
+    headers['x-requested-with'] = operatorRef || '2055';
 
     const response = await this.talkyTimesProvider.makeRequest({
       method: 'POST',
