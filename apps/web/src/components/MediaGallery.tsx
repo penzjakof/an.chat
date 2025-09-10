@@ -1322,8 +1322,15 @@ export function MediaGallery({
     // Фільтрація за статусом
     if (statusFilter !== 'all') {
       return audios.filter(audio => {
-        // Беремо статус із мапи, або fallback з самого аудіо (якщо бекенд ще не дав статуси)
-        const mapped = audioStatuses.get(audio.id);
+        // Беремо статус із мапи за кількома можливими ключами (id, idAudio, idGalleryAudio),
+        // або fallback з самого аудіо (якщо бекенд ще не дав статуси)
+        const key1 = audio.id as unknown as number;
+        const key2 = (audio as any).idAudio as number | undefined;
+        const key3 = (audio as any).idGalleryAudio as number | undefined;
+        const mapped =
+          (typeof key1 !== 'undefined' ? audioStatuses.get(Number(key1)) : undefined) ??
+          (typeof key2 !== 'undefined' ? audioStatuses.get(Number(key2)) : undefined) ??
+          (typeof key3 !== 'undefined' ? audioStatuses.get(Number(key3)) : undefined);
         const fallback = (audio.status === 'accessed' || audio.status === 'sent') ? (audio.status as 'accessed' | 'sent') : null;
         const status = (typeof mapped === 'undefined') ? fallback : mapped;
         switch (statusFilter) {
