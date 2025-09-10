@@ -1309,7 +1309,10 @@ export function MediaGallery({
     // Фільтрація за статусом
     if (statusFilter !== 'all') {
       return audios.filter(audio => {
-        const status = audioStatuses.get(audio.id);
+        // Беремо статус із мапи, або fallback з самого аудіо (якщо бекенд ще не дав статуси)
+        const mapped = audioStatuses.get(audio.id);
+        const fallback = (audio.status === 'accessed' || audio.status === 'sent') ? (audio.status as 'accessed' | 'sent') : null;
+        const status = (typeof mapped === 'undefined') ? fallback : mapped;
         switch (statusFilter) {
           case 'available':
             // Доступні: статус відсутній або null
@@ -1327,6 +1330,28 @@ export function MediaGallery({
 
     return audios;
   }, [audioStatuses]);
+
+  // Перевірка та догруз статусів аудіо (якщо пропущено первинний запит)
+  const ensureAllAudioStatusesLoaded = useCallback(async () => {
+    if (!idRegularUser || context !== 'chat' || audios.length === 0) return;
+
+    const audiosWithoutStatuses = audios.filter(audio => 
+      !audioStatuses.has(audio.id) && !statusRequestedAudios.has(audio.id)
+    );
+
+    if (audiosWithoutStatuses.length > 0) {
+      await loadAudioStatuses(audiosWithoutStatuses, idRegularUser);
+    }
+  }, [audios, audioStatuses, statusRequestedAudios, idRegularUser, context, loadAudioStatuses]);
+
+  useEffect(() => {
+    if (isOpen && audios.length > 0 && context === 'chat') {
+      const timeoutId = setTimeout(() => {
+        ensureAllAudioStatusesLoaded();
+      }, 2000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isOpen, audios.length, context, ensureAllAudioStatusesLoaded]);
 
   // Мемоізований список відфільтрованих аудіо
   const filteredAudios = useMemo(() => {
