@@ -570,11 +570,14 @@ export function MediaGallery({
           profileId: parseInt(profileId)
         });
 
-        const typedResponse = response as { success: boolean; data?: { videos: VideoConnectionStatus[] }; error?: string };
-        if (typedResponse.success && typedResponse.data?.videos) {
+        const typedResponse = response as { success: boolean; data?: { videos?: VideoConnectionStatus[]; data?: { videos?: VideoConnectionStatus[] } }; error?: string };
+        const videosList = typedResponse.success && typedResponse.data 
+          ? (typedResponse.data.videos ?? typedResponse.data.data?.videos)
+          : undefined;
+        if (videosList && Array.isArray(videosList)) {
           setVideoStatuses(prev => {
             const newStatusMap = new Map(prev);
-            typedResponse.data!.videos.forEach((videoStatus: VideoConnectionStatus) => {
+            videosList.forEach((videoStatus: VideoConnectionStatus) => {
               newStatusMap.set(videoStatus.idVideo, videoStatus.status);
             });
             
@@ -655,15 +658,18 @@ export function MediaGallery({
           profileId: parseInt(profileId)
         });
 
-        const typedResponse = response as { success: boolean; data?: { photos: PhotoConnectionStatus[] }; error?: string };
-        if (typedResponse.success && typedResponse.data?.photos) {
+        const typedResponse = response as { success: boolean; data?: { photos?: PhotoConnectionStatus[]; data?: { photos?: PhotoConnectionStatus[] } }; error?: string };
+        const photosList = typedResponse.success && typedResponse.data 
+          ? (typedResponse.data.photos ?? typedResponse.data.data?.photos)
+          : undefined;
+        if (photosList && Array.isArray(photosList)) {
           // Повністю відключаємо логування результатів батчів
           // if (process.env.NODE_ENV === 'development' && ((batchIndex + 1) % 10 === 0 || batchIndex === batches.length - 1)) {
           //   console.log(`📊 Batch ${batchIndex + 1}: Received statuses for ${typedResponse.data.photos.length} photos`);
           // }
           setPhotoStatuses(prev => {
             const newStatusMap = new Map(prev);
-            typedResponse.data!.photos.forEach((photoStatus: PhotoConnectionStatus) => {
+            photosList.forEach((photoStatus: PhotoConnectionStatus) => {
               newStatusMap.set(photoStatus.idPhoto, photoStatus.status);
             });
             
@@ -866,11 +872,14 @@ export function MediaGallery({
           profileId: parseInt(profileId)
         });
 
-        const typedResponse = response as { success: boolean; data?: { audios: AudioConnectionStatus[] }; error?: string };
-        if (typedResponse.success && typedResponse.data?.audios) {
+        const typedResponse = response as { success: boolean; data?: { audios?: AudioConnectionStatus[]; data?: { audios?: AudioConnectionStatus[] } }; error?: string };
+        const audiosList = typedResponse.success && typedResponse.data 
+          ? (typedResponse.data.audios ?? typedResponse.data.data?.audios)
+          : undefined;
+        if (audiosList && Array.isArray(audiosList)) {
           setAudioStatuses(prev => {
             const newStatusMap = new Map(prev);
-            typedResponse.data!.audios.forEach((audioStatus: AudioConnectionStatus) => {
+            audiosList.forEach((audioStatus: AudioConnectionStatus) => {
               newStatusMap.set(audioStatus.idAudio, audioStatus.status);
             });
             
