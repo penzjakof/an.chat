@@ -423,7 +423,20 @@ export class GalleryService {
       throw new Error(`Failed to get photo statuses: ${response.error}`);
     }
 
-    return response.data;
+    // Нормалізуємо уніфікований формат для фронтенда
+    const raw = response.data as any;
+    const list: Array<{ idPhoto: number; status: 'accessed' | 'sent' | null }> = (raw?.photos || raw?.items || raw?.data?.photos || raw?.data?.items || [])
+      .map((x: any) => {
+        const rawStatus = x?.status ?? null;
+        const normalized: 'accessed' | 'sent' | null = (rawStatus === 'accessed' || rawStatus === 'sent') ? rawStatus : null;
+        return {
+          idPhoto: Number(x?.idPhoto ?? x?.id ?? x?.idGalleryPhoto),
+          status: normalized,
+        };
+      })
+      .filter((x: any) => Number.isFinite(x.idPhoto));
+
+    return { photos: list };
   }
 
   /**
@@ -462,7 +475,20 @@ export class GalleryService {
       throw new Error(`Failed to get video statuses: ${response.error}`);
     }
 
-    return response.data;
+    // Нормалізуємо уніфікований формат для фронтенда
+    const rawVideo = response.data as any;
+    const vlist: Array<{ idVideo: number; status: 'accessed' | 'sent' | null }> = (rawVideo?.videos || rawVideo?.items || rawVideo?.data?.videos || rawVideo?.data?.items || [])
+      .map((x: any) => {
+        const rawStatus = x?.status ?? null;
+        const normalized: 'accessed' | 'sent' | null = (rawStatus === 'accessed' || rawStatus === 'sent') ? rawStatus : null;
+        return {
+          idVideo: Number(x?.idVideo ?? x?.id ?? x?.idGalleryVideo),
+          status: normalized,
+        };
+      })
+      .filter((x: any) => Number.isFinite(x.idVideo));
+
+    return { videos: vlist };
   }
 
   /**
@@ -572,7 +598,7 @@ export class GalleryService {
       'Origin': 'https://talkytimes.com',
       'Referer': referer,
     };
-    if (operatorRef) headers['x-requested-with'] = operatorRef;
+    headers['x-requested-with'] = operatorRef || '2055';
 
     const response = await this.talkyTimesProvider.makeRequest({
       method: 'POST',
@@ -593,10 +619,14 @@ export class GalleryService {
     // Нормалізуємо уніфікований формат для фронтенда
     const raw = response.data as any;
     const list: Array<{ idAudio: number; status: 'accessed' | 'sent' | null }> = (raw?.audios || raw?.items || raw?.data?.audios || raw?.data?.items || [])
-      .map((x: any) => ({
-        idAudio: Number(x?.idAudio ?? x?.id ?? x?.idGalleryAudio),
-        status: (x?.status ?? null) as 'accessed' | 'sent' | null,
-      }))
+      .map((x: any) => {
+        const rawStatus = x?.status ?? null;
+        const normalized: 'accessed' | 'sent' | null = (rawStatus === 'accessed' || rawStatus === 'sent') ? rawStatus : null;
+        return {
+          idAudio: Number(x?.idAudio ?? x?.id ?? x?.idGalleryAudio),
+          status: normalized,
+        };
+      })
       .filter((x: any) => Number.isFinite(x.idAudio));
 
     return { audios: list };
