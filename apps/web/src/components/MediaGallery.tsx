@@ -67,6 +67,8 @@ export interface Audio {
   id: number;
   idUser: number;
   status: string;
+  // Обчислений статус зі сторони діалогу (з мапи статусів)
+  statusComputed?: 'accessed' | 'sent' | null;
   title: string;
   duration: number;
   dateCreated: string;
@@ -877,19 +879,25 @@ export function MediaGallery({
           ? (typedResponse.data.audios ?? typedResponse.data.data?.audios)
           : undefined;
         if (audiosList && Array.isArray(audiosList)) {
-          setAudioStatuses(prev => {
-            const newStatusMap = new Map(prev);
-            audiosList.forEach((audioStatus: AudioConnectionStatus | any) => {
-              const candidates = [
-                Number(audioStatus?.idAudio),
-                Number(audioStatus?.id),
-                Number(audioStatus?.idGalleryAudio)
-              ].filter((k) => Number.isFinite(k));
-              candidates.forEach((k) => newStatusMap.set(k, audioStatus.status as ('accessed' | 'sent' | null)));
-            });
-            
-            return newStatusMap;
+          // Оновлюємо мапу статусів
+          const newStatusMap = new Map(audioStatuses);
+          audiosList.forEach((audioStatus: AudioConnectionStatus | any) => {
+            const candidates = [
+              Number(audioStatus?.idAudio),
+              Number(audioStatus?.id),
+              Number(audioStatus?.idGalleryAudio)
+            ].filter((k) => Number.isFinite(k));
+            candidates.forEach((k) => newStatusMap.set(k, audioStatus.status as ('accessed' | 'sent' | null)));
           });
+          setAudioStatuses(newStatusMap);
+
+          // Одночасно прокидуємо обчислений статус у самі елементи audios для простішої фільтрації
+          setAudios(prev => prev.map(a => {
+            const keyCandidates = [Number(a.id), Number((a as any).idAudio), Number((a as any).idGalleryAudio)];
+            const matched = keyCandidates.find(k => Number.isFinite(k) && newStatusMap.has(Number(k)));
+            const computed = typeof matched !== 'undefined' ? newStatusMap.get(Number(matched)) ?? null : a.statusComputed ?? null;
+            return { ...a, statusComputed: computed };
+          }));
         } else {
           // У випадку помилки - видаляємо з списку запитаних, щоб спробувати знову
           setStatusRequestedAudios(prev => {
@@ -1327,8 +1335,19 @@ export function MediaGallery({
     // Фільтрація за статусом
     if (statusFilter !== 'all') {
       return audios.filter(audio => {
-        // Беремо статус із мапи за кількома можливими ключами (id, idAudio, idGalleryAudio),
-        // або fallback з самого аудіо (якщо бекенд ще не дав статуси)
+        // Беремо обчислений статус з елемента якщо є,
+        // або з мапи за кількома можливими ключами (id, idAudio, idGalleryAudio),
+        // або fallback з сирого поля audio.status (TT повертає 'accessed')
+        if (typeof audio.statusComputed !== 'undefined') {
+          switch (statusFilter) {
+            case 'available':
+              return audio.statusComputed === null || typeof audio.statusComputed === 'undefined';
+            case 'accessed':
+              return audio.statusComputed === 'accessed';
+            case 'sent':
+              return audio.statusComputed === 'sent' || audio.statusComputed === 'accessed';
+          }
+        }
         const key1 = audio.id as unknown as number;
         const key2 = (audio as any).idAudio as number | undefined;
         const key3 = (audio as any).idGalleryAudio as number | undefined;
