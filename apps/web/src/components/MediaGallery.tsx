@@ -2363,6 +2363,11 @@ export function MediaGallery({
                 </div>
               )}
 
+              {/* Debug counters (temporary) */}
+              {mediaType === 'audio' && (
+                <div className="px-2 py-1 text-xs text-red-600">Debug A:{audioCounts.available} / X:{audioCounts.accessed} / S:{audioCounts.sent} / All:{audioCounts.all}</div>
+              )}
+
               {/* Audios List */}
               <div 
                 ref={scrollContainerRef}
