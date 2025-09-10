@@ -399,7 +399,7 @@ export function MediaGallery({
         const status = photoStatuses.get(photo.idPhoto);
         switch (statusFilter) {
           case 'available':
-            return status === null; // Тільки фото без статусу (не переглянуті)
+            return status === null || typeof status === 'undefined';
           case 'accessed':
             return status === 'accessed'; // Тільки переглянуті
           case 'sent':
@@ -424,7 +424,7 @@ export function MediaGallery({
         const status = videoStatuses.get(video.idVideo);
         switch (statusFilter) {
           case 'available':
-            return status === null; // Тільки відео без статусу (не переглянуті)
+            return status === null || typeof status === 'undefined';
           case 'accessed':
             return status === 'accessed'; // Тільки переглянуті
           case 'sent':
