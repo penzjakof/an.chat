@@ -396,6 +396,16 @@ export class GalleryService {
     if (!this.talkyTimesProvider.makeRequest) {
       return { cursor: '', items: [] } as AudioGalleryResponse;
     }
+    // Формуємо необхідні заголовки (referer/origin/x-requested-with)
+    const referer = `https://talkytimes.com/chat/${profileId}_${idUser}`;
+    const operatorRef = await this.sessionService.getActiveOperatorRefForProfile(String(profileId));
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Origin': 'https://talkytimes.com',
+      'Referer': referer,
+    };
+    if (operatorRef) headers['x-requested-with'] = operatorRef;
 
     const response = await this.talkyTimesProvider.makeRequest({
       method: 'POST',
@@ -405,10 +415,7 @@ export class GalleryService {
         idsPhotos
       },
       profileId, // Використовуємо правильний profileId
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+      headers,
     });
 
     if (!response.success) {
@@ -428,6 +435,16 @@ export class GalleryService {
     if (!this.talkyTimesProvider.makeRequest) {
       throw new Error('makeRequest method is not available on TalkyTimes provider');
     }
+    // Заголовки як на сторінці чату з конкретним користувачем
+    const referer = `https://talkytimes.com/chat/${profileId}_${idUser}`;
+    const operatorRef = await this.sessionService.getActiveOperatorRefForProfile(String(profileId));
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Origin': 'https://talkytimes.com',
+      'Referer': referer,
+    };
+    if (operatorRef) headers['x-requested-with'] = operatorRef;
 
     const response = await this.talkyTimesProvider.makeRequest({
       method: 'POST',
@@ -437,10 +454,7 @@ export class GalleryService {
         idsVideos
       },
       profileId,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+      headers,
     });
 
     if (!response.success) {
@@ -549,6 +563,16 @@ export class GalleryService {
     if (!this.talkyTimesProvider.makeRequest) {
       throw new Error('makeRequest method is not available on TalkyTimes provider');
     }
+    // Заголовки як на сторінці чату з конкретним користувачем
+    const referer = `https://talkytimes.com/chat/${profileId}_${idUser}`;
+    const operatorRef = await this.sessionService.getActiveOperatorRefForProfile(String(profileId));
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Origin': 'https://talkytimes.com',
+      'Referer': referer,
+    };
+    if (operatorRef) headers['x-requested-with'] = operatorRef;
 
     const response = await this.talkyTimesProvider.makeRequest({
       method: 'POST',
@@ -558,10 +582,7 @@ export class GalleryService {
         idsAudios
       },
       profileId,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+      headers,
     });
 
     if (!response.success) {

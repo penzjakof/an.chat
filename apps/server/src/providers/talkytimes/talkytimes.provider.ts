@@ -91,14 +91,10 @@ export class TalkyTimesProvider implements SiteProvider {
 			const timeout = setTimeout(() => controller.abort(), timeoutMs);
 			
 			try {
-				// Використовуємо connection pool agent
-				const agent = this.connectionPool.getAgentForUrl(url);
-				
+				// Використовуємо стандартний dispatcher (без custom agent), щоб уникнути несумісності з undici
 				const res = await fetch(url, {
 					...fetchOptions,
-					signal: controller.signal,
-					// @ts-ignore - Node.js fetch підтримує agent
-					agent: agent
+					signal: controller.signal
 				});
 				
 				clearTimeout(timeout);
@@ -2289,15 +2285,17 @@ export class TalkyTimesProvider implements SiteProvider {
 				referer
 			});
 
-			const headers = {
+			const headers: Record<string, string> = {
 				'accept': '*/*',
 				'accept-language': 'en-US,en;q=0.9',
 				'content-type': 'application/grpc-web+proto',
 				'x-grpc-web': '1',
 				'x-user-agent': 'connect-es/2.0.2',
 				'cookie': session.cookies,
-				'referer': referer
+				'referer': referer,
+				'origin': 'https://talkytimes.com'
 			};
+			await this.applyOperatorRefHeader(headers, { profileId });
 
 			console.log('📤 Request body length:', body.length, 'bytes');
 			console.log('📋 Full headers:', headers);
