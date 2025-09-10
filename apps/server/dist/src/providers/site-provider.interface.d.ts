@@ -1,0 +1,118 @@
+export type ProviderRequestContext = {
+    agencyCode: string;
+    operatorCode?: string;
+};
+export interface DialogsFilters {
+    status?: string;
+    search?: string;
+    onlineOnly?: boolean;
+    cursor?: string;
+}
+export interface SiteProvider {
+    fetchDialogs(ctx: ProviderRequestContext, filters?: DialogsFilters): Promise<unknown>;
+    fetchDialogsByProfile?(profileId: string, criteria?: string[], cursor?: string, limit?: number): Promise<unknown>;
+    fetchProfiles?(profileId: string, userIds: number[]): Promise<{
+        success: boolean;
+        profiles?: any[];
+        error?: string;
+    }>;
+    fetchProfileData?(profileId: string): Promise<{
+        success: boolean;
+        profileData?: any;
+        error?: string;
+    }>;
+    fetchMessages(ctx: ProviderRequestContext, dialogId: string, cursor?: string): Promise<unknown>;
+    fetchMessagesByProfile?(profileId: string, dialogId: string, cursor?: string): Promise<{
+        success: boolean;
+        messages?: any[];
+        error?: string;
+    }>;
+    sendTextMessage(ctx: ProviderRequestContext, dialogId: string, text: string): Promise<unknown>;
+    sendPhoto?(ctx: ProviderRequestContext, params: {
+        idProfile: number;
+        idRegularUser: number;
+        idPhoto: number;
+    }): Promise<{
+        success: boolean;
+        data?: any;
+        error?: string;
+    }>;
+    sendSticker?(ctx: ProviderRequestContext, params: {
+        idProfile: number;
+        idRegularUser: number;
+        stickerId: number;
+        stickerUrl: string;
+    }): Promise<{
+        success: boolean;
+        data?: any;
+        error?: string;
+    }>;
+    sendStickerById?(profileId: string, interlocutorId: number, stickerId: number): Promise<{
+        success: boolean;
+        data?: any;
+        error?: string;
+    }>;
+    getStickers?(profileId: string, interlocutorId: number): Promise<{
+        success: boolean;
+        categories?: any[];
+        error?: string;
+    }>;
+    makeRequest?(options: {
+        method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+        url: string;
+        data?: any;
+        profileId: number;
+        headers?: Record<string, string>;
+    }): Promise<{
+        success: boolean;
+        data?: any;
+        error?: string;
+    }>;
+    searchDialogByPair?(profileId: string, clientId: number): Promise<{
+        success: boolean;
+        dialog?: any;
+        error?: string;
+    }>;
+    fetchRestrictions?(profileId: string, clientId: number): Promise<{
+        success: boolean;
+        lettersLeft?: number;
+        error?: string;
+    }>;
+    getTtRestrictions?(ctx: ProviderRequestContext, profileId: number, idInterlocutor: number): Promise<{
+        success: boolean;
+        hasExclusivePosts?: boolean;
+        categories?: string[];
+        categoryCounts?: Record<string, number>;
+        tier?: 'special' | 'specialplus';
+        error?: string;
+    }>;
+    getForbiddenCorrespondenceTags?(profileId: number, idInterlocutor: number): Promise<{
+        success: boolean;
+        tags?: string[];
+        error?: string;
+    }>;
+    sendLetter?(profileId: number, idUserTo: number, payload: {
+        content: string;
+        photoIds?: number[];
+        videoIds?: number[];
+    }): Promise<{
+        success: boolean;
+        data?: any;
+        error?: string;
+    }>;
+    sendExclusivePost?(profileId: number, idRegularUser: number, payload: {
+        idsGalleryPhotos: number[];
+        idsGalleryVideos: number[];
+        text: string;
+    }): Promise<{
+        success: boolean;
+        data?: any;
+        error?: string;
+    }>;
+    getPostDetails?(idPost: number, idProfile: number, idInterlocutor: number, ctx: ProviderRequestContext): Promise<any>;
+    getUnansweredMails?(profileId: string, offset?: number, limit?: number): Promise<{
+        success: boolean;
+        data?: any;
+        error?: string;
+    }>;
+}

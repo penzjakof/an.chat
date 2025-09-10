@@ -1,0 +1,43 @@
+{
+  "app": {
+    "[project]/apps/web/src/app/_not-found/page": [
+      "static/media/caa3a2e1cccd8315-s.p.6435ea53.woff2",
+      "static/media/797e433ab948586e-s.p.dbea232f.woff2"
+    ],
+    "[project]/apps/web/src/app/chats/[dialogId]/page": [
+      "static/media/caa3a2e1cccd8315-s.p.6435ea53.woff2",
+      "static/media/797e433ab948586e-s.p.dbea232f.woff2"
+    ],
+    "[project]/apps/web/src/app/chats/page": [
+      "static/media/caa3a2e1cccd8315-s.p.6435ea53.woff2",
+      "static/media/797e433ab948586e-s.p.dbea232f.woff2"
+    ],
+    "[project]/apps/web/src/app/dashboard/page": [
+      "static/media/caa3a2e1cccd8315-s.p.6435ea53.woff2",
+      "static/media/797e433ab948586e-s.p.dbea232f.woff2"
+    ],
+    "[project]/apps/web/src/app/login/page": [
+      "static/media/caa3a2e1cccd8315-s.p.6435ea53.woff2",
+      "static/media/797e433ab948586e-s.p.dbea232f.woff2"
+    ],
+    "[project]/apps/web/src/app/operators/page": [
+      "static/media/caa3a2e1cccd8315-s.p.6435ea53.woff2",
+      "static/media/797e433ab948586e-s.p.dbea232f.woff2"
+    ],
+    "[project]/apps/web/src/app/owner/page": [
+      "static/media/caa3a2e1cccd8315-s.p.6435ea53.woff2",
+      "static/media/797e433ab948586e-s.p.dbea232f.woff2"
+    ],
+    "[project]/apps/web/src/app/page": [
+      "static/media/caa3a2e1cccd8315-s.p.6435ea53.woff2",
+      "static/media/797e433ab948586e-s.p.dbea232f.woff2"
+    ],
+    "[project]/apps/web/src/app/profiles/page": [
+      "static/media/caa3a2e1cccd8315-s.p.6435ea53.woff2",
+      "static/media/797e433ab948586e-s.p.dbea232f.woff2"
+    ]
+  },
+  "appUsingSizeAdjust": true,
+  "pages": {},
+  "pagesUsingSizeAdjust": false
+}

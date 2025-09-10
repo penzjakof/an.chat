@@ -1,0 +1,12 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/chats/[dialogId]/page": "/chats/[dialogId]",
+  "/chats/page": "/chats",
+  "/dashboard/page": "/dashboard",
+  "/favicon.ico/route": "/favicon.ico",
+  "/login/page": "/login",
+  "/operators/page": "/operators",
+  "/owner/page": "/owner",
+  "/page": "/",
+  "/profiles/page": "/profiles"
+}
