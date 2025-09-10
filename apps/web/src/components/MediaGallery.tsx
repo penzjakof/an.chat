@@ -1402,25 +1402,6 @@ export function MediaGallery({
     return filterAudiosByStatus(audios, statusFilter);
   }, [audios, statusFilter, filterAudiosByStatus]);
 
-  // Лічильники для аудіо-фільтрів (допоміжно для дебагу)
-  const audioCounts = useMemo(() => {
-    const counts = { all: audios.length, available: 0, accessed: 0, sent: 0 };
-    audios.forEach((audio) => {
-      const key1 = Number(audio.id);
-      const key2 = Number((audio as any).idAudio);
-      const key3 = Number((audio as any).idGalleryAudio);
-      const mapped =
-        (Number.isFinite(key1) ? audioStatuses.get(key1) : undefined) ??
-        (Number.isFinite(key2) ? audioStatuses.get(key2) : undefined) ??
-        (Number.isFinite(key3) ? audioStatuses.get(key3) : undefined);
-      const fallback = (audio.status === 'accessed' || audio.status === 'sent') ? (audio.status as 'accessed' | 'sent') : null;
-      const status = (typeof mapped === 'undefined') ? fallback : mapped;
-      if (status === 'accessed') counts.accessed += 1;
-      else if (status === 'sent') counts.sent += 1;
-      else counts.available += 1; // null/undefined
-    });
-    return counts;
-  }, [audios, audioStatuses]);
 
   // Видаляємо checkAndLoadMorePhotos щоб уникнути циклічних залежностей
 
