@@ -69,7 +69,10 @@ export class TalkyTimesRTMService implements OnModuleInit, OnModuleDestroy {
 
 	async onModuleInit() {
 		this.logger.log('🚀 RTM Service initializing...');
-		await this.connect();
+		// Не блокуємо старт HTTP-сервера: підключення RTM запускаємо асинхронно
+		this.connect().catch((error) => {
+			this.logger.error('❌ RTM async init failed:', error);
+		});
 	}
 
 	onModuleDestroy() {

@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import * as dotenv from 'dotenv';
+dotenv.config();
 import { TalkyTimesProvider } from './talkytimes/talkytimes.provider';
 import { TalkyTimesSessionService } from './talkytimes/session.service';
 import { TalkyTimesRTMService } from './talkytimes/rtm.service';
