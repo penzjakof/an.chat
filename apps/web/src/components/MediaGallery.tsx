@@ -879,8 +879,13 @@ export function MediaGallery({
         if (audiosList && Array.isArray(audiosList)) {
           setAudioStatuses(prev => {
             const newStatusMap = new Map(prev);
-            audiosList.forEach((audioStatus: AudioConnectionStatus) => {
-              newStatusMap.set(audioStatus.idAudio, audioStatus.status);
+            audiosList.forEach((audioStatus: AudioConnectionStatus | any) => {
+              const candidates = [
+                Number(audioStatus?.idAudio),
+                Number(audioStatus?.id),
+                Number(audioStatus?.idGalleryAudio)
+              ].filter((k) => Number.isFinite(k));
+              candidates.forEach((k) => newStatusMap.set(k, audioStatus.status as ('accessed' | 'sent' | null)));
             });
             
             return newStatusMap;
