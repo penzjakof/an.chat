@@ -1383,6 +1383,26 @@ export function MediaGallery({
     return filterAudiosByStatus(audios, statusFilter);
   }, [audios, statusFilter, filterAudiosByStatus]);
 
+  // Лічильники для аудіо-фільтрів (допоміжно для дебагу)
+  const audioCounts = useMemo(() => {
+    const counts = { all: audios.length, available: 0, accessed: 0, sent: 0 };
+    audios.forEach((audio) => {
+      const key1 = Number(audio.id);
+      const key2 = Number((audio as any).idAudio);
+      const key3 = Number((audio as any).idGalleryAudio);
+      const mapped =
+        (Number.isFinite(key1) ? audioStatuses.get(key1) : undefined) ??
+        (Number.isFinite(key2) ? audioStatuses.get(key2) : undefined) ??
+        (Number.isFinite(key3) ? audioStatuses.get(key3) : undefined);
+      const fallback = (audio.status === 'accessed' || audio.status === 'sent') ? (audio.status as 'accessed' | 'sent') : null;
+      const status = (typeof mapped === 'undefined') ? fallback : mapped;
+      if (status === 'accessed') counts.accessed += 1;
+      else if (status === 'sent') counts.sent += 1;
+      else counts.available += 1; // null/undefined
+    });
+    return counts;
+  }, [audios, audioStatuses]);
+
   // Видаляємо checkAndLoadMorePhotos щоб уникнути циклічних залежностей
 
   // Завантажуємо медіа при відкритті галереї або зміні типу
@@ -1737,7 +1757,7 @@ export function MediaGallery({
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
               </svg>
-              <span>Усі</span>
+              <span>Усі ({audioCounts.all})</span>
             </button>
             <button
               onClick={() => setStatusFilter('available')}
@@ -1750,7 +1770,7 @@ export function MediaGallery({
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>Доступні</span>
+              <span>Доступні ({audioCounts.available})</span>
             </button>
             <button
               onClick={() => setStatusFilter('accessed')}
@@ -1764,7 +1784,7 @@ export function MediaGallery({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
-              <span>Переглянуті</span>
+              <span>Переглянуті ({audioCounts.accessed})</span>
             </button>
             <button
               onClick={() => setStatusFilter('sent')}
@@ -1777,7 +1797,7 @@ export function MediaGallery({
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
-              <span>Надіслані</span>
+              <span>Надіслані ({audioCounts.sent})</span>
             </button>
           </div>
           <button
