@@ -1312,7 +1312,8 @@ export function MediaGallery({
         const status = audioStatuses.get(audio.id);
         switch (statusFilter) {
           case 'available':
-            return status === null; // Тільки аудіо без статусу (не переглянуті)
+            // Доступні: статус відсутній або null
+            return status === null || typeof status === 'undefined';
           case 'accessed':
             return status === 'accessed'; // Тільки переглянуті
           case 'sent':
