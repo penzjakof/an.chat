@@ -1306,6 +1306,10 @@ export function MediaGallery({
     audios: Audio[], 
     statusFilter: 'all' | 'available' | 'accessed' | 'sent'
   ): Audio[] => {
+    // Швидкий фолбек: якщо статуси ще не підвантажені — показуємо всі як доступні
+    if (statusFilter === 'available' && audioStatuses.size === 0) {
+      return audios;
+    }
     // Фільтрація за статусом
     if (statusFilter !== 'all') {
       return audios.filter(audio => {
