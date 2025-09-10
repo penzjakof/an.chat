@@ -1763,67 +1763,7 @@ export function MediaGallery({
             )}
           </div>
 
-          {/* Status filters for all media types */}
-          <div className="flex items-center space-x-2">
-            <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setStatusFilter('all')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
-                  statusFilter === 'all'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                </svg>
-                <span>Усі ({audioCounts.all})</span>
-              </button>
-              <button
-                onClick={() => setStatusFilter('available')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
-                  statusFilter === 'available'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Доступні ({audioCounts.available})</span>
-              </button>
-              <button
-                onClick={() => setStatusFilter('accessed')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
-                  statusFilter === 'accessed'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                <span>Переглянуті ({audioCounts.accessed})</span>
-              </button>
-              <button
-                onClick={() => setStatusFilter('sent')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
-                  statusFilter === 'sent'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-                <span>Надіслані ({audioCounts.sent})</span>
-              </button>
-            </div>
-            {mediaType === 'audio' && (
-              <div className="text-xs text-gray-500 whitespace-nowrap">A:{audioCounts.available} / X:{audioCounts.accessed} / S:{audioCounts.sent} / All:{audioCounts.all}</div>
-            )}
-          </div>
+          {/* Status filters removed (was for debugging) */}
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 p-2"
@@ -2361,11 +2301,6 @@ export function MediaGallery({
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                   <p className="text-red-600">{error}</p>
                 </div>
-              )}
-
-              {/* Debug counters (temporary) */}
-              {mediaType === 'audio' && (
-                <div className="px-2 py-1 text-xs text-red-600">Debug A:{audioCounts.available} / X:{audioCounts.accessed} / S:{audioCounts.sent} / All:{audioCounts.all}</div>
               )}
 
               {/* Audios List */}
