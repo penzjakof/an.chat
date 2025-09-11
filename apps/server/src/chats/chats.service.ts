@@ -29,13 +29,11 @@ export class ChatsService {
 		
 		if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL) {
 			console.log(`📋 Using cached accessible profiles for ${cacheKey}`);
-			console.log('🔍 Cached accessible profiles:', cached.profiles.map(p => ({ id: p.profileId, name: p.displayName })));
 			return cached.profiles;
 		}
 
 		console.log(`📋 Fetching fresh accessible profiles for ${cacheKey}`);
 		const profiles = await this.chatAccess.getAccessibleProfiles(auth);
-		console.log('🔍 Fresh accessible profiles:', profiles.map(p => ({ id: p.profileId, name: p.displayName })));
 		this.profilesCache.set(cacheKey, { profiles, timestamp: Date.now() });
 
 		return profiles;
