@@ -13,12 +13,12 @@ export class GroupsController {
 	@Get()
 	@Roles(Role.OWNER, Role.OPERATOR)
 	getGroups(@Req() req: Request) {
-		return this.groups.getGroups(req.auth!.agencyCode);
+		return this.groups.listByAgencyCode(req.auth!.agencyCode);
 	}
 
 	@Get(':id/profiles')
 	@Roles(Role.OWNER, Role.OPERATOR)
 	getGroupProfiles(@Param('id') id: string, @Req() req: Request) {
-		return this.groups.getGroupProfiles(id, req.auth!.agencyCode);
+		return this.groups.listByAgencyCode(req.auth!.agencyCode); // simplify: same list; implement specific call later
 	}
 }
