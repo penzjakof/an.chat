@@ -194,7 +194,7 @@ export class ProfilesService {
 		return res;
 	}
 
-	async authenticateProfile(profileId: string, password: string, agencyCode: string) {
+	async authenticateProfile(profileId: string, password: string, agencyCode: string, loginOverride?: string) {
 		console.log(`🔐 Authenticating profile ${profileId} with agencyCode ${agencyCode}`);
 		
 		// Знаходимо профіль
@@ -214,20 +214,21 @@ export class ProfilesService {
 		
 		console.log(`✅ Profile found: ${profile.displayName}, credentialLogin: ${profile.credentialLogin}`);
 
-		// Перевіряємо, що є облікові дані
-		if (!profile.credentialPassword || !profile.credentialLogin) {
-			throw new BadRequestException('Profile credentials not found');
+		// Обираємо логін: override з тіла запиту, або збережений у профілі
+		const effectiveLogin = (loginOverride && loginOverride.trim().length > 0) ? loginOverride.trim() : (profile.credentialLogin || '');
+		if (!effectiveLogin) {
+			throw new BadRequestException('Profile login is required');
 		}
 
 		// Розшифровуємо збережений пароль (для діагностики). Не блокуємо автентифікацію при невідповідності —
 		// використовуємо введений пароль і за успіху оновлюємо збережений.
-		const decryptedPassword = this.encryption.decrypt(profile.credentialPassword);
+		const decryptedPassword = this.encryption.decrypt(profile.credentialPassword ?? undefined);
 		const passwordsMatch = decryptedPassword === password;
 		console.log(`🔓 Stored TT password matches provided? ${passwordsMatch}`);
 
 		// Автентифікуємо профіль через провайдер
-		console.log(`🚀 Calling TalkyTimes validateCredentials for ${profile.credentialLogin}`);
-		const result = await this.talkyTimesProvider.validateCredentials(profile.credentialLogin, password);
+		console.log(`🚀 Calling TalkyTimes validateCredentials for ${effectiveLogin}`);
+		const result = await this.talkyTimesProvider.validateCredentials(effectiveLogin, password);
 		
 		console.log(`📥 TalkyTimes auth result:`, { success: result.success, error: result.error, profileId: result.profileId });
 		
@@ -244,6 +245,10 @@ export class ProfilesService {
 		}
 		if (!passwordsMatch) {
 			updateData.credentialPassword = this.encryption.encrypt(password);
+		}
+		// Якщо був поданий новий логін - зберігаємо його
+		if (loginOverride && loginOverride.trim().length > 0 && loginOverride.trim() !== profile.credentialLogin) {
+			updateData.credentialLogin = loginOverride.trim();
 		}
 		if (Object.keys(updateData).length > 0) {
 			await this.prisma.profile.update({ where: { id: profileId }, data: updateData });

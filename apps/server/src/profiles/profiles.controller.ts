@@ -54,8 +54,8 @@ export class ProfilesController {
 
 	@Roles(Role.OWNER, Role.OPERATOR)
 	@Post(':id/authenticate')
-	authenticateProfile(@Param('id') id: string, @Body() body: { password: string }, @Req() req: Request) {
-		return this.profiles.authenticateProfile(id, body.password, req.auth!.agencyCode);
+	authenticateProfile(@Param('id') id: string, @Body() body: { login?: string; password: string }, @Req() req: Request) {
+		return this.profiles.authenticateProfile(id, body.password, req.auth!.agencyCode, body.login);
 	}
 
 	@Roles(Role.OWNER, Role.OPERATOR)
