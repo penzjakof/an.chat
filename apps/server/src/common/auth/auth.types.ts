@@ -1,4 +1,7 @@
-import { Role } from '@prisma/client';
+export enum Role {
+	OWNER = 'OWNER',
+	OPERATOR = 'OPERATOR',
+}
 
 export type RequestAuthContext = {
 	agencyCode: string;

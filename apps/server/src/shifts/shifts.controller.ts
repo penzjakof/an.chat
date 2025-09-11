@@ -1,80 +1,24 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
-import { JwtAuthGuard } from '../auth/jwt.guard';
-import { Roles, RolesGuard } from '../common/auth/roles.guard';
-import { Role } from '@prisma/client';
 import { ShiftsService } from './shifts.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { JwtAuthGuard } from '../auth/jwt.guard';
+import { Roles } from '../common/auth/roles.guard';
+import { Role } from '../common/auth/auth.types';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('shifts')
+@UseGuards(JwtAuthGuard)
 export class ShiftsController {
-  constructor(private readonly shifts: ShiftsService, private readonly prisma: PrismaService) {}
+	constructor(private readonly shifts: ShiftsService) {}
 
-  @Roles(Role.OPERATOR)
-  @Get('groups-status')
-  async groupsStatus(@Req() req: Request) {
-    return this.shifts.getGroupsStatusByOperator(req.auth!.userId);
-  }
+	@Get('active')
+	@Roles(Role.OWNER, Role.OPERATOR)
+	getActive(@Req() req: Request) {
+		return this.shifts.listActiveShiftsByAgency(req.auth!.agencyCode);
+	}
 
-  @Roles(Role.OPERATOR)
-  @Get('can-start')
-  async canStart(@Req() req: Request) {
-    return this.shifts.canStartShiftForOperator(req.auth!.userId);
-  }
-
-  @Roles(Role.OPERATOR, Role.OWNER)
-  @Get('is-active')
-  async isActive(@Req() req: Request) {
-    // Для власника завжди повертаємо false, оскільки власник не має активних змін
-    if (req.auth!.role === 'OWNER') {
-      return { active: false };
-    }
-    return this.shifts.hasActiveShift(req.auth!.userId);
-  }
-
-  @Roles(Role.OPERATOR)
-  @Post('start')
-  async start(@Req() req: Request) {
-    const user = await this.prisma.user.findUnique({ where: { id: req.auth!.userId } });
-    return this.shifts.startShift(req.auth!.userId, user!.agencyId);
-  }
-
-  @Roles(Role.OPERATOR)
-  @Post('end')
-  async end(@Req() req: Request) {
-    return this.shifts.endShift(req.auth!.userId);
-  }
-
-  @Roles(Role.OWNER)
-  @Get('logs')
-  async logs(@Req() req: Request) {
-    const agency = await this.prisma.agency.findUnique({ where: { code: req.auth!.agencyCode } });
-    const logs = await this.prisma.shiftLog.findMany({
-      where: { agencyId: agency!.id },
-      orderBy: { createdAt: 'desc' },
-      take: 200,
-      include: { shift: { include: { operator: true } } },
-    });
-    return logs.map((l) => ({
-      id: l.id,
-      action: l.action,
-      createdAt: l.createdAt,
-      operatorName: l.shift.operator.name,
-      operatorId: l.operatorId,
-      message: l.message,
-    }));
-  }
-
-  @Roles(Role.OWNER)
-  @Get('active')
-  async activeShifts(@Req() req: Request) {
-    return this.shifts.listActiveShiftsByAgency(req.auth!.agencyCode);
-  }
-
-  @Roles(Role.OWNER)
-  @Post('force-end')
-  async forceEnd(@Req() req: Request, @Body() body: { operatorId: string }) {
-    return this.shifts.forceEndShiftForOperator(body.operatorId, req.auth!.agencyCode);
-  }
+	@Get(':operatorId/force-end')
+	@Roles(Role.OWNER)
+	forceEnd(@Param('operatorId') operatorId: string, @Req() req: Request) {
+		return this.shifts.forceEndShiftForOperator(operatorId, req.auth!.agencyCode);
+	}
 }

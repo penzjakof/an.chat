@@ -1,6 +1,7 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Header } from '@nestjs/common';
 import { AppService } from './app.service';
 import { Public } from './common/auth/public.decorator';
+import { readGitCommitShort } from './common/version/version.util';
 
 @Controller()
 export class AppController {
@@ -12,5 +13,12 @@ export class AppController {
     return this.appService.getHello();
   }
 
+  @Public()
+  @Get('version')
+  @Header('Cache-Control', 'no-store')
+  version() {
+    const commit = readGitCommitShort();
+    return { commit };
+  }
 
 }

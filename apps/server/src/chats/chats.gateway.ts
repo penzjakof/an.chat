@@ -5,7 +5,6 @@ import { JwtService } from '@nestjs/jwt';
 import { OnEvent } from '@nestjs/event-emitter';
 import { TalkyTimesRTMService } from '../providers/talkytimes/rtm.service';
 import { ChatAccessService } from './chat-access.service';
-import { Role } from '@prisma/client';
 
 @WebSocketGateway({
   cors: {
@@ -52,7 +51,7 @@ export class ChatsGateway implements OnModuleInit {
 		try {
 			const token = (client.handshake.auth as any)?.token as string | undefined;
 			if (!token) return;
-			const payload = await this.jwt.verifyAsync<{ sub: string; role: Role; agencyCode: string; operatorCode?: string }>(token);
+			const payload = await this.jwt.verifyAsync<{ sub: string; role: any; agencyCode: string; operatorCode?: string }>(token);
 			const authCtx = { agencyCode: payload.agencyCode, role: payload.role, userId: payload.sub, operatorCode: payload.operatorCode } as any;
 			const accessible = await this.chatAccess.getAccessibleProfiles(authCtx);
 			for (const p of accessible) {
@@ -247,7 +246,7 @@ export class ChatsGateway implements OnModuleInit {
 			}
 
 			const payload = await this.jwt.verifyAsync(token);
-			const userId = payload.sub;
+			const userId = (payload as any).sub;
 
 			// Зберігаємо зв'язок користувача з сокетом
 			if (!this.userSockets.has(userId)) {

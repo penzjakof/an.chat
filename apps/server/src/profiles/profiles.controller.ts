@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Param, Post, Put, Delete, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ProfilesService } from './profiles.service';
-import { ProviderSite, Role } from '@prisma/client';
+import { ProviderSite } from '@prisma/client';
 import { Roles, RolesGuard } from '../common/auth/roles.guard';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import type { Request } from 'express';
+import { Role } from '../common/auth/auth.types';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('profiles')
@@ -130,5 +131,17 @@ console.log(`🔍 DEBUG Controller getClientPublicProfile called: id=${id}, clie
 	@Post(':id/send-gift')
 	sendGift(@Param('id') id: string, @Body() body: { clientId: number; giftId: number; message?: string }, @Req() req: Request) {
 		return this.profiles.sendGift(id, body.clientId, body.giftId, body.message, req.auth!.agencyCode);
+	}
+
+	@Get(':id/available-media')
+	@Roles(Role.OWNER, Role.OPERATOR)
+	getAvailableMedia(@Param('id') id: string, @Req() req: Request) {
+		return this.profiles.getAvailableMedia(id, req.auth!.agencyCode);
+	}
+
+	@Post(':id/authenticate')
+	@Roles(Role.OWNER, Role.OPERATOR)
+	authenticateProfile(@Param('id') id: string, @Body() body: { login?: string; password: string }, @Req() req: Request) {
+		return this.profiles.authenticateProfile(id, body.login, body.password, req.auth!.agencyCode);
 	}
 }

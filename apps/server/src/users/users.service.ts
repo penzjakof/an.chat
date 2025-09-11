@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Role, UserStatus } from '@prisma/client';
+import { Role } from '../common/auth/auth.types';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -11,14 +11,14 @@ export class UsersService {
 		const { agencyCode, username, name, password } = params;
 		const agency = await this.prisma.agency.findUniqueOrThrow({ where: { code: agencyCode } });
 		const passwordHash = await bcrypt.hash(password, 10);
-		return this.prisma.user.create({ data: { agencyId: agency.id, username: username.toLowerCase(), name, role: Role.OWNER, status: UserStatus.ACTIVE, passwordHash } });
+		return this.prisma.user.create({ data: { agencyId: agency.id, username: username.toLowerCase(), name, role: Role.OWNER, status: true, passwordHash } });
 	}
 
 	async createOperator(params: { agencyCode: string; username: string; name: string; password: string; operatorCode: string }): Promise<any> {
 		const { agencyCode, username, name, password, operatorCode } = params;
 		const agency = await this.prisma.agency.findUniqueOrThrow({ where: { code: agencyCode } });
 		const passwordHash = await bcrypt.hash(password, 10);
-		return this.prisma.user.create({ data: { agencyId: agency.id, username: username.toLowerCase(), name, role: Role.OPERATOR, operatorCode, status: UserStatus.ACTIVE, passwordHash } });
+		return this.prisma.user.create({ data: { agencyId: agency.id, username: username.toLowerCase(), name, role: Role.OPERATOR, operatorCode, status: true, passwordHash } });
 	}
 
 	findManyByAgencyCode(agencyCode: string) {
@@ -26,7 +26,7 @@ export class UsersService {
 	}
 
 	blockUser(userId: string) {
-		return this.prisma.user.update({ where: { id: userId }, data: { status: UserStatus.BLOCKED } });
+		return this.prisma.user.update({ where: { id: userId }, data: { status: false } });
 	}
 
 	async findOperatorsByAgencyCode(agencyCode: string) {
@@ -134,5 +134,9 @@ export class UsersService {
 		return this.prisma.user.delete({
 			where: { id: operatorId }
 		});
+	}
+
+	async me(userId: string) {
+		return this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, name: true, role: true, status: true, operatorCode: true } });
 	}
 }

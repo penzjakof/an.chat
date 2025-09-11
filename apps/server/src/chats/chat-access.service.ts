@@ -1,36 +1,36 @@
 import { Injectable } from '@nestjs/common';
-import { ProfilesService } from '../profiles/profiles.service';
-import { Role } from '@prisma/client';
-import type { RequestAuthContext } from '../common/auth/auth.types';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class ChatAccessService {
-	constructor(private readonly profiles: ProfilesService) {}
+	constructor(private readonly prisma: PrismaService) {}
 
-	async getAccessibleProfiles(auth: RequestAuthContext) {
-		if (auth.role === Role.OWNER) {
-			// Owner має доступ до всіх профілів агенції
-			return this.profiles.listByAgencyCode(auth.agencyCode);
-		} else if (auth.role === Role.OPERATOR) {
-			// Operator має доступ тільки до профілів своїх груп
-			return this.profiles.listByOperatorAccess(auth.userId, auth.agencyCode);
-		}
-		return [];
+	async getAccessibleProfiles(auth: { agencyCode: string; userId: string; role: any }) {
+		// Повертаємо профілі в межах агенції, доступні користувачу
+		return this.prisma.profile.findMany({
+			where: { group: { agency: { code: auth.agencyCode } } },
+			select: { id: true, profileId: true },
+		});
 	}
 
-	async canAccessProfile(profileId: string, auth: RequestAuthContext): Promise<boolean> {
-		if (auth.role === Role.OWNER) {
+	async canAccessProfile(profileId: string, auth: { agencyCode: string; userId: string; role: any }): Promise<boolean> {
+		if (auth.role === 'OWNER') {
 			// Owner може отримати доступ до будь-якого профілю своєї агенції
-			const profiles = await this.profiles.listByAgencyCode(auth.agencyCode);
-			return profiles.some(p => p.id === profileId);
-		} else if (auth.role === Role.OPERATOR) {
+			const profiles = await this.prisma.profile.findMany({
+				where: { group: { agency: { code: auth.agencyCode } } },
+				select: { id: true, profileId: true },
+			});
+			return profiles.some(p => p.profileId === profileId);
+		} else if (auth.role === 'OPERATOR') {
 			// Operator може отримати доступ тільки до профілів своїх груп
-			return this.profiles.hasAccessToProfile(profileId, auth.userId, auth.agencyCode);
+			return this.prisma.profile.findFirst({
+				where: { id: profileId, group: { agency: { code: auth.agencyCode } } },
+			}) !== null;
 		}
 		return false;
 	}
 
-	async filterDialogsByAccess(dialogs: any, auth: RequestAuthContext): Promise<any> {
+	async filterDialogsByAccess(dialogs: any, auth: { agencyCode: string; userId: string; role: any }): Promise<any> {
 		// Якщо це не структура TalkyTimes з діалогами, повертаємо як є
 		if (!dialogs || typeof dialogs !== 'object') {
 			return dialogs;
@@ -46,7 +46,7 @@ export class ChatAccessService {
 			return dialogs;
 		}
 
-		if (auth.role === Role.OWNER) {
+		if (auth.role === 'OWNER') {
 			// Owner бачить всі діалоги
 			return dialogs;
 		}

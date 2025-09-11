@@ -7,6 +7,7 @@ import { ChatsService } from './chats.service';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { SendPhotoDto } from './dto/send-photo.dto';
 import { ActiveShiftGuard } from '../common/auth/auth.guard';
+import { Role as AuthRole } from '../common/auth/auth.types';
 
 @UseGuards(JwtAuthGuard, RolesGuard, ActiveShiftGuard)
 @Throttle({ default: { limit: 60, ttl: 60000 } }) // 60 запитів до чатів за хвилину

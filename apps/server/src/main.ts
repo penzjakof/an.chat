@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
+import { readGitCommitShort } from './common/version/version.util';
 
 // Перевіряємо чи завантажилися змінні
 console.log('🔧 Config initialized');
@@ -22,6 +23,13 @@ async function bootstrap() {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  });
+
+  // Віддаємо X-Commit заголовок для всіх відповідей
+  const commit = readGitCommitShort();
+  app.use((req, res, next) => {
+    if (commit) res.setHeader('X-Commit', commit);
+    next();
   });
 
   await app.listen(port);

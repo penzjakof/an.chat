@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException, Logge
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
-import { Role } from '@prisma/client';
+import { Role } from '../common/auth/auth.types';
 import { IS_PUBLIC_KEY } from '../common/auth/public.decorator';
 
 @Injectable()
@@ -27,9 +27,9 @@ export class JwtAuthGuard implements CanActivate {
 		
 		try {
 			const payload = await this.jwt.verifyAsync<{ sub: string; role: Role; agencyCode: string; operatorCode?: string }>(token);
-			req.auth = { agencyCode: payload.agencyCode, role: payload.role, userId: payload.sub, operatorCode: payload.operatorCode };
+			req.auth = { agencyCode: payload.agencyCode, role: payload.role, userId: payload.sub, operatorCode: payload.operatorCode } as any;
 			return true;
-		} catch (error) {
+		} catch (error: any) {
 			this.logger.warn(`🚨 JWT Guard: Token verification failed for ${req.method} ${req.url}: ${error.message}`);
 			throw new UnauthorizedException();
 		}

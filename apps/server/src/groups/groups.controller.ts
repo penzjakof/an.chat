@@ -1,30 +1,24 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
 import { GroupsService } from './groups.service';
-import { Roles, RolesGuard } from '../common/auth/roles.guard';
 import type { Request } from 'express';
-import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt.guard';
+import { Roles } from '../common/auth/roles.guard';
+import { Role } from '../common/auth/auth.types';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('groups')
+@UseGuards(JwtAuthGuard)
 export class GroupsController {
 	constructor(private readonly groups: GroupsService) {}
 
-	@Roles(Role.OWNER)
 	@Get()
-	list(@Req() req: Request) {
-		return this.groups.listByAgencyCode(req.auth!.agencyCode);
+	@Roles(Role.OWNER, Role.OPERATOR)
+	getGroups(@Req() req: Request) {
+		return this.groups.getGroups(req.auth!.agencyCode);
 	}
 
-	@Roles(Role.OWNER)
-	@Post()
-	create(@Req() req: Request, @Body() body: { name: string }) {
-		return this.groups.create(req.auth!.agencyCode, body.name);
-	}
-
-	@Roles(Role.OWNER)
-	@Post(':groupId/assign/:operatorId')
-	assign(@Param('groupId') groupId: string, @Param('operatorId') operatorId: string) {
-		return this.groups.assignOperator(groupId, operatorId);
+	@Get(':id/profiles')
+	@Roles(Role.OWNER, Role.OPERATOR)
+	getGroupProfiles(@Param('id') id: string, @Req() req: Request) {
+		return this.groups.getGroupProfiles(id, req.auth!.agencyCode);
 	}
 }
