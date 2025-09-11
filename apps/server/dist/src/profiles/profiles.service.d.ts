@@ -19,93 +19,93 @@ export declare class ProfilesService {
         group: {
             id: string;
             name: string;
+            agencyId: string;
             createdAt: Date;
             updatedAt: Date;
-            agencyId: string;
             activeShiftId: string | null;
         };
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
-    listByGroup(groupId: string): import("@prisma/client").Prisma.PrismaPromise<({
+    listByGroup(groupId: string): import(".prisma/client").Prisma.PrismaPromise<({
         group: {
             id: string;
             name: string;
+            agencyId: string;
             createdAt: Date;
             updatedAt: Date;
-            agencyId: string;
             activeShiftId: string | null;
         };
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     })[]>;
-    listByAgencyCode(agencyCode: string): import("@prisma/client").Prisma.PrismaPromise<({
+    listByAgencyCode(agencyCode: string): import(".prisma/client").Prisma.PrismaPromise<({
         group: {
             id: string;
             name: string;
+            agencyId: string;
             createdAt: Date;
             updatedAt: Date;
-            agencyId: string;
             activeShiftId: string | null;
         };
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     })[]>;
     listByOperatorAccess(operatorId: string, agencyCode: string): Promise<({
         group: {
             id: string;
             name: string;
+            agencyId: string;
             createdAt: Date;
             updatedAt: Date;
-            agencyId: string;
             activeShiftId: string | null;
         };
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     })[]>;
     hasAccessToProfile(profileId: string, operatorId: string, agencyCode: string): Promise<boolean>;
     update(profileId: string, updates: {
@@ -117,40 +117,40 @@ export declare class ProfilesService {
         group: {
             id: string;
             name: string;
+            agencyId: string;
             createdAt: Date;
             updatedAt: Date;
-            agencyId: string;
             activeShiftId: string | null;
         };
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     delete(profileId: string, agencyCode: string): Promise<{
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
-    authenticateProfile(profileId: string, password: string, agencyCode: string): Promise<{
+    authenticateProfile(profileId: string, password: string, agencyCode: string, loginOverride?: string): Promise<{
         success: boolean;
         profileId: string | null;
         message: string;

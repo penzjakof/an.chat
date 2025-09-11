@@ -24,21 +24,21 @@ export declare class ShiftsController {
     }>;
     start(req: Request): Promise<{
         id: string;
-        agencyId: string;
         operatorId: string;
+        agencyId: string;
         startedAt: Date;
         endedAt: Date | null;
     }>;
     end(req: Request): Promise<{
         id: string;
-        agencyId: string;
         operatorId: string;
+        agencyId: string;
         startedAt: Date;
         endedAt: Date | null;
     }>;
     logs(req: Request): Promise<{
         id: string;
-        action: import("@prisma/client").$Enums.ShiftAction;
+        action: import(".prisma/client").$Enums.ShiftAction;
         createdAt: Date;
         operatorName: string;
         operatorId: string;
@@ -55,8 +55,8 @@ export declare class ShiftsController {
         operatorId: string;
     }): Promise<{
         id: string;
-        agencyId: string;
         operatorId: string;
+        agencyId: string;
         startedAt: Date;
         endedAt: Date | null;
     }>;

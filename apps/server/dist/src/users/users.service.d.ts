@@ -15,38 +15,38 @@ export declare class UsersService {
         password: string;
         operatorCode: string;
     }): Promise<any>;
-    findManyByAgencyCode(agencyCode: string): import("@prisma/client").Prisma.PrismaPromise<{
+    findManyByAgencyCode(agencyCode: string): import(".prisma/client").Prisma.PrismaPromise<{
         id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
         username: string;
         passwordHash: string;
-        role: import("@prisma/client").$Enums.Role;
-        status: import("@prisma/client").$Enums.UserStatus;
+        name: string;
+        role: import(".prisma/client").$Enums.Role;
+        status: import(".prisma/client").$Enums.UserStatus;
         operatorCode: string | null;
         agencyId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }[]>;
-    blockUser(userId: string): import("@prisma/client").Prisma.Prisma__UserClient<{
+    blockUser(userId: string): import(".prisma/client").Prisma.Prisma__UserClient<{
         id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
         username: string;
         passwordHash: string;
-        role: import("@prisma/client").$Enums.Role;
-        status: import("@prisma/client").$Enums.UserStatus;
+        name: string;
+        role: import(".prisma/client").$Enums.Role;
+        status: import(".prisma/client").$Enums.UserStatus;
         operatorCode: string | null;
         agencyId: string;
-    }, never, import("@prisma/client/runtime/library").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
+        createdAt: Date;
+        updatedAt: Date;
+    }, never, import("@prisma/client/runtime/library").DefaultArgs>;
     findOperatorsByAgencyCode(agencyCode: string): Promise<({
         operatorLinks: ({
             group: {
                 id: string;
                 name: string;
+                agencyId: string;
                 createdAt: Date;
                 updatedAt: Date;
-                agencyId: string;
                 activeShiftId: string | null;
             };
         } & {
@@ -56,15 +56,15 @@ export declare class UsersService {
         })[];
     } & {
         id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
         username: string;
         passwordHash: string;
-        role: import("@prisma/client").$Enums.Role;
-        status: import("@prisma/client").$Enums.UserStatus;
+        name: string;
+        role: import(".prisma/client").$Enums.Role;
+        status: import(".prisma/client").$Enums.UserStatus;
         operatorCode: string | null;
         agencyId: string;
+        createdAt: Date;
+        updatedAt: Date;
     })[]>;
     updateOperator(operatorId: string, updates: {
         username?: string;
@@ -77,9 +77,9 @@ export declare class UsersService {
             group: {
                 id: string;
                 name: string;
+                agencyId: string;
                 createdAt: Date;
                 updatedAt: Date;
-                agencyId: string;
                 activeShiftId: string | null;
             };
         } & {
@@ -89,26 +89,26 @@ export declare class UsersService {
         })[];
     } & {
         id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
         username: string;
         passwordHash: string;
-        role: import("@prisma/client").$Enums.Role;
-        status: import("@prisma/client").$Enums.UserStatus;
+        name: string;
+        role: import(".prisma/client").$Enums.Role;
+        status: import(".prisma/client").$Enums.UserStatus;
         operatorCode: string | null;
         agencyId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     deleteOperator(operatorId: string, agencyCode: string): Promise<{
         id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
         username: string;
         passwordHash: string;
-        role: import("@prisma/client").$Enums.Role;
-        status: import("@prisma/client").$Enums.UserStatus;
+        name: string;
+        role: import(".prisma/client").$Enums.Role;
+        status: import(".prisma/client").$Enums.UserStatus;
         operatorCode: string | null;
         agencyId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
 }

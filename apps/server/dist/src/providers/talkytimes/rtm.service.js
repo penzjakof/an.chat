@@ -77,7 +77,9 @@ let TalkyTimesRTMService = TalkyTimesRTMService_1 = class TalkyTimesRTMService {
     }
     async onModuleInit() {
         this.logger.log('🚀 RTM Service initializing...');
-        await this.connect();
+        this.connect().catch((error) => {
+            this.logger.error('❌ RTM async init failed:', error);
+        });
     }
     onModuleDestroy() {
         this.cleanup();

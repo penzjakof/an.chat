@@ -57,11 +57,9 @@ class TalkyTimesProvider {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), timeoutMs);
             try {
-                const agent = this.connectionPool.getAgentForUrl(url);
                 const res = await fetch(url, {
                     ...fetchOptions,
-                    signal: controller.signal,
-                    agent: agent
+                    signal: controller.signal
                 });
                 clearTimeout(timeout);
                 if (!res.ok) {
@@ -1879,8 +1877,10 @@ class TalkyTimesProvider {
                 'x-grpc-web': '1',
                 'x-user-agent': 'connect-es/2.0.2',
                 'cookie': session.cookies,
-                'referer': referer
+                'referer': referer,
+                'origin': 'https://talkytimes.com'
             };
+            await this.applyOperatorRefHeader(headers, { profileId });
             console.log('📤 Request body length:', body.length, 'bytes');
             console.log('📋 Full headers:', headers);
             const response = await this.fetchWithConnectionPool(url, {

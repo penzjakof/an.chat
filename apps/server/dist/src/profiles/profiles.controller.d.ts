@@ -4,74 +4,74 @@ import type { Request } from 'express';
 export declare class ProfilesController {
     private readonly profiles;
     constructor(profiles: ProfilesService);
-    listAll(req: Request): import("@prisma/client").Prisma.PrismaPromise<({
+    listAll(req: Request): import(".prisma/client").Prisma.PrismaPromise<({
         group: {
             id: string;
             name: string;
+            agencyId: string;
             createdAt: Date;
             updatedAt: Date;
-            agencyId: string;
             activeShiftId: string | null;
         };
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     })[]>;
     listMy(req: Request): Promise<({
         group: {
             id: string;
             name: string;
+            agencyId: string;
             createdAt: Date;
             updatedAt: Date;
-            agencyId: string;
             activeShiftId: string | null;
         };
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     })[]>;
-    list(groupId: string): import("@prisma/client").Prisma.PrismaPromise<({
+    list(groupId: string): import(".prisma/client").Prisma.PrismaPromise<({
         group: {
             id: string;
             name: string;
+            agencyId: string;
             createdAt: Date;
             updatedAt: Date;
-            agencyId: string;
             activeShiftId: string | null;
         };
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     })[]>;
     create(body: {
         groupId: string;
@@ -83,24 +83,24 @@ export declare class ProfilesController {
         group: {
             id: string;
             name: string;
+            agencyId: string;
             createdAt: Date;
             updatedAt: Date;
-            agencyId: string;
             activeShiftId: string | null;
         };
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     update(id: string, body: {
         displayName?: string;
@@ -111,40 +111,41 @@ export declare class ProfilesController {
         group: {
             id: string;
             name: string;
+            agencyId: string;
             createdAt: Date;
             updatedAt: Date;
-            agencyId: string;
             activeShiftId: string | null;
         };
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     delete(id: string, req: Request): Promise<{
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        status: import("@prisma/client").$Enums.ProfileStatus;
-        groupId: string;
-        provider: import("@prisma/client").$Enums.ProviderSite;
+        provider: import(".prisma/client").$Enums.ProviderSite;
         externalId: string;
         displayName: string | null;
         credentialLogin: string | null;
         credentialPassword: string | null;
         profileId: string | null;
+        status: import(".prisma/client").$Enums.ProfileStatus;
         lastActiveAt: Date | null;
+        groupId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     authenticateProfile(id: string, body: {
+        login?: string;
         password: string;
     }, req: Request): Promise<{
         success: boolean;

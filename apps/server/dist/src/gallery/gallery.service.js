@@ -205,6 +205,15 @@ let GalleryService = GalleryService_1 = class GalleryService {
         if (!this.talkyTimesProvider.makeRequest) {
             return { cursor: '', items: [] };
         }
+        const referer = `https://talkytimes.com/chat/${profileId}_${idUser}`;
+        const operatorRef = await this.sessionService.getActiveOperatorRefForProfile(String(profileId));
+        const headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Origin': 'https://talkytimes.com',
+            'Referer': referer,
+        };
+        headers['x-requested-with'] = operatorRef || '2055';
         const response = await this.talkyTimesProvider.makeRequest({
             method: 'POST',
             url: '/platform/gallery/photo/connection/list',
@@ -213,22 +222,39 @@ let GalleryService = GalleryService_1 = class GalleryService {
                 idsPhotos
             },
             profileId,
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
+            headers,
         });
         if (!response.success) {
             this.logger.error(`❌ TalkyTimes get photo statuses failed:`, response.error);
             throw new Error(`Failed to get photo statuses: ${response.error}`);
         }
-        return response.data;
+        const raw = response.data;
+        const list = (raw?.photos || raw?.items || raw?.data?.photos || raw?.data?.items || [])
+            .map((x) => {
+            const rawStatus = x?.status ?? null;
+            const normalized = (rawStatus === 'accessed' || rawStatus === 'sent') ? rawStatus : null;
+            return {
+                idPhoto: Number(x?.idPhoto ?? x?.id ?? x?.idGalleryPhoto),
+                status: normalized,
+            };
+        })
+            .filter((x) => Number.isFinite(x.idPhoto));
+        return { photos: list };
     }
     async getVideoStatuses(idUser, idsVideos, profileId) {
         this.logger.log(`🎥 Getting video statuses for user ${idUser}, videos: ${idsVideos.length}, profile: ${profileId}`);
         if (!this.talkyTimesProvider.makeRequest) {
             throw new Error('makeRequest method is not available on TalkyTimes provider');
         }
+        const referer = `https://talkytimes.com/chat/${profileId}_${idUser}`;
+        const operatorRef = await this.sessionService.getActiveOperatorRefForProfile(String(profileId));
+        const headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Origin': 'https://talkytimes.com',
+            'Referer': referer,
+        };
+        headers['x-requested-with'] = operatorRef || '2055';
         const response = await this.talkyTimesProvider.makeRequest({
             method: 'POST',
             url: '/platform/gallery/video/connection/list',
@@ -237,16 +263,24 @@ let GalleryService = GalleryService_1 = class GalleryService {
                 idsVideos
             },
             profileId,
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
+            headers,
         });
         if (!response.success) {
             this.logger.error(`❌ TalkyTimes get video statuses failed:`, response.error);
             throw new Error(`Failed to get video statuses: ${response.error}`);
         }
-        return response.data;
+        const rawVideo = response.data;
+        const vlist = (rawVideo?.videos || rawVideo?.items || rawVideo?.data?.videos || rawVideo?.data?.items || [])
+            .map((x) => {
+            const rawStatus = x?.status ?? null;
+            const normalized = (rawStatus === 'accessed' || rawStatus === 'sent') ? rawStatus : null;
+            return {
+                idVideo: Number(x?.idVideo ?? x?.id ?? x?.idGalleryVideo),
+                status: normalized,
+            };
+        })
+            .filter((x) => Number.isFinite(x.idVideo));
+        return { videos: vlist };
     }
     async getAudios(profileId, request = {}) {
         this.logger.log(`🎵 Getting audios for profile ${profileId} with cursor: ${request.cursor || 'none'}`);
@@ -320,6 +354,15 @@ let GalleryService = GalleryService_1 = class GalleryService {
         if (!this.talkyTimesProvider.makeRequest) {
             throw new Error('makeRequest method is not available on TalkyTimes provider');
         }
+        const referer = `https://talkytimes.com/chat/${profileId}_${idUser}`;
+        const operatorRef = await this.sessionService.getActiveOperatorRefForProfile(String(profileId));
+        const headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Origin': 'https://talkytimes.com',
+            'Referer': referer,
+        };
+        headers['x-requested-with'] = operatorRef || '2055';
         const response = await this.talkyTimesProvider.makeRequest({
             method: 'POST',
             url: '/platform/gallery/audio/connection/list',
@@ -328,16 +371,24 @@ let GalleryService = GalleryService_1 = class GalleryService {
                 idsAudios
             },
             profileId,
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
+            headers,
         });
         if (!response.success) {
             this.logger.error(`❌ TalkyTimes get audio statuses failed:`, response.error);
             throw new Error(`Failed to get audio statuses: ${response.error}`);
         }
-        return response.data;
+        const raw = response.data;
+        const list = (raw?.audios || raw?.items || raw?.data?.audios || raw?.data?.items || [])
+            .map((x) => {
+            const rawStatus = x?.status ?? null;
+            const normalized = (rawStatus === 'accessed' || rawStatus === 'sent') ? rawStatus : null;
+            return {
+                idAudio: Number(x?.idAudio ?? x?.id ?? x?.idGalleryAudio),
+                status: normalized,
+            };
+        })
+            .filter((x) => Number.isFinite(x.idAudio));
+        return { audios: list };
     }
 };
 exports.GalleryService = GalleryService;

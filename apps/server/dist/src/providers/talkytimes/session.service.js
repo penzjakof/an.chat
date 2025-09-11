@@ -104,8 +104,9 @@ let TalkyTimesSessionService = class TalkyTimesSessionService {
             console.log(`❌ Session not found for profile ${profileId}`);
             return false;
         }
-        if (!session.cookies.includes('tld-token=')) {
-            console.log(`❌ No tld-token found in cookies for profile ${profileId}`);
+        const hasAnyCookiePair = /\w+=/.test(session.cookies);
+        if (!hasAnyCookiePair) {
+            console.log(`❌ No cookie pairs found in cookies for profile ${profileId}`);
             return false;
         }
         if (session.expiresAt < new Date()) {

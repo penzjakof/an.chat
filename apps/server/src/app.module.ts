@@ -1,4 +1,10 @@
 import { Module, OnModuleInit } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { EnvSchema } from './config/env.schema';
+import appConfig from './config/app.config';
+import databaseConfig from './config/database.config';
+import authConfig from './config/auth.config';
+import ttConfig from './config/talkytimes.config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -24,6 +30,19 @@ import { TalkyTimesRTMService } from './providers/talkytimes/rtm.service';
 
 @Module({
 	imports: [
+		ConfigModule.forRoot({
+			isGlobal: true,
+			cache: true,
+			envFilePath: [`.env.${process.env.NODE_ENV}`, '.env'],
+			validate: (env) => {
+				const parsed = EnvSchema.safeParse(env);
+				if (!parsed.success) {
+					throw new Error(parsed.error.message);
+				}
+				return parsed.data;
+			},
+			load: [appConfig, databaseConfig, authConfig, ttConfig],
+		}),
 		EventEmitterModule.forRoot(),
 		// Rate limiting конфігурація
 		ThrottlerModule.forRoot([

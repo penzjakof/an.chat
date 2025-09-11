@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class EncryptionService {
+	constructor(private readonly config: ConfigService) {}
+
 	private getKey(): Buffer {
-		const key = process.env.ENCRYPTION_KEY;
+		const key = this.config.get<string>('auth.encryptionKey');
 		if (!key || key.length < 32) {
 			// 32 bytes (256-bit) key expected; for dev fallback to fixed-length pad
 			return Buffer.from((key ?? 'dev-encryption-key').padEnd(32, '0').slice(0, 32));

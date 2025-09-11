@@ -1,18 +1,19 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { ConfigService } from '@nestjs/config';
 
 // Перевіряємо чи завантажилися змінні
-console.log('🔧 Environment variables loaded:');
-console.log('  JWT_SECRET:', process.env.JWT_SECRET ? 'Present' : 'Missing');
-console.log('  TT_BASE_URL:', process.env.TT_BASE_URL || 'Not set');
-console.log('  PORT:', process.env.PORT || 'Not set');
+console.log('🔧 Config initialized');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // CORS налаштування тільки для HTTP, WebSocket налаштовується окремо
-  const allowedOrigins = process.env.NODE_ENV === 'production'
+  const config = app.get(ConfigService);
+  const nodeEnv = config.get<string>('NODE_ENV');
+  const port = config.get<number>('PORT', 4000);
+  const allowedOrigins = nodeEnv === 'production'
     ? ['https://anchat.me', 'https://www.anchat.me'] // Тільки дозволені домени на продакшені
     : ['http://localhost:3000', 'http://localhost:4000', 'http://127.0.0.1:3000']; // Для розробки
 
@@ -23,7 +24,7 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
   });
 
-  await app.listen(process.env.PORT ?? 4000);
+  await app.listen(port);
 }
 bootstrap().catch((error: unknown) => {
   console.error('Bootstrap failed', error);

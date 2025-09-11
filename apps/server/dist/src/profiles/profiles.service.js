@@ -182,7 +182,7 @@ let ProfilesService = class ProfilesService {
         catch { }
         return res;
     }
-    async authenticateProfile(profileId, password, agencyCode) {
+    async authenticateProfile(profileId, password, agencyCode, loginOverride) {
         console.log(`🔐 Authenticating profile ${profileId} with agencyCode ${agencyCode}`);
         const profile = await this.prisma.profile.findFirst({
             where: {
@@ -197,28 +197,33 @@ let ProfilesService = class ProfilesService {
             throw new common_1.NotFoundException('Profile not found');
         }
         console.log(`✅ Profile found: ${profile.displayName}, credentialLogin: ${profile.credentialLogin}`);
-        if (!profile.credentialPassword || !profile.credentialLogin) {
-            throw new common_1.BadRequestException('Profile credentials not found');
+        const effectiveLogin = (loginOverride && loginOverride.trim().length > 0) ? loginOverride.trim() : (profile.credentialLogin || '');
+        if (!effectiveLogin) {
+            throw new common_1.BadRequestException('Profile login is required');
         }
-        const decryptedPassword = this.encryption.decrypt(profile.credentialPassword);
-        console.log(`🔓 Decrypted password matches provided: ${decryptedPassword === password}`);
-        if (decryptedPassword !== password) {
-            console.log(`❌ Password mismatch for profile ${profileId}`);
-            throw new common_1.BadRequestException('Invalid password');
-        }
-        console.log(`🚀 Calling TalkyTimes validateCredentials for ${profile.credentialLogin}`);
-        const result = await this.talkyTimesProvider.validateCredentials(profile.credentialLogin, password);
+        const decryptedPassword = this.encryption.decrypt(profile.credentialPassword ?? undefined);
+        const passwordsMatch = decryptedPassword === password;
+        console.log(`🔓 Stored TT password matches provided? ${passwordsMatch}`);
+        console.log(`🚀 Calling TalkyTimes validateCredentials for ${effectiveLogin}`);
+        const result = await this.talkyTimesProvider.validateCredentials(effectiveLogin, password);
         console.log(`📥 TalkyTimes auth result:`, { success: result.success, error: result.error, profileId: result.profileId });
         if (!result.success) {
             console.log(`❌ TalkyTimes authentication failed: ${result.error}`);
             throw new common_1.BadRequestException(result.error || 'Authentication failed');
         }
+        const updateData = {};
         if (result.profileId && result.profileId !== profile.profileId) {
             console.log(`🔄 Updating profileId from ${profile.profileId} to ${result.profileId}`);
-            await this.prisma.profile.update({
-                where: { id: profileId },
-                data: { profileId: result.profileId }
-            });
+            updateData.profileId = result.profileId;
+        }
+        if (!passwordsMatch) {
+            updateData.credentialPassword = this.encryption.encrypt(password);
+        }
+        if (loginOverride && loginOverride.trim().length > 0 && loginOverride.trim() !== profile.credentialLogin) {
+            updateData.credentialLogin = loginOverride.trim();
+        }
+        if (Object.keys(updateData).length > 0) {
+            await this.prisma.profile.update({ where: { id: profileId }, data: updateData });
         }
         console.log(`✅ Profile authenticated successfully: ${result.profileId || profile.profileId}`);
         return {

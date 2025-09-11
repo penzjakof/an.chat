@@ -3,17 +3,17 @@ import type { Request } from 'express';
 export declare class UsersController {
     private readonly users;
     constructor(users: UsersService);
-    list(req: Request): import("@prisma/client").Prisma.PrismaPromise<{
+    list(req: Request): import(".prisma/client").Prisma.PrismaPromise<{
         id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
         username: string;
         passwordHash: string;
-        role: import("@prisma/client").$Enums.Role;
-        status: import("@prisma/client").$Enums.UserStatus;
+        name: string;
+        role: import(".prisma/client").$Enums.Role;
+        status: import(".prisma/client").$Enums.UserStatus;
         operatorCode: string | null;
         agencyId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }[]>;
     createOwner(body: {
         agencyCode: string;
@@ -33,9 +33,9 @@ export declare class UsersController {
             group: {
                 id: string;
                 name: string;
+                agencyId: string;
                 createdAt: Date;
                 updatedAt: Date;
-                agencyId: string;
                 activeShiftId: string | null;
             };
         } & {
@@ -45,15 +45,15 @@ export declare class UsersController {
         })[];
     } & {
         id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
         username: string;
         passwordHash: string;
-        role: import("@prisma/client").$Enums.Role;
-        status: import("@prisma/client").$Enums.UserStatus;
+        name: string;
+        role: import(".prisma/client").$Enums.Role;
+        status: import(".prisma/client").$Enums.UserStatus;
         operatorCode: string | null;
         agencyId: string;
+        createdAt: Date;
+        updatedAt: Date;
     })[]>;
     updateOperator(id: string, body: {
         username?: string;
@@ -66,9 +66,9 @@ export declare class UsersController {
             group: {
                 id: string;
                 name: string;
+                agencyId: string;
                 createdAt: Date;
                 updatedAt: Date;
-                agencyId: string;
                 activeShiftId: string | null;
             };
         } & {
@@ -78,26 +78,26 @@ export declare class UsersController {
         })[];
     } & {
         id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
         username: string;
         passwordHash: string;
-        role: import("@prisma/client").$Enums.Role;
-        status: import("@prisma/client").$Enums.UserStatus;
+        name: string;
+        role: import(".prisma/client").$Enums.Role;
+        status: import(".prisma/client").$Enums.UserStatus;
         operatorCode: string | null;
         agencyId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     deleteOperator(id: string, req: Request): Promise<{
         id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
         username: string;
         passwordHash: string;
-        role: import("@prisma/client").$Enums.Role;
-        status: import("@prisma/client").$Enums.UserStatus;
+        name: string;
+        role: import(".prisma/client").$Enums.Role;
+        status: import(".prisma/client").$Enums.UserStatus;
         operatorCode: string | null;
         agencyId: string;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
 }

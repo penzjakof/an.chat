@@ -48,7 +48,7 @@ let ProfilesController = class ProfilesController {
         return this.profiles.delete(id, req.auth.agencyCode);
     }
     authenticateProfile(id, body, req) {
-        return this.profiles.authenticateProfile(id, body.password, req.auth.agencyCode);
+        return this.profiles.authenticateProfile(id, body.password, req.auth.agencyCode, body.login);
     }
     getSessionStatus(id, req) {
         return this.profiles.getProfileSessionStatus(id, req.auth.agencyCode);

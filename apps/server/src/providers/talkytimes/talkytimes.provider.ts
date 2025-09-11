@@ -285,8 +285,8 @@ export class TalkyTimesProvider implements SiteProvider {
 	}
 
 	private isMock(): boolean {
-		// ВИПРАВЛЕННЯ: перевіряємо тільки змінну середовища, ігноруємо this.baseUrl
-		const ttBaseUrl = process.env.TT_BASE_URL || '';
+		// Перевіряємо тільки baseUrl провайдера (інжектується з конфігів)
+		const ttBaseUrl = this.baseUrl || '';
 		const result = ttBaseUrl.startsWith('mock:') || ttBaseUrl === '';
 		// Логуємо тільки при зміні режиму
 		if (!this._lastMockState || this._lastMockState !== result) {

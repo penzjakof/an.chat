@@ -8,29 +8,29 @@ export declare class ShiftsService {
         activeShift: ({
             operator: {
                 id: string;
-                name: string;
-                createdAt: Date;
-                updatedAt: Date;
                 username: string;
                 passwordHash: string;
-                role: import("@prisma/client").$Enums.Role;
-                status: import("@prisma/client").$Enums.UserStatus;
+                name: string;
+                role: import(".prisma/client").$Enums.Role;
+                status: import(".prisma/client").$Enums.UserStatus;
                 operatorCode: string | null;
                 agencyId: string;
+                createdAt: Date;
+                updatedAt: Date;
             };
         } & {
             id: string;
-            agencyId: string;
             operatorId: string;
+            agencyId: string;
             startedAt: Date;
             endedAt: Date | null;
         }) | null;
     } & {
         id: string;
         name: string;
+        agencyId: string;
         createdAt: Date;
         updatedAt: Date;
-        agencyId: string;
         activeShiftId: string | null;
     })[]>;
     getGroupsStatusByOperator(operatorId: string): Promise<{
@@ -52,15 +52,15 @@ export declare class ShiftsService {
     }>;
     startShift(operatorId: string, agencyId: string): Promise<{
         id: string;
-        agencyId: string;
         operatorId: string;
+        agencyId: string;
         startedAt: Date;
         endedAt: Date | null;
     }>;
     endShift(operatorId: string): Promise<{
         id: string;
-        agencyId: string;
         operatorId: string;
+        agencyId: string;
         startedAt: Date;
         endedAt: Date | null;
     }>;
@@ -73,8 +73,8 @@ export declare class ShiftsService {
     }[]>;
     forceEndShiftForOperator(operatorId: string, agencyCode: string): Promise<{
         id: string;
-        agencyId: string;
         operatorId: string;
+        agencyId: string;
         startedAt: Date;
         endedAt: Date | null;
     }>;
