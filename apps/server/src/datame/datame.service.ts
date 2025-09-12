@@ -21,7 +21,7 @@ export class DatameService {
     return res.json() as Promise<T>;
   }
 
-  async login(email: string, password: string, cookies?: string): Promise<{ refreshToken: string; setCookie?: string[] }> {
+  async login(email: string, password: string, cookies?: string): Promise<{ refreshToken: string; setCookie?: string[]; cookieHeader?: string }> {
     const url = `${this.base}/platform/auth/login`;
     const headers: Record<string, string> = {
       'accept': 'application/json',
@@ -44,8 +44,23 @@ export class DatameService {
     }
     const data = (await res.json()) as DatameLoginResponse;
     const refreshToken = data?.data?.refreshToken || '';
-    const setCookie = (res as any).headers?.getSetCookie?.() || [];
-    return { refreshToken, setCookie };
+    // Надійне зчитування set-cookie для undici/node-fetch
+    let setCookie: string[] = [];
+    const anyHeaders: any = (res as any).headers;
+    if (typeof anyHeaders?.getSetCookie === 'function') {
+      setCookie = anyHeaders.getSetCookie();
+    } else if (typeof anyHeaders?.raw === 'function') {
+      const raw = anyHeaders.raw();
+      setCookie = raw['set-cookie'] || [];
+    } else {
+      const one = res.headers.get('set-cookie');
+      if (one) setCookie = [one];
+    }
+    const cookieHeader = setCookie
+      .map((h) => h.split(';')[0].trim())
+      .filter(Boolean)
+      .join('; ');
+    return { refreshToken, setCookie, cookieHeader };
   }
 
   setAgencyCookie(agencyCode: string, cookie: string) {
@@ -78,7 +93,8 @@ export class DatameService {
       'user-agent': 'Mozilla/5.0',
       'cookie': cookie,
     };
-    return this.fetchJson<any>(url, { method: 'POST', headers });
+    // Можуть вимагати content-length: 0 для CORS-подібної поведінки
+    return this.fetchJson<any>(url, { method: 'POST', headers, body: '' as any });
   }
 
   async getFemale(id: number, cookie: string): Promise<any> {

@@ -14,7 +14,7 @@ export class DatameController {
     const res = await this.datame.login(email, password, cookieHeader);
     // зберігаємо сесію для агенції
     const agencyCode = (req as any)?.auth?.agencyCode || 'default';
-    const joined = [cookieHeader, ...(res.setCookie || [])].filter(Boolean).join('; ');
+    const joined = [cookieHeader, res.cookieHeader].filter(Boolean).join('; ');
     if (joined) this.datame.setAgencyCookie(agencyCode, joined);
     return { success: true };
   }
