@@ -27,6 +27,7 @@ import { HttpModule } from './common/http/http.module';
 import { EncryptionModule } from './common/encryption/encryption.module';
 import { ShiftsModule } from './shifts/shifts.module';
 import { TalkyTimesRTMService } from './providers/talkytimes/rtm.service';
+import { DatameModule } from './datame/datame.module';
 
 @Module({
 	imports: [
@@ -74,6 +75,7 @@ import { TalkyTimesRTMService } from './providers/talkytimes/rtm.service';
 		GalleryModule,
 		AuthModule,
 		ShiftsModule,
+		DatameModule,
 	],
 	controllers: [AppController],
 	providers: [

@@ -65,6 +65,11 @@ export default function ProfilesPage() {
     errorMessage?: string;
   }>>([]);
   const [isImporting, setIsImporting] = useState(false);
+  // Datame
+  const [dmCookie, setDmCookie] = useState('');
+  const [dmItems, setDmItems] = useState<Array<{ id: number; name: string; age?: number; avatar_xxs?: string }>>([]);
+  const [dmLoading, setDmLoading] = useState(false);
+  const [dmLastId, setDmLastId] = useState<number | undefined>(undefined);
   const router = useRouter();
   const userRole = getRole();
   // UI фільтри/сортування/пагінація
@@ -99,6 +104,49 @@ export default function ProfilesPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Datame: отримати пачку approved
+  const fetchDatameBatch = async (reset = false) => {
+    if (!dmCookie.trim()) return;
+    setDmLoading(true);
+    try {
+      const body: any = { cookieHeader: dmCookie, status: 'approved', limit: 25 };
+      if (!reset && dmLastId) body.id_last = dmLastId;
+      const res = await apiPost<any>('/datame/collection', body);
+      const items = (res?.data || []).map((x: any) => ({ id: x.id, name: x.name, age: x.age, avatar_xxs: x.avatar_xxs }));
+      const merged = reset ? items : [...dmItems, ...items];
+      setDmItems(merged);
+      setDmLastId(items?.length ? items[items.length - 1].id : dmLastId);
+    } catch (e) {
+      // ignore simple UI
+    } finally {
+      setDmLoading(false);
+    }
+  };
+
+  const fetchFemaleDetails = async (id: number) => {
+    if (!dmCookie.trim()) return;
+    try {
+      const data = await apiPost<any>('/datame/female', { id, cookieHeader: dmCookie });
+      const d = data?.data || data;
+      const mapped = { id, name: d?.name ?? '', age: d?.age ?? undefined, avatar_xxs: d?.avatar_xxs ?? '' };
+      setDmItems(prev => prev.map(i => (i.id === id ? { ...i, ...mapped } : i)));
+    } catch {}
+  };
+
+  // Створення профілю на базі Datame email: беремо email з form-data, пароль = email
+  const createProfileFromDatame = async (datameId: number) => {
+    if (!dmCookie.trim()) return;
+    try {
+      const fd = await apiPost<any>('/datame/form-data', { id: datameId, cookieHeader: dmCookie });
+      const email = fd?.data?.profile?.email || '';
+      if (!email) return alert('Email не знайдено у form-data');
+      setShowCreateForm(true);
+      setFormData(prev => ({ ...prev, credentialLogin: email, credentialPassword: email, provider: 'TALKYTIMES' }));
+    } catch (e: any) {
+      alert(e?.message || 'Помилка form-data');
     }
   };
 
@@ -397,6 +445,12 @@ export default function ProfilesPage() {
           <button onClick={() => loadData()} className="px-4 py-2 rounded border hover:bg-gray-50" title="Оновити дані">Оновити</button>
         </div>
         <div className="flex gap-3">
+          {/* Datame controls */}
+          <div className="hidden md:flex items-center gap-2">
+            <input value={dmCookie} onChange={e => setDmCookie(e.target.value)} placeholder="Cookie datame (tld-token; user; _csrf)" className="border p-2 rounded min-w-[280px]" />
+            <button onClick={() => fetchDatameBatch(true)} className="px-3 py-2 border rounded hover:bg-gray-50">DM: Завантажити</button>
+            <button onClick={() => fetchDatameBatch(false)} disabled={dmLoading} className="px-3 py-2 border rounded hover:bg-gray-50 disabled:opacity-50">Ще</button>
+          </div>
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
             className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark"
@@ -605,6 +659,45 @@ export default function ProfilesPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Datame table if cookie present */}
+      {dmCookie.trim() && (
+        <div className="overflow-x-auto border rounded mb-4">
+          <table className="min-w-full bg-white">
+            <thead className="sticky top-0 bg-white/90 backdrop-blur z-10">
+              <tr>
+                <th className="py-2 px-4 border-b text-left">ID</th>
+                <th className="py-2 px-4 border-b text-left">Аватар</th>
+                <th className="py-2 px-4 border-b text-left">Імʼя</th>
+                <th className="py-2 px-4 border-b text-left">Вік</th>
+                <th className="py-2 px-4 border-b text-left">Деталі</th>
+                <th className="py-2 px-4 border-b text-left">Створити TT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dmItems.map((u) => (
+                <tr key={u.id} className="hover:bg-gray-50">
+                  <td className="py-2 px-4 border-b text-sm text-gray-700">{u.id}</td>
+                  <td className="py-2 px-4 border-b">
+                    {u.avatar_xxs ? <img src={u.avatar_xxs} alt="avatar" className="w-8 h-8 rounded" /> : <div className="w-8 h-8 bg-gray-200 rounded" />}
+                  </td>
+                  <td className="py-2 px-4 border-b">{u.name}</td>
+                  <td className="py-2 px-4 border-b">{u.age ?? ''}</td>
+                  <td className="py-2 px-4 border-b">
+                    <button onClick={() => fetchFemaleDetails(u.id)} className="px-3 py-1 border rounded hover:bg-gray-50 text-sm">Оновити</button>
+                  </td>
+                  <td className="py-2 px-4 border-b">
+                    <button onClick={() => createProfileFromDatame(u.id)} className="px-3 py-1 border rounded hover:bg-gray-50 text-sm">Вставити email</button>
+                  </td>
+                </tr>
+              ))}
+              {dmItems.length === 0 && (
+                <tr><td colSpan={5} className="py-3 px-4 text-sm text-gray-500">Даних немає. Вкажіть cookie та натисніть “DM: Завантажити”.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       )}
 

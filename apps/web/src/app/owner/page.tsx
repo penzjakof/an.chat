@@ -69,6 +69,7 @@ export default function OwnerPage() {
 					<Link className="border rounded p-3 hover:bg-gray-50" href="/chats">Чати</Link>
 					<Link className="border rounded p-3 hover:bg-gray-50" href="/operators">Оператори</Link>
 					<Link className="border rounded p-3 hover:bg-gray-50" href="/profiles">Профілі</Link>
+					<Link className="border rounded p-3 hover:bg-gray-50" href="/owner/settings">Налаштування</Link>
 				</div>
 
 				<div className="mt-6">
