@@ -67,6 +67,12 @@ export default function ProfilesPage() {
   const [isImporting, setIsImporting] = useState(false);
   const router = useRouter();
   const userRole = getRole();
+  // UI фільтри/сортування/пагінація
+  const [search, setSearch] = useState('');
+  const [groupFilter, setGroupFilter] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'created_desc' | 'created_asc' | 'name_asc' | 'login_asc'>('created_desc');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     if (userRole !== 'OWNER') {
@@ -311,6 +317,40 @@ export default function ProfilesPage() {
     }
   };
 
+  // Виведення списку з фільтрами/сортуванням/пагінацією
+  const filteredSortedProfiles = (() => {
+    let list = [...profiles];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(p => (p.displayName || '').toLowerCase().includes(q) || (p.credentialLogin || '').toLowerCase().includes(q));
+    }
+    if (groupFilter) {
+      list = list.filter(p => p.group?.id === groupFilter);
+    }
+    switch (sortBy) {
+      case 'created_asc':
+        list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        break;
+      case 'name_asc':
+        list.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+        break;
+      case 'login_asc':
+        list.sort((a, b) => (a.credentialLogin || '').localeCompare(b.credentialLogin || ''));
+        break;
+      default:
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return list;
+  })();
+
+  const total = filteredSortedProfiles.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageProfiles = filteredSortedProfiles.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, groupFilter, sortBy, pageSize]);
+
   if (loading) return <div className="p-6">Завантаження...</div>;
   if (error) return <div className="p-6 text-red-500">Помилка: {error}</div>;
   if (userRole !== 'OWNER') return <div className="p-6 text-red-500">Доступ заборонено</div>;
@@ -322,29 +362,73 @@ export default function ProfilesPage() {
       {/* Основний контент */}
       <div className="flex-1 overflow-y-auto p-6 custom-scroll">
 
-      <div className="flex gap-3 mb-4">
-        <button
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark"
-        >
-          {showCreateForm ? 'Приховати форму' : 'Створити новий профіль'}
-        </button>
-        <label className="bg-blue-500 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-600">
-          Імпорт CSV
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleCsvFile(file);
-              e.currentTarget.value = '';
-            }}
-          />
-        </label>
-        <button onClick={handleDownloadTemplate} className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">
-          Шаблон CSV
-        </button>
+      {/* Тулбар з пошуком/фільтрами/сортуванням та діями */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+        <div className="flex flex-col md:flex-row gap-2 md:items-center">
+          <div className="relative">
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Пошук по імені або логіну..."
+              className="border p-2 pr-9 rounded min-w-[260px]"
+            />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400">🔎</span>
+          </div>
+          <select
+            value={groupFilter}
+            onChange={e => setGroupFilter(e.target.value)}
+            className="border p-2 rounded min-w-[200px]"
+          >
+            <option value="">Всі групи</option>
+            {groups.map(g => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as any)}
+            className="border p-2 rounded min-w-[180px]"
+          >
+            <option value="created_desc">Нові зверху</option>
+            <option value="created_asc">Старі зверху</option>
+            <option value="name_asc">Ім'я (А→Я)</option>
+            <option value="login_asc">Логін (А→Я)</option>
+          </select>
+          <button onClick={() => loadData()} className="px-4 py-2 rounded border hover:bg-gray-50" title="Оновити дані">Оновити</button>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark"
+          >
+            {showCreateForm ? 'Приховати форму' : 'Створити новий профіль'}
+          </button>
+          <label className="bg-blue-500 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-600">
+            Імпорт CSV
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleCsvFile(file);
+                e.currentTarget.value = '';
+              }}
+            />
+          </label>
+          <button onClick={handleDownloadTemplate} className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Шаблон CSV</button>
+        </div>
+      </div>
+
+      {/* Підсумок і розмір сторінки */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-2 text-sm text-gray-600">
+        <div>Знайдено: <span className="font-semibold text-gray-900">{total}</span></div>
+        <div className="flex items-center gap-2">
+          <span>На сторінці:</span>
+          <select className="border p-1 rounded" value={pageSize} onChange={e => setPageSize(parseInt(e.target.value) || 10)}>
+            {[10,20,50,100].map(s => (<option key={s} value={s}>{s}</option>))}
+          </select>
+        </div>
       </div>
 
       {showCreateForm && (
@@ -524,21 +608,21 @@ export default function ProfilesPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white border border-gray-200">
-          <thead>
+      <div className="overflow-x-auto border rounded">
+        <table className="min-w-full bg-white">
+          <thead className="sticky top-0 bg-white/90 backdrop-blur z-10">
             <tr>
-              <th className="py-2 px-4 border-b">Ім&apos;я</th>
-              <th className="py-2 px-4 border-b">Логін</th>
-              <th className="py-2 px-4 border-b">Статус</th>
-              <th className="py-2 px-4 border-b">Група</th>
-              <th className="py-2 px-4 border-b">Платформа</th>
-              <th className="py-2 px-4 border-b">Створено</th>
-              <th className="py-2 px-4 border-b">Дії</th>
+              <th className="py-2 px-4 border-b text-left">Ім&apos;я</th>
+              <th className="py-2 px-4 border-b text-left">Логін</th>
+              <th className="py-2 px-4 border-b text-left">Статус</th>
+              <th className="py-2 px-4 border-b text-left">Група</th>
+              <th className="py-2 px-4 border-b text-left">Платформа</th>
+              <th className="py-2 px-4 border-b text-left">Створено</th>
+              <th className="py-2 px-4 border-b text-left">Дії</th>
             </tr>
           </thead>
           <tbody>
-            {profiles.map((profile) => (
+            {pageProfiles.map((profile) => (
               <tr key={profile.id} className="hover:bg-gray-50">
                 {editingProfile?.id === profile.id ? (
                   <>
@@ -562,7 +646,9 @@ export default function ProfilesPage() {
                         required
                       />
                     </td>
-                    <td className="py-2 px-4 border-b">{profile.status}</td>
+                    <td className="py-2 px-4 border-b">
+                      <span className={`px-2 py-1 rounded text-xs ${profile.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{profile.status}</span>
+                    </td>
                     <td className="py-2 px-4 border-b">
                       <select
                         name="groupId"
@@ -578,7 +664,7 @@ export default function ProfilesPage() {
                         ))}
                       </select>
                     </td>
-                    <td className="py-2 px-4 border-b">{profile.provider}</td>
+                    <td className="py-2 px-4 border-b"><span className="px-2 py-1 rounded text-xs bg-purple-100 text-purple-800">{profile.provider}</span></td>
                     <td className="py-2 px-4 border-b">{new Date(profile.createdAt).toLocaleDateString()}</td>
                     <td className="py-2 px-4 border-b">
                       <button onClick={handleUpdate} className="bg-blue-500 text-white px-2 py-1 rounded text-sm hover:bg-blue-600">
@@ -598,7 +684,7 @@ export default function ProfilesPage() {
                         {profile.status}
                       </span>
                     </td>
-                    <td className="py-2 px-4 border-b">{profile.group.name}</td>
+                    <td className="py-2 px-4 border-b"><span className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-800">{profile.group.name}</span></td>
                     <td className="py-2 px-4 border-b">{profile.provider}</td>
                     <td className="py-2 px-4 border-b">{new Date(profile.createdAt).toLocaleDateString()}</td>
                     <td className="py-2 px-4 border-b">
@@ -615,6 +701,16 @@ export default function ProfilesPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Пагінація */}
+      <div className="flex items-center justify-between mt-3">
+        <div className="text-sm text-gray-600">Показано {total === 0 ? 0 : (page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} з {total}</div>
+        <div className="flex items-center gap-2">
+          <button className="px-3 py-1 border rounded disabled:opacity-50" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>Попередня</button>
+          <span className="text-sm">Сторінка {page} / {totalPages}</span>
+          <button className="px-3 py-1 border rounded disabled:opacity-50" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Наступна</button>
+        </div>
       </div>
       </div>
     </div>
