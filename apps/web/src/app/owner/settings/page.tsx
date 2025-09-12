@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getRole } from '@/src/lib/session';
+import { getRole } from '@/lib/session';
 import { Header } from '@/components/Header';
-import { apiPost } from '@/src/lib/api';
+import { apiPost } from '@/lib/api';
 
 export default function OwnerSettingsPage() {
   const router = useRouter();
