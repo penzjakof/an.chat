@@ -19,6 +19,9 @@ cd "$APP_DIR/apps/server"
 npx prisma generate || true
 cd "$APP_DIR"
 
+echo "[2.6/5] Clean Next.js cache"
+rm -rf "$APP_DIR/apps/web/.next" || true
+
 echo "[3/5] Starting/Reloading PM2 apps"
 if pm2 ping >/dev/null 2>&1; then
   :
