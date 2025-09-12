@@ -15,4 +15,10 @@ export class UsersController {
 	me(@Req() req: Request) {
 		return this.users.me(req.auth!.userId);
 	}
+
+	@Get('operators')
+	@Roles(Role.OWNER)
+	operators(@Req() req: Request) {
+		return this.users.findOperatorsByAgencyCode(req.auth!.agencyCode);
+	}
 }

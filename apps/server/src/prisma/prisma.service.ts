@@ -15,7 +15,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     });
   }
 	async onModuleInit(): Promise<void> {
-		await this.$connect();
+		try {
+			await this.$connect();
+		} catch (error) {
+			console.error('Prisma connect failed (non-fatal during bootstrap):', (error as any)?.message || error);
+		}
 	}
 
 	async onModuleDestroy(): Promise<void> {

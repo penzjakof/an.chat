@@ -9,7 +9,7 @@ export class ChatAccessService {
 		// Повертаємо профілі в межах агенції, доступні користувачу
 		return this.prisma.profile.findMany({
 			where: { group: { agency: { code: auth.agencyCode } } },
-			select: { id: true, profileId: true },
+			select: { id: true, profileId: true, displayName: true, provider: true, credentialLogin: true },
 		});
 	}
 

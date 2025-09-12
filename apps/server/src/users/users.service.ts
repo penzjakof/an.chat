@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role } from '../common/auth/auth.types';
-import { UserStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -12,14 +12,14 @@ export class UsersService {
 		const { agencyCode, username, name, password } = params;
 		const agency = await this.prisma.agency.findUniqueOrThrow({ where: { code: agencyCode } });
 		const passwordHash = await bcrypt.hash(password, 10);
-		return this.prisma.user.create({ data: { agencyId: agency.id, username: username.toLowerCase(), name, role: Role.OWNER, status: UserStatus.ACTIVE, passwordHash } });
+		return this.prisma.user.create({ data: { agencyId: agency.id, username: username.toLowerCase(), name, role: Role.OWNER, status: (Prisma as any).UserStatus.ACTIVE, passwordHash } });
 	}
 
 	async createOperator(params: { agencyCode: string; username: string; name: string; password: string; operatorCode: string }): Promise<any> {
 		const { agencyCode, username, name, password, operatorCode } = params;
 		const agency = await this.prisma.agency.findUniqueOrThrow({ where: { code: agencyCode } });
 		const passwordHash = await bcrypt.hash(password, 10);
-		return this.prisma.user.create({ data: { agencyId: agency.id, username: username.toLowerCase(), name, role: Role.OPERATOR, operatorCode, status: UserStatus.ACTIVE, passwordHash } });
+		return this.prisma.user.create({ data: { agencyId: agency.id, username: username.toLowerCase(), name, role: Role.OPERATOR, operatorCode, status: (Prisma as any).UserStatus.ACTIVE, passwordHash } });
 	}
 
 	findManyByAgencyCode(agencyCode: string) {
@@ -27,7 +27,7 @@ export class UsersService {
 	}
 
 	async blockUser(userId: string) {
-		return this.prisma.user.update({ where: { id: userId }, data: { status: UserStatus.BLOCKED } });
+		return this.prisma.user.update({ where: { id: userId }, data: { status: (Prisma as any).UserStatus.BLOCKED } });
 	}
 
 	async findOperatorsByAgencyCode(agencyCode: string) {

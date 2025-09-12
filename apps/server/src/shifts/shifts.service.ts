@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ShiftAction } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
@@ -37,14 +37,18 @@ export class ShiftsService {
     return { active: !!shift };
   }
 
-  async startShift(operatorId: string, agencyId: string) {
+  async startShift(operatorId: string, agencyCode: string) {
     const { canStart, busyGroups } = await this.canStartShiftForOperator(operatorId);
     if (!canStart) {
       throw new ForbiddenException(`Групи зайняті: ${busyGroups.map((g) => g.name).join(', ')}`);
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const shift = await tx.shift.create({ data: { operatorId, agencyId } });
+      const agency = await tx.agency.findUnique({ where: { code: agencyCode } });
+      if (!agency) {
+        throw new NotFoundException('Агенцію не знайдено');
+      }
+      const shift = await tx.shift.create({ data: { operatorId, agencyId: agency.id } });
 
       const links = await tx.operatorGroup.findMany({ where: { operatorId } });
       if (links.length > 0) {
@@ -58,7 +62,7 @@ export class ShiftsService {
       }
 
       await tx.shiftLog.create({
-        data: { shiftId: shift.id, operatorId, agencyId, action: ShiftAction.START, message: 'Shift started' },
+        data: { shiftId: shift.id, operatorId, agencyId: agency.id, action: 'START' as any, message: 'Shift started' },
       });
 
       return shift;
@@ -73,7 +77,7 @@ export class ShiftsService {
       await tx.group.updateMany({ where: { activeShiftId: shift.id }, data: { activeShiftId: null } });
       const closed = await tx.shift.update({ where: { id: shift.id }, data: { endedAt: new Date() } });
       await tx.shiftLog.create({
-        data: { shiftId: shift.id, operatorId, agencyId: shift.agencyId, action: ShiftAction.END, message: 'Shift ended' },
+        data: { shiftId: shift.id, operatorId, agencyId: shift.agencyId, action: 'END' as any, message: 'Shift ended' },
       });
       // Сповіщаємо про завершення зміни (для миттєвого редіректу оператора)
       try { this.events.emit('shift.ended', { operatorId }); } catch {}
@@ -97,6 +101,24 @@ export class ShiftsService {
     }));
   }
 
+  async listLogsByAgency(agencyCode: string) {
+    const agency = await this.prisma.agency.findUnique({ where: { code: agencyCode } });
+    if (!agency) return [] as Array<{ id: string; action: 'START' | 'END'; createdAt: Date; operatorName: string; operatorId: string; message?: string }>;
+    const logs = await this.prisma.shiftLog.findMany({
+      where: { agencyId: agency.id },
+      include: { shift: { include: { operator: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+    return logs.map((l) => ({
+      id: l.id,
+      action: l.action,
+      createdAt: l.createdAt,
+      operatorName: (l as any).shift?.operator?.name ?? '',
+      operatorId: l.operatorId,
+      message: l.message || undefined
+    }));
+  }
+
   async forceEndShiftForOperator(operatorId: string, agencyCode: string) {
     const agency = await this.prisma.agency.findUnique({ where: { code: agencyCode } });
     if (!agency) throw new NotFoundException('Агенцію не знайдено');
@@ -107,7 +129,7 @@ export class ShiftsService {
       await tx.group.updateMany({ where: { activeShiftId: shift.id }, data: { activeShiftId: null } });
       const closed = await tx.shift.update({ where: { id: shift.id }, data: { endedAt: new Date() } });
       await tx.shiftLog.create({
-        data: { shiftId: shift.id, operatorId, agencyId: shift.agencyId, action: ShiftAction.END, message: 'Force ended by owner' },
+        data: { shiftId: shift.id, operatorId, agencyId: shift.agencyId, action: 'END' as any, message: 'Force ended by owner' },
       });
       try { this.events.emit('shift.ended', { operatorId }); } catch {}
       return closed;

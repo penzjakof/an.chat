@@ -295,9 +295,9 @@ export class ChatsService {
 			profiles: profilesMap,
 			sourceProfiles: accessibleProfiles.map(p => ({
 				id: p.id,
-				displayName: p.displayName,
-				provider: p.provider,
-				profileId: p.profileId
+				provider: (p as any).provider,
+				profileId: p.profileId,
+				displayName: (p as any).displayName || (p as any).credentialLogin || p.profileId || null
 			}))
 		};
 	}
@@ -308,7 +308,7 @@ export class ChatsService {
 			
 					// ВИПРАВЛЕННЯ: Використовуємо кешовану версію
 		const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
-		console.log(`📋 Accessible profiles:`, accessibleProfiles.map(p => ({ id: p.id, profileId: p.profileId, displayName: p.displayName })));
+		console.log(`📋 Accessible profiles:`, accessibleProfiles.map(p => ({ id: p.id, profileId: p.profileId })));
 			
 			// Парсимо dialogId для отримання idUser та idInterlocutor
 			const [idUser, idInterlocutor] = dialogId.split('-').map(Number);
@@ -316,7 +316,7 @@ export class ChatsService {
 			
 			// Знаходимо профіль, який відповідає за цей діалог (за profileId = idUser)
 			const targetProfile = accessibleProfiles.find(profile => profile.profileId === idUser.toString());
-			console.log(`🎯 Target profile:`, targetProfile ? { id: targetProfile.id, profileId: targetProfile.profileId, displayName: targetProfile.displayName } : 'not found');
+			console.log(`🎯 Target profile:`, targetProfile ? { id: targetProfile.id, profileId: targetProfile.profileId } : 'not found');
 
 			if (!targetProfile || !targetProfile.profileId) {
 				throw new Error(`No authenticated profile found for this dialog. Looking for profileId: ${idUser}`);
@@ -646,8 +646,7 @@ export class ChatsService {
 
 			console.log('⚡ Using profile for TT restrictions:', {
 				profileId,
-				idInterlocutor,
-				displayName: targetProfile.displayName
+				idInterlocutor
 			});
 
 			// Викликаємо метод провайдера для gRPC запиту
@@ -747,7 +746,7 @@ export class ChatsService {
 
 			// Доступ до профілю
 			const accessibleProfiles = await this.getCachedAccessibleProfiles(auth);
-			console.log('🔍 Accessible profiles:', accessibleProfiles.map(p => ({ id: p.profileId, name: p.displayName })));
+			console.log('🔍 Accessible profiles:', accessibleProfiles.map(p => ({ id: p.profileId })));
 			const targetProfile = accessibleProfiles.find(p => parseInt(p.profileId) === idProfile);
 			console.log('🎯 Target profile search:', { lookingFor: idProfile, found: !!targetProfile, profile: targetProfile });
 			if (!targetProfile) throw new ForbiddenException(`Access denied to profile ${idProfile}`);

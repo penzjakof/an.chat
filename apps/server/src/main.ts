@@ -9,6 +9,7 @@ console.log('🔧 Config initialized');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.setGlobalPrefix('api');
 
   // CORS налаштування тільки для HTTP, WebSocket налаштовується окремо
   const config = app.get(ConfigService);
