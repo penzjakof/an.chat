@@ -9,7 +9,7 @@ module.exports = {
       name: 'anchat-api',
       cwd: './apps/server',
       script: 'node',
-      args: 'dist/src/main.js',
+      args: 'dist/main.js',
       env: {
         NODE_ENV: 'production'
       },

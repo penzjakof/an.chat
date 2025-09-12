@@ -14,6 +14,11 @@ npm ci
 echo "[2/5] Building workspaces"
 npm run build --workspaces
 
+echo "[2.5/5] Generate Prisma client"
+cd "$APP_DIR/apps/server"
+npx prisma generate || true
+cd "$APP_DIR"
+
 echo "[3/5] Starting/Reloading PM2 apps"
 if pm2 ping >/dev/null 2>&1; then
   :
