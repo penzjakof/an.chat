@@ -8,6 +8,7 @@ interface DatameLoginResponse {
 @Injectable()
 export class DatameService {
   private readonly base = 'https://datame.cloud';
+  private readonly agencyCookies = new Map<string, string>();
 
   constructor(private readonly pool: ConnectionPoolService) {}
 
@@ -45,6 +46,14 @@ export class DatameService {
     const refreshToken = data?.data?.refreshToken || '';
     const setCookie = (res as any).headers?.getSetCookie?.() || [];
     return { refreshToken, setCookie };
+  }
+
+  setAgencyCookie(agencyCode: string, cookie: string) {
+    this.agencyCookies.set(agencyCode, cookie);
+  }
+
+  getAgencyCookie(agencyCode: string): string | undefined {
+    return this.agencyCookies.get(agencyCode);
   }
 
   async collection(params: { status?: string; limit?: number; id_last?: number | string }, cookie: string): Promise<any> {
