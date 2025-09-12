@@ -20,6 +20,9 @@ npm ci || {
   npm ci;
 }
 
+echo "[1.9/5] Clean Next.js cache (before build)"
+rm -rf "$APP_DIR/apps/web/.next" || true
+
 echo "[2/5] Building workspaces"
 if ! npm run build --workspaces; then
   echo "[2/5] Build failed — retrying web without Turbopack"
@@ -30,9 +33,6 @@ echo "[2.5/5] Generate Prisma client"
 cd "$APP_DIR/apps/server"
 npx prisma generate || true
 cd "$APP_DIR"
-
-echo "[2.6/5] Clean Next.js cache"
-rm -rf "$APP_DIR/apps/web/.next" || true
 
 echo "[3/5] Starting/Reloading PM2 apps"
 if pm2 ping >/dev/null 2>&1; then
