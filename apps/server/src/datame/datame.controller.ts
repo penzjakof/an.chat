@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { DatameService } from './datame.service';
-
-@Controller('api/datame')
+// Глобальний префікс вже 'api' у main.ts, тому тут тільки 'datame'
+@Controller('datame')
 export class DatameController {
   // Для простоти — в cookieHeader передаємо повний Cookie рядок з tld-token, user, _csrf
   constructor(private readonly datame: DatameService) {}
