@@ -9,7 +9,13 @@ APP_DIR=${APP_DIR:-$ROOT_DIR}
 
 echo "[1/5] Installing dependencies (workspaces)"
 cd "$APP_DIR"
-npm ci
+# Чисте встановлення з fallback у разі збоїв кеша/артефактів
+npm ci || {
+  echo "npm ci failed, cleaning cache and retrying...";
+  npm cache clean --force || true;
+  rm -rf node_modules || true;
+  npm ci;
+}
 
 echo "[2/5] Building workspaces"
 npm run build --workspaces
