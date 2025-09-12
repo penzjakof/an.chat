@@ -9,10 +9,13 @@ APP_DIR=${APP_DIR:-$ROOT_DIR}
 
 echo "[1/5] Installing dependencies (workspaces)"
 cd "$APP_DIR"
-# Чисте встановлення з fallback у разі збоїв кеша/артефактів
+# Повне очищення перед інсталяцією, щоб уникнути EEXIST symlink
+rm -rf node_modules || true
+mkdir -p node_modules
+rm -f node_modules/server node_modules/web || true
+npm cache clean --force || true
 npm ci || {
-  echo "npm ci failed, cleaning cache and retrying...";
-  npm cache clean --force || true;
+  echo "npm ci failed, cleaning and retrying...";
   rm -rf node_modules || true;
   npm ci;
 }
