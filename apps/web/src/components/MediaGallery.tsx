@@ -186,7 +186,7 @@ export function MediaGallery({
 
   // Кеш функції
   const UNIFIED_PHOTO_CACHE_KEY = `gallery_unified_photos_${profileId}`;
-  const FILTER_CACHE_KEY = `gallery_filters_${profileId}`;
+  const FILTER_CACHE_KEY = 'gallery_filters';
   const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 години
 
   // Функції для роботи з єдиним кешем фото
@@ -492,7 +492,7 @@ export function MediaGallery({
       setPhotoType(initial);
       // статус-фільтр можемо брати з кешу як і раніше
       try {
-        const cachedFilters = localStorage.getItem(`gallery_filters_${profileId}`);
+        const cachedFilters = localStorage.getItem(FILTER_CACHE_KEY);
         if (cachedFilters) {
           const filters = JSON.parse(cachedFilters);
           if (filters.statusFilter) setStatusFilter(filters.statusFilter);
@@ -509,7 +509,7 @@ export function MediaGallery({
       const timeoutId = setTimeout(() => {
         try {
           const filtersToSave = { photoType, statusFilter };
-          localStorage.setItem(`gallery_filters_${profileId}`, JSON.stringify(filtersToSave));
+          localStorage.setItem(FILTER_CACHE_KEY, JSON.stringify(filtersToSave));
           console.log('💾 Filters saved to cache:', filtersToSave);
         } catch (error) {
           console.warn('Failed to save filters to cache:', error);
