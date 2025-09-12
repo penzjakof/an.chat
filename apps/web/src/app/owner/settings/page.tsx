@@ -17,7 +17,7 @@ export default function OwnerSettingsPage() {
   const [password, setPassword] = useState('');
   const [progress, setProgress] = useState<{ total: number; loaded: number; loading: boolean }>({ total: 0, loaded: 0, loading: false });
   const [loginInfo, setLoginInfo] = useState<string>('');
-  const [collected, setCollected] = useState<Array<{ id: number; name: string; age?: number }>>([]);
+  const [collected, setCollected] = useState<Array<{ id: number; name: string; age?: number; email?: string; avatar?: string }>>([]);
   const [collecting, setCollecting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [importMode, setImportMode] = useState<'new_only' | 'replace_all' | 'skip'>('new_only');
@@ -62,17 +62,41 @@ export default function OwnerSettingsPage() {
         if (!Array.isArray(items) || items.length === 0) break;
         total += items.length;
         loaded = total;
-        setCollected(prev => [...prev, ...items.map((x: any) => ({ id: x.id, name: x.name, age: x.age }))]);
+        setCollected(prev => [
+          ...prev,
+          ...items.map((x: any) => ({ id: x.id, name: x.name, age: x.age, avatar: x.avatar_xxs || x.avatar_small || x.avatar || '' }))
+        ]);
         setProgress({ total, loaded, loading: true });
         id_last = items[items.length - 1].id;
         // запобігти блокуванню UI
         await new Promise(r => setTimeout(r, 50));
       }
       setProgress(p => ({ ...p, loading: false }));
+      // після збору — підтягнути email-и з form-data
+      await enrichEmails();
     } catch (e) {
       setProgress(p => ({ ...p, loading: false }));
     } finally {
       setCollecting(false);
+    }
+  };
+
+  const enrichEmails = async (max: number = Infinity) => {
+    let processed = 0;
+    for (let i = 0; i < collected.length; i++) {
+      if (processed >= max) break;
+      const item = collected[i];
+      if (item.email) continue;
+      try {
+        const fd = await apiPost<any>('/datame/form-data', { id: item.id });
+        const email = fd?.data?.profile?.email || '';
+        if (email) {
+          setCollected(prev => prev.map((p, idx) => idx === i ? { ...p, email } : p));
+        }
+      } catch {}
+      processed++;
+      // невелика пауза
+      await new Promise(r => setTimeout(r, 25));
     }
   };
 
@@ -159,21 +183,25 @@ export default function OwnerSettingsPage() {
               <table className="min-w-full">
                 <thead>
                   <tr>
+                    <th className="px-3 py-2 text-left">Аватар</th>
+                    <th className="px-3 py-2 text-left">Імʼя, вік</th>
+                    <th className="px-3 py-2 text-left">Email</th>
                     <th className="px-3 py-2 text-left">ID</th>
-                    <th className="px-3 py-2 text-left">Імʼя</th>
-                    <th className="px-3 py-2 text-left">Вік</th>
                   </tr>
                 </thead>
                 <tbody>
                   {collected.slice(0, 50).map(i => (
                     <tr key={i.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 border-t text-sm">
+                        {i.avatar ? <img src={i.avatar} alt="avatar" className="w-8 h-8 rounded" /> : <div className="w-8 h-8 rounded bg-gray-200" />}
+                      </td>
+                      <td className="px-3 py-2 border-t text-sm">{i.name}{typeof i.age === 'number' ? `, ${i.age}` : ''}</td>
+                      <td className="px-3 py-2 border-t text-sm">{i.email || ''}</td>
                       <td className="px-3 py-2 border-t text-sm">{i.id}</td>
-                      <td className="px-3 py-2 border-t text-sm">{i.name}</td>
-                      <td className="px-3 py-2 border-t text-sm">{i.age ?? ''}</td>
                     </tr>
                   ))}
                   {collected.length > 50 && (
-                    <tr><td colSpan={3} className="px-3 py-2 text-sm text-gray-500">Показано перші 50...</td></tr>
+                    <tr><td colSpan={4} className="px-3 py-2 text-sm text-gray-500">Показано перші 50...</td></tr>
                   )}
                 </tbody>
               </table>
