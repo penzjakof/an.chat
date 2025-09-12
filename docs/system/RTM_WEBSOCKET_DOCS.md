@@ -58,13 +58,12 @@ TalkyTimes RTM → RTMService → ChatsGateway → WebSocket → Frontend → To
 
 ## 🧪 Testing
 
-Comprehensive test suite covering:
-- RTM Service connection and message handling
-- ChatsGateway WebSocket events and RTM integration  
-- WebSocket Pool socket management and dialog switching
-- Toast Component rendering, animations, and interactions
+Як перевірити в продакшені/стейджингу:
+- Переконатися, що RTM підключення активні: `GET /api/tt/rtm-status` (очікується `connected`).
+- Відкрити UI чату і отримати реальне RTM повідомлення — має зʼявитися toast та оновитись список діалогів.
+- Перевірити логи: `pm2 logs anchat-api --lines 100 --nostream` — події `rtm.message.new`, `rtm.email.new`, `rtm.message.read`, `rtm.dialog.limit.changed`.
 
-Run tests: `./test-rtm-websocket.sh`
+Примітка: окремого тест-скрипта немає; валідація виконується інтеграційно через реальні RTM події.
 
 ## ✅ Production Ready
 
@@ -89,3 +88,14 @@ Run tests: `./test-rtm-websocket.sh`
 10. **Full message type support** with proper content parsing and display
 
 The system is now production-ready with robust real-time messaging! 🎉
+
+## 🔔 Події та емісії (актуальні назви)
+
+- Вхідні RTM події (OnEvent):
+  - `rtm.message.new` — нові чат-повідомлення
+  - `rtm.email.new` — нові листи (correspondence)
+  - `rtm.message.read` — прочитання повідомлень
+  - `rtm.dialog.limit.changed` — зміна лімітів діалогу
+- Вебсокет емісії з `ChatsGateway`:
+  - В кімнату `profile:{profileId}`: `message_toast` (коротка карточка події)
+  - В кімнату `dialog:{dialogId}`: реальні оновлення історії/статусів

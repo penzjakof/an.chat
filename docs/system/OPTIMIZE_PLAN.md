@@ -3,7 +3,7 @@
 Мета: спростити кодову базу, зменшити звʼязність, підвищити стабільність і спостережуваність без зміни бізнес-логіки.
 
 ### Фаза 1 — низький ризик, швидкий ефект
-- [ ] Backend/Core: підключити `@nestjs/config` + схеми валідації (Zod), прибрати прямі `process.env`.
+- [x] Backend/Core: підключити `@nestjs/config` + схеми валідації (Zod), прибрати прямі `process.env`.
 - [ ] Backend/Core: увімкнути глобально `ValidationPipe({ whitelist: true, transform: true })`.
 - [ ] Backend/Core: додати `LoggingInterceptor` і `HttpExceptionFilter`; замінити `console.log` на `Logger`.
 - [ ] Chats: додати ліміт паралельних запитів у `chats.service` (p-limit 5–8 замість повного `allSettled`).
@@ -24,12 +24,12 @@
 - [ ] TT Sessions: модель з зашифрованим cookie-jar, `expiresAt`, `lastValidatedAt`, `source`.
 - [ ] TT Sessions: фоновий валідатор/рефрешер (scheduler) з backoff.
 - [ ] Profiles: централізувати оновлення пароля; аудит у `ShiftLog`.
-- [ ] Prisma/DB: переглянути/додати індекси під ключові запити; звести повʼязані записи в `prisma.$transaction`.
+- [x] Prisma/DB: переглянути/додати індекси під ключові запити; звести повʼязані записи в `prisma.$transaction`.
 - [ ] Frontend/Types: в CI запускати `tsc --noEmit` як окремий job (warning-режим).
 - [ ] Frontend/Types: поступово прибрати `ignoreDuringBuilds` і `ignoreBuildErrors` у `next.config.ts`.
 
 ### Безпека та документація (паралельно з фазами)
-- [ ] Секрети/ключі винести в `.env` / Secret Manager; прибрати з `.md`.
+- [x] Секрети/ключі винести в `.env` / Secret Manager; прибрати з `.md`.
 - [ ] RBAC: уніфікувати `@Roles`; додати інтеграційні тести доступів.
 
 ### Що прибрати / спростити

@@ -193,15 +193,13 @@ SELECT * FROM Profile WHERE provider = 'TALKYTIMES' AND profileId = '123456'
 
 ## 🔧 Технічні деталі
 
-### **SQLite Index Statistics**
+### **PostgreSQL Index Statistics**
 ```sql
--- Перевірка використання індексів
-EXPLAIN QUERY PLAN SELECT * FROM User WHERE username = 'test';
--- Result: SEARCH TABLE User USING INDEX User_username_idx (username=?)
+-- Перевірка плану запиту
+EXPLAIN ANALYZE SELECT * FROM "User" WHERE username = 'test';
 
--- Статистика індексів
-PRAGMA index_list('User');
-PRAGMA index_info('User_username_idx');
+-- Список індексів у схемі public
+SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public';
 ```
 
 ### **Index Maintenance**

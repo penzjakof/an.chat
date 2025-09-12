@@ -104,7 +104,7 @@ const activeLottieInstances = useRef<Map<string, any>>(new Map());
 
 ## 🚀 API Endpoints
 
-### GET `/profiles/:id/gift-limits`
+### POST `/api/profiles/:id/gift-limits`
 Отримання лімітів відправки подарунків для профілю
 
 **Параметри:**
@@ -122,7 +122,7 @@ const activeLottieInstances = useRef<Map<string, any>>(new Map());
 }
 ```
 
-### GET `/profiles/:id/gift-list`
+### GET `/api/profiles/:id/gift-list` (якщо додасте окремий endpoint) / Наразі — використовується внутрішній провайдер без прямого REST ендпоінта.
 Отримання списку доступних подарунків з пагінацією
 
 **Параметри:**
@@ -152,7 +152,7 @@ const activeLottieInstances = useRef<Map<string, any>>(new Map());
 }
 ```
 
-### POST `/profiles/:id/send-gift`
+### POST `/api/profiles/:id/send-gift` (якщо додасте окремий endpoint) / Наразі — відправка через `TalkyTimesProvider.sendVirtualGift()` із ProfilesService/Controller викликів немає.
 Відправка подарунку клієнту
 
 **Параметри:**

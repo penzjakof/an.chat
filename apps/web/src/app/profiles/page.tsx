@@ -53,6 +53,18 @@ export default function ProfilesPage() {
     groupId: '',
   });
   const [newGroupName, setNewGroupName] = useState('');
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importRows, setImportRows] = useState<Array<{
+    displayName: string;
+    credentialLogin: string;
+    credentialPassword?: string;
+    provider?: string;
+    groupId?: string;
+    groupName?: string;
+    status?: 'pending' | 'success' | 'error';
+    errorMessage?: string;
+  }>>([]);
+  const [isImporting, setIsImporting] = useState(false);
   const router = useRouter();
   const userRole = getRole();
 
@@ -98,6 +110,129 @@ export default function ProfilesPage() {
       setError('Помилка створення групи');
       console.error(err);
     }
+  };
+
+  // ===== CSV Import =====
+  const handleDownloadTemplate = () => {
+    const headers = ['displayName','credentialLogin','credentialPassword','provider','groupName'];
+    const example = ['Anna Example','anna_login','secret123','TALKYTIMES','Default Group'];
+    const csv = `${headers.join(',')}\n${example.join(',')}\n`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'profiles_template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  function parseCsvLine(line: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          // Escaped quote
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          current += ch;
+        }
+      } else {
+        if (ch === ',') {
+          result.push(current);
+          current = '';
+        } else if (ch === '"') {
+          inQuotes = true;
+        } else {
+          current += ch;
+        }
+      }
+    }
+    result.push(current);
+    return result.map(v => v.trim());
+  }
+
+  const handleCsvFile = async (file: File) => {
+    const text = await file.text();
+    const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim().length > 0);
+    if (lines.length === 0) {
+      setImportRows([]);
+      return;
+    }
+    const header = parseCsvLine(lines[0]).map(h => h.toLowerCase());
+    const rows: Array<any> = [];
+    for (let i = 1; i < lines.length; i++) {
+      const fields = parseCsvLine(lines[i]);
+      const row: Record<string, string> = {};
+      header.forEach((h, idx) => {
+        row[h] = fields[idx] || '';
+      });
+      const item = {
+        displayName: row['displayname'] || '',
+        credentialLogin: row['credentiallogin'] || '',
+        credentialPassword: row['credentialpassword'] || '',
+        provider: row['provider'] || 'TALKYTIMES',
+        groupId: row['groupid'] || '',
+        groupName: row['groupname'] || '',
+        status: 'pending' as const
+      };
+      // Відфільтровуємо порожні рядки
+      if (item.displayName || item.credentialLogin) {
+        rows.push(item);
+      }
+    }
+    setImportRows(rows);
+    setShowImportModal(true);
+  };
+
+  const resolveGroupId = async (groupId: string | undefined, groupName: string | undefined): Promise<string> => {
+    if (groupId && groups.some(g => g.id === groupId)) return groupId;
+    if (groupName) {
+      const existing = groups.find(g => g.name.toLowerCase() === groupName.toLowerCase());
+      if (existing) return existing.id;
+      // створюємо нову групу
+      try {
+        const newGroup = await apiPost<Group>('/groups', { name: groupName });
+        setGroups(prev => [...prev, newGroup]);
+        return newGroup.id;
+      } catch {
+        throw new Error(`Не вдалося створити групу: ${groupName}`);
+      }
+    }
+    // якщо нічого не задано — помилка
+    throw new Error('Потрібно вказати groupId або groupName');
+  };
+
+  const handleImport = async () => {
+    setIsImporting(true);
+    const updated: typeof importRows = [...importRows];
+    for (let i = 0; i < updated.length; i++) {
+      const r = updated[i];
+      try {
+        const gid = await resolveGroupId(r.groupId, r.groupName);
+        await apiPost('/profiles', {
+          displayName: r.displayName,
+          credentialLogin: r.credentialLogin,
+          credentialPassword: r.credentialPassword,
+          provider: r.provider || 'TALKYTIMES',
+          groupId: gid
+        } as any);
+        updated[i] = { ...r, status: 'success', errorMessage: undefined };
+      } catch (e: any) {
+        updated[i] = { ...r, status: 'error', errorMessage: e?.message || 'Помилка' };
+      }
+      setImportRows([...updated]);
+    }
+    setIsImporting(false);
+    // Оновлюємо список профілів
+    loadData();
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -187,12 +322,30 @@ export default function ProfilesPage() {
       {/* Основний контент */}
       <div className="flex-1 overflow-y-auto p-6 custom-scroll">
 
-      <button
-        onClick={() => setShowCreateForm(!showCreateForm)}
-        className="bg-primary text-white px-4 py-2 rounded mb-4 hover:bg-primary-dark"
-      >
-        {showCreateForm ? 'Приховати форму' : 'Створити новий профіль'}
-      </button>
+      <div className="flex gap-3 mb-4">
+        <button
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark"
+        >
+          {showCreateForm ? 'Приховати форму' : 'Створити новий профіль'}
+        </button>
+        <label className="bg-blue-500 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-600">
+          Імпорт CSV
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleCsvFile(file);
+              e.currentTarget.value = '';
+            }}
+          />
+        </label>
+        <button onClick={handleDownloadTemplate} className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">
+          Шаблон CSV
+        </button>
+      </div>
 
       {showCreateForm && (
         <form onSubmit={handleCreate} className="bg-gray-100 p-4 rounded mb-6">
@@ -309,6 +462,64 @@ export default function ProfilesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg w-full max-w-4xl max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-3">Імпорт профілів з CSV</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Підтримувані колонки: <code>displayName</code>, <code>credentialLogin</code>, <code>credentialPassword</code>, <code>provider</code> (за замовчуванням TALKYTIMES),
+              <code>groupId</code> або <code>groupName</code>.
+            </p>
+            <div className="overflow-x-auto border rounded">
+              <table className="min-w-full bg-white">
+                <thead>
+                  <tr>
+                    <th className="py-2 px-3 border-b text-left">Ім'я</th>
+                    <th className="py-2 px-3 border-b text-left">Логін</th>
+                    <th className="py-2 px-3 border-b text-left">Пароль</th>
+                    <th className="py-2 px-3 border-b text-left">Платформа</th>
+                    <th className="py-2 px-3 border-b text-left">Група (ID/Name)</th>
+                    <th className="py-2 px-3 border-b text-left">Статус</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importRows.map((r, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="py-2 px-3 border-b">{r.displayName}</td>
+                      <td className="py-2 px-3 border-b">{r.credentialLogin}</td>
+                      <td className="py-2 px-3 border-b">{r.credentialPassword ? '••••••' : ''}</td>
+                      <td className="py-2 px-3 border-b">{r.provider || 'TALKYTIMES'}</td>
+                      <td className="py-2 px-3 border-b">{r.groupId || r.groupName || ''}</td>
+                      <td className="py-2 px-3 border-b">
+                        {r.status === 'pending' && <span className="text-gray-600">Очікує</span>}
+                        {r.status === 'success' && <span className="text-green-600">Імпортовано</span>}
+                        {r.status === 'error' && <span className="text-red-600">Помилка: {r.errorMessage}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex gap-2 justify-end">
+              <button
+                className={`px-4 py-2 rounded text-white ${isImporting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                onClick={handleImport}
+                disabled={isImporting || importRows.length === 0}
+              >
+                {isImporting ? 'Імпорт триває...' : 'Імпортувати'}
+              </button>
+              <button
+                className="px-4 py-2 rounded text-white bg-gray-600 hover:bg-gray-700"
+                onClick={() => { setShowImportModal(false); setImportRows([]); }}
+                disabled={isImporting}
+              >
+                Закрити
+              </button>
+            </div>
           </div>
         </div>
       )}
