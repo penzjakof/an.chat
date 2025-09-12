@@ -18,7 +18,10 @@ npm ci || {
 }
 
 echo "[2/5] Building workspaces"
-npm run build --workspaces
+if ! npm run build --workspaces; then
+  echo "[2/5] Build failed — retrying web without Turbopack"
+  npm --workspace apps/web run build:compat
+fi
 
 echo "[2.5/5] Generate Prisma client"
 cd "$APP_DIR/apps/server"
