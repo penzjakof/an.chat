@@ -52,7 +52,18 @@ export class ProfilesService {
 
 	async authenticateProfile(profileId: string, loginOverride: string | undefined, password: string, agencyCode: string) {
 		try {
-			const profile = await this.prisma.profile.findUnique({ where: { id: profileId } });
+			const profile = await this.prisma.profile.findUnique({
+				where: { id: profileId },
+				select: {
+					id: true,
+					displayName: true,
+					credentialLogin: true,
+					credentialPassword: true,
+					provider: true,
+					groupId: true,
+					profileId: true,
+				}
+			});
 			if (!profile) throw new BadRequestException('Profile not found');
 
 			const decryptedPassword = this.encryption.decrypt(profile.credentialPassword ?? undefined);
@@ -165,7 +176,19 @@ export class ProfilesService {
 	}
 
 	async updateProfile(id: string, data: { displayName?: string; credentialLogin?: string; credentialPassword?: string; provider?: string; groupId?: string }, agencyCode: string) {
-		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
+		const profile = await this.prisma.profile.findUnique({
+			where: { id },
+			select: {
+				id: true,
+				displayName: true,
+				credentialLogin: true,
+				credentialPassword: true,
+				provider: true,
+				groupId: true,
+				profileId: true,
+				group: { include: { agency: true } },
+			}
+		});
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
 		// Дозволяємо OWNER оновлювати профілі своєї агенції або профілі без групи
 		const allowed = !!profile && (profile.group?.agency?.code === agencyCode || profile.groupId == null);
@@ -228,7 +251,14 @@ export class ProfilesService {
 	}
 
 	async deleteProfile(id: string, agencyCode: string) {
-		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
+		const profile = await this.prisma.profile.findUnique({
+			where: { id },
+			select: {
+				id: true,
+				groupId: true,
+				group: { include: { agency: true } },
+			}
+		});
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
 		const allowed = !!profile && (profile.group?.agency?.code === agencyCode || profile.groupId == null);
 		if (!allowed) throw new ForbiddenException('Доступ заборонено');
@@ -237,7 +267,15 @@ export class ProfilesService {
 	}
 
 	async getProfileDataById(id: string, agencyCode: string) {
-		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
+		const profile = await this.prisma.profile.findUnique({
+			where: { id },
+			select: {
+				id: true,
+				groupId: true,
+				profileId: true,
+				group: { include: { agency: true } },
+			}
+		});
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
 		const allowed = !!profile && (profile.group?.agency?.code === agencyCode || profile.groupId == null);
 		if (!allowed) throw new ForbiddenException('Доступ заборонено');
@@ -261,7 +299,15 @@ export class ProfilesService {
 	}
 
 	async getClientPublicProfile(id: string, clientId: number, agencyCode: string) {
-		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
+		const profile = await this.prisma.profile.findUnique({
+			where: { id },
+			select: {
+				id: true,
+				groupId: true,
+				profileId: true,
+				group: { include: { agency: true } },
+			}
+		});
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
 		const allowed = !!profile && (profile.group?.agency?.code === agencyCode || profile.groupId == null);
 		if (!allowed) throw new ForbiddenException('Доступ заборонено');
@@ -281,7 +327,15 @@ export class ProfilesService {
 	}
 
 	async getClientPhotos(id: string, clientId: number, agencyCode: string) {
-		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
+		const profile = await this.prisma.profile.findUnique({
+			where: { id },
+			select: {
+				id: true,
+				groupId: true,
+				profileId: true,
+				group: { include: { agency: true } },
+			}
+		});
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
 		const allowed = !!profile && (profile.group?.agency?.code === agencyCode || profile.groupId == null);
 		if (!allowed) throw new ForbiddenException('Доступ заборонено');
@@ -300,7 +354,15 @@ export class ProfilesService {
 		const result: Record<string, { authenticated: boolean; message: string }> = {};
 		for (const id of ids) {
 			try {
-				const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
+				const profile = await this.prisma.profile.findUnique({
+					where: { id },
+					select: {
+						id: true,
+						groupId: true,
+						profileId: true,
+						group: { include: { agency: true } },
+					}
+				});
 				const allowed = !!profile && (profile.group?.agency?.code === agencyCode || profile.groupId == null);
 				if (!allowed) {
 					result[id] = { authenticated: false, message: 'Профіль не знайдено' };
@@ -329,7 +391,15 @@ export class ProfilesService {
 		if (!Number.isFinite(clientId)) {
 			throw new BadRequestException('clientId is required');
 		}
-		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
+		const profile = await this.prisma.profile.findUnique({
+			where: { id },
+			select: {
+				id: true,
+				groupId: true,
+				profileId: true,
+				group: { include: { agency: true } },
+			}
+		});
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
 		const allowed = !!profile && (profile.group?.agency?.code === agencyCode || profile.groupId == null);
 		if (!allowed) throw new ForbiddenException('Доступ заборонено');
