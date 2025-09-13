@@ -39,11 +39,15 @@ export class DatameImportService {
     return { byEmail, byProfileId };
   }
 
-  async importItems(agencyCode: string, groupId: string, items: Array<{ id: number; email: string; name?: string }>, mode: 'new_only' | 'replace_all' | 'skip') {
+  async importItems(agencyCode: string, groupId: string | undefined, items: Array<{ id: number; email: string; name?: string }>, mode: 'new_only' | 'replace_all' | 'skip') {
     const agency = await this.prisma.agency.findUnique({ where: { code: agencyCode } });
     if (!agency) throw new Error('Agency not found');
-    const group = await this.prisma.group.findUnique({ where: { id: groupId } });
-    if (!group || group.agencyId !== agency.id) throw new Error('Group not found for agency');
+    let group: { id: string } | null = null;
+    if (groupId) {
+      const g = await this.prisma.group.findUnique({ where: { id: groupId } });
+      if (!g || g.agencyId !== agency.id) throw new Error('Group not found for agency');
+      group = { id: g.id };
+    }
 
     const dup = await this.findDuplicates(agencyCode, items);
     const results: Array<{ id: number; status: 'created' | 'skipped' | 'replaced'; profileId?: string }> = [];
@@ -68,7 +72,7 @@ export class DatameImportService {
             provider: 'TALKYTIMES' as any,
             profileId: String(it.id),
             externalId: String(it.id),
-            groupId: group.id,
+            ...(group ? { groupId: group.id } : {}),
           },
         });
         results.push({ id: it.id, status: 'replaced', profileId: existing });
@@ -85,7 +89,7 @@ export class DatameImportService {
             credentialPassword: it.email ? this.enc.encrypt(it.email) : null,
             profileId: String(it.id),
             status: 'ACTIVE' as any,
-            groupId: group.id,
+            ...(group ? { groupId: group.id } : {}),
           },
           select: { id: true },
         });

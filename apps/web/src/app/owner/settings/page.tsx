@@ -301,12 +301,12 @@ export default function OwnerSettingsPage() {
       } catch {}
     }
     const pwd = rowPwd[itemId] || emailVal || '';
-    const gid = rowGroup[itemId] || groups[0]?.id || '';
-    if (!emailVal || !gid) return alert('Заповніть email та групу');
+    const gid = rowGroup[itemId];
+    if (!emailVal) return alert('Заповніть email');
     setRowStatus(prev => ({ ...prev, [itemId]: 'saving' }));
     try {
       await apiPost('/datame-import/import', {
-        groupId: gid,
+        groupId: gid || undefined,
         items: [{ id: item.id, email: emailVal, name: item.name || '' }],
         mode: 'new_only'
       });

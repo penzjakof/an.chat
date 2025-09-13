@@ -105,10 +105,10 @@ model Profile {
   profileId          String?
   status       ProfileStatus @default(ACTIVE)
   lastActiveAt       DateTime?
-  groupId            String
+  groupId            String?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
-  group              Group         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  group              Group?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   @@unique([provider, externalId])
   @@index([groupId])

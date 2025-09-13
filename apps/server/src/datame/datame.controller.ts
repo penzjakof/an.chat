@@ -83,7 +83,7 @@ export class DatameImportController {
   }
 
   @Post('import')
-  async import(@Body() body: { groupId: string; items: Array<{ id: number; email: string; name?: string }>; mode: 'new_only' | 'replace_all' | 'skip'; agencyCode?: string }, @Req() req: Request) {
+  async import(@Body() body: { groupId?: string; items: Array<{ id: number; email: string; name?: string }>; mode: 'new_only' | 'replace_all' | 'skip'; agencyCode?: string }, @Req() req: Request) {
     try {
       const agencyCode = body.agencyCode || (req as any)?.auth?.agencyCode || 'default';
       return await this.importer.importItems(agencyCode, body.groupId, body.items || [], body.mode || 'new_only');
