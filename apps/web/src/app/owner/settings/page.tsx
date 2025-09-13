@@ -215,20 +215,21 @@ export default function OwnerSettingsPage() {
   };
 
   const checkDuplicates = async () => {
-    if (collected.length === 0) return;
+    const base = selectedConnIdx !== null ? (connections[selectedConnIdx]?.items || []) : collected;
+    if (base.length === 0) return;
     const resp = await apiPost<{ byEmail: Record<string,string>; byProfileId: Record<string,string> }>(
       '/datame-import/check-duplicates',
-      { items: collected.map(c => ({ id: c.id })) }
+      { items: base.map(c => ({ id: c.id })) }
     );
     setDupInfo(resp);
   };
 
   const doImport = async () => {
     if (!targetGroupId) return alert('Оберіть групу');
-    if (collected.length === 0) return;
-    // тягнемо емейли через form-data, щоб імпортувати валідно
+    const base = selectedConnIdx !== null ? (connections[selectedConnIdx!]?.items || []) : collected;
+    if (base.length === 0) return;
     const items: Array<{ id: number; email: string; name?: string }> = [];
-    for (const c of collected.slice(0, 500)) { // обмежимо пачку для UI
+    for (const c of base.slice(0, 500)) {
       try {
         const fd = await apiPost<any>('/datame/form-data', { id: c.id });
         const email = fd?.data?.profile?.email || '';
