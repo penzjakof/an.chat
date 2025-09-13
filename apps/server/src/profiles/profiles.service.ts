@@ -51,30 +51,35 @@ export class ProfilesService {
 	}
 
 	async authenticateProfile(profileId: string, loginOverride: string | undefined, password: string, agencyCode: string) {
-		const profile = await this.prisma.profile.findUnique({ where: { id: profileId } });
-		if (!profile) throw new BadRequestException('Profile not found');
+		try {
+			const profile = await this.prisma.profile.findUnique({ where: { id: profileId } });
+			if (!profile) throw new BadRequestException('Profile not found');
 
-		const decryptedPassword = this.encryption.decrypt(profile.credentialPassword ?? undefined);
+			const decryptedPassword = this.encryption.decrypt(profile.credentialPassword ?? undefined);
+			const loginToUse = loginOverride || profile.credentialLogin;
+			if (!loginToUse) {
+				throw new BadRequestException('Profile login credentials not found');
+			}
 
-		const loginToUse = loginOverride || profile.credentialLogin;
-		if (!loginToUse) {
-			throw new BadRequestException('Profile login credentials not found');
-		}
-		const result = await this.talkyTimesProvider.validateCredentials(loginToUse, password);
+			const result = await this.talkyTimesProvider.validateCredentials(loginToUse, password);
 
-		const passwordsMatch = decryptedPassword === password;
-		const updateData: Partial<typeof profile> = {} as any;
-		if (loginOverride && loginOverride !== profile.credentialLogin) {
-			(updateData as any).credentialLogin = loginOverride;
-		}
-		if (!passwordsMatch) {
-			(updateData as any).credentialPassword = this.encryption.encrypt(password);
-		}
-		if (Object.keys(updateData).length > 0) {
-			await this.prisma.profile.update({ where: { id: profileId }, data: updateData });
-		}
+			const passwordsMatch = decryptedPassword === password;
+			const updateData: Partial<typeof profile> = {} as any;
+			if (loginOverride && loginOverride !== profile.credentialLogin) {
+				(updateData as any).credentialLogin = loginOverride;
+			}
+			if (!passwordsMatch) {
+				(updateData as any).credentialPassword = this.encryption.encrypt(password);
+			}
+			if (Object.keys(updateData).length > 0) {
+				await this.prisma.profile.update({ where: { id: profileId }, data: updateData });
+			}
 
-		return result;
+			return result;
+		} catch (e: any) {
+			// Не ламаємо UI 500-кою, повертаємо контрольовану помилку
+			throw new BadRequestException(e?.message || 'Помилка автентифікації');
+		}
 	}
 
 	// ===== CRUD для профілів =====
