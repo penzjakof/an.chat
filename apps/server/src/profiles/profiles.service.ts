@@ -191,15 +191,29 @@ export class ProfilesService {
 			const normalizedProvider = data.provider
 				? ((Prisma as any).ProviderSite[data.provider as any] ?? (profile as any).provider)
 				: (profile as any).provider;
+
+			// Формуємо лише змінені поля, щоб уникати зайвих записів
+			const updateData: any = {};
+			if (data.displayName !== undefined && data.displayName !== profile.displayName) {
+				updateData.displayName = data.displayName;
+			}
+			if (data.credentialLogin !== undefined && data.credentialLogin !== profile.credentialLogin) {
+				updateData.credentialLogin = data.credentialLogin || null;
+			}
+			if (data.provider !== undefined && normalizedProvider !== (profile as any).provider) {
+				updateData.provider = normalizedProvider;
+			}
+			if (data.groupId !== undefined && targetGroupId !== profile.groupId) {
+				updateData.groupId = targetGroupId;
+			}
+			// Пароль оновлюємо лише якщо був переданий не-порожній
+			if (encrypted !== undefined) {
+				updateData.credentialPassword = encrypted;
+			}
+
 			return await this.prisma.profile.update({
 				where: { id },
-				data: {
-					displayName: data.displayName ?? profile.displayName,
-					credentialLogin: data.credentialLogin ?? profile.credentialLogin,
-					credentialPassword: encrypted !== undefined ? encrypted : profile.credentialPassword,
-					provider: normalizedProvider,
-					groupId: targetGroupId,
-				},
+				data: updateData,
 				include: { group: true }
 			});
 		} catch (e: any) {
