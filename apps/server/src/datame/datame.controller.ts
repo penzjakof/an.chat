@@ -1,12 +1,23 @@
-import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { DatameService } from './datame.service';
 import { DatameImportService } from './datame.import.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { BadRequestException } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt.guard';
+import { Roles } from '../common/auth/roles.guard';
+import { Role } from '../common/auth/auth.types';
 // Глобальний префікс вже 'api' у main.ts, тому тут тільки 'datame'
 @Controller('datame')
+@UseGuards(JwtAuthGuard)
+@Roles(Role.OWNER)
 export class DatameController {
   // Для простоти — в cookieHeader передаємо повний Cookie рядок з tld-token, user, _csrf
-  constructor(private readonly datame: DatameService, private readonly importer: DatameImportService) {}
+  constructor(
+    private readonly datame: DatameService,
+    private readonly importer: DatameImportService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Post('login')
   async login(@Body() body: { email: string; password: string; cookieHeader?: string }, @Req() req: Request) {
@@ -16,6 +27,20 @@ export class DatameController {
     const agencyCode = (req as any)?.auth?.agencyCode || 'default';
     const joined = [cookieHeader, res.cookieHeader].filter(Boolean).join('; ');
     if (joined) this.datame.setAgencyCookie(agencyCode, joined);
+    // best-effort збереження підключення адмін-панелі
+    try {
+      const agency = await this.prisma.agency.findUnique({ where: { code: agencyCode } });
+      if (agency) {
+        await this.prisma.adminPanelConnection.upsert({
+          where: { agencyId_platform_email: { agencyId: agency.id, platform: 'TALKYTIMES', email } },
+          update: { status: 'connected', lastUpdatedAt: new Date(), passwordEnc: password /* TODO: encrypt */ },
+          create: { agencyId: agency.id, platform: 'TALKYTIMES' as any, email, status: 'connected', lastUpdatedAt: new Date(), count: 0, passwordEnc: password /* TODO: encrypt */ },
+        });
+      }
+    } catch (e) {
+      // ігноруємо, якщо таблиці немає (ще не мігрували)
+      console.warn('AdminPanelConnection save failed (non-fatal):', (e as any)?.message);
+    }
     return { success: true };
   }
 
@@ -46,6 +71,8 @@ export class DatameController {
 
 // Імпорт у БД з урахуванням дублікатів
 @Controller('datame-import')
+@UseGuards(JwtAuthGuard)
+@Roles(Role.OWNER)
 export class DatameImportController {
   constructor(private readonly importer: DatameImportService) {}
 
@@ -57,8 +84,13 @@ export class DatameImportController {
 
   @Post('import')
   async import(@Body() body: { groupId: string; items: Array<{ id: number; email: string; name?: string }>; mode: 'new_only' | 'replace_all' | 'skip'; agencyCode?: string }, @Req() req: Request) {
-    const agencyCode = body.agencyCode || (req as any)?.auth?.agencyCode || 'default';
-    return this.importer.importItems(agencyCode, body.groupId, body.items || [], body.mode || 'new_only');
+    try {
+      const agencyCode = body.agencyCode || (req as any)?.auth?.agencyCode || 'default';
+      return await this.importer.importItems(agencyCode, body.groupId, body.items || [], body.mode || 'new_only');
+    } catch (e: any) {
+      console.error('datame-import/import error:', e?.message, e);
+      throw new BadRequestException(e?.message || 'Import failed');
+    }
   }
 }
 

@@ -16,6 +16,7 @@ model Agency {
   groups    Group[]
   users     User[]
   shifts    Shift[]
+  adminPanels AdminPanelConnection[]
 }
 
 model User {
@@ -127,6 +128,24 @@ model TalkyTimesSession {
 
   @@index([profileId])
   @@index([expiresAt])
+}
+
+model AdminPanelConnection {
+  id            String       @id @default(cuid())
+  platform      ProviderSite
+  email         String
+  status        String       @default("connected")
+  lastUpdatedAt DateTime?
+  count         Int          @default(0)
+  agencyId      String
+  passwordEnc   String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  agency        Agency       @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyId, platform, email])
+  @@index([agencyId])
 }
 
 enum Role {
