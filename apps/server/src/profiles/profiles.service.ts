@@ -242,7 +242,15 @@ export class ProfilesService {
 			return await this.prisma.profile.update({
 				where: { id },
 				data: updateData,
-				include: { group: true }
+				select: {
+					id: true,
+					displayName: true,
+					credentialLogin: true,
+					profileId: true,
+					provider: true,
+					createdAt: true,
+					group: { select: { id: true, name: true } },
+				}
 			});
 		} catch (e: any) {
 			// Якщо проблема із енумом/констрейнтом — повертаємо контрольовану помилку, а не 500
