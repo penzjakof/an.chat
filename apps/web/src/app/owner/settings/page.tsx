@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getRole } from '@/lib/session';
+import { getRole, getAccessToken } from '@/lib/session';
 import { Header } from '@/components/Header';
 import { apiPost, apiGet } from '@/lib/api';
 
@@ -66,6 +66,7 @@ export default function OwnerSettingsPage() {
 
   useEffect(() => {
     (async () => {
+      if (!getAccessToken() || role !== 'OWNER') return;
       try {
         const data = await apiGet<Group[]>('/groups');
         setGroups(Array.isArray(data) ? data : []);
@@ -74,11 +75,12 @@ export default function OwnerSettingsPage() {
         setGroups([]);
       }
     })();
-  }, []);
+  }, [role]);
 
   // Підтягнути збережені підключення з бекенду (не блокує UI)
   useEffect(() => {
     (async () => {
+      if (!getAccessToken() || role !== 'OWNER') return;
       try {
         const list = await apiGet<Array<{ id: string; platform: 'DATAME' | 'TALKYTIMES'; email: string; status: 'connecting'|'connected'|'error'; lastUpdatedAt?: string | number; count?: number }>>('/admin-panels');
         const mapped: Connection[] = (Array.isArray(list) ? list : []).map((x) => ({
@@ -94,7 +96,7 @@ export default function OwnerSettingsPage() {
         setConnections(mapped);
       } catch {}
     })();
-  }, []);
+  }, [role]);
 
   if (role !== 'OWNER') return null;
 
@@ -179,6 +181,10 @@ export default function OwnerSettingsPage() {
       }
       const now = Date.now();
       setConnections(prev => prev.map((c, i) => i === idx ? { ...c, items, count: total, lastUpdatedAt: now, status: 'connected', loading: false } : c));
+      // best-effort оновити лічильник на сервері
+      try {
+        await apiPost('/admin-panels/update', { email: (connections[idx]?.email || ''), count: total, status: 'connected' });
+      } catch {}
     } catch {
       setConnections(prev => prev.map((c, i) => i === idx ? { ...c, loading: false, status: 'error' } : c));
     }
