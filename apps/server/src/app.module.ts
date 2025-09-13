@@ -27,6 +27,7 @@ import { HttpModule } from './common/http/http.module';
 import { EncryptionModule } from './common/encryption/encryption.module';
 import { ShiftsModule } from './shifts/shifts.module';
 import { TalkyTimesRTMService } from './providers/talkytimes/rtm.service';
+import { AdminPanelsController } from './admin-panels/admin-panels.controller';
 import { DatameModule } from './datame/datame.module';
 
 @Module({
@@ -77,7 +78,7 @@ import { DatameModule } from './datame/datame.module';
 		ShiftsModule,
 		DatameModule,
 	],
-	controllers: [AppController],
+	controllers: [AppController, AdminPanelsController],
 	providers: [
 		AppService,
 		EncryptionValidatorService,
