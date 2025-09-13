@@ -17,6 +17,7 @@ model Agency {
   users     User[]
   shifts    Shift[]
   adminPanels AdminPanelConnection[]
+  profiles  Profile[]
 }
 
 model User {
