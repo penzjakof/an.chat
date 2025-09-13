@@ -370,7 +370,7 @@ export default function OwnerSettingsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(selectedConnIdx !== null && connections[selectedConnIdx]?.items ? connections[selectedConnIdx]!.items : []).map(i => (
+                      {(selectedConnIdx !== null && connections[selectedConnIdx]?.items ? (connections[selectedConnIdx]?.items || []) : []).map(i => (
                         <tr key={i.id} className="hover:bg-gray-50">
                           <td className="px-3 py-2 border-t text-sm">{i.avatar ? <img src={i.avatar} alt="avatar" className="w-8 h-8 rounded" /> : <div className="w-8 h-8 rounded bg-gray-200" />}</td>
                           <td className="px-3 py-2 border-t text-sm">{i.name}{typeof i.age === 'number' ? `, ${i.age}` : ''}</td>
