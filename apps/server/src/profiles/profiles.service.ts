@@ -85,12 +85,7 @@ export class ProfilesService {
 
 		if (role === 'OWNER') {
 			return this.prisma.profile.findMany({
-				where: {
-					OR: [
-						{ group: { agencyId: agency.id } },
-						{ agencyId: agency.id }
-					]
-				},
+				where: { group: { agencyId: agency.id } },
 				select: { id: true, credentialLogin: true, displayName: true, profileId: true },
 				orderBy: { createdAt: 'desc' }
 			});
@@ -109,16 +104,7 @@ export class ProfilesService {
 	async listByAgencyCode(agencyCode: string) {
 		const agency = await this.prisma.agency.findUnique({ where: { code: agencyCode } });
 		if (!agency) return [] as any[];
-		return this.prisma.profile.findMany({
-			where: {
-				OR: [
-					{ group: { agencyId: agency.id } },
-					{ agencyId: agency.id }
-				]
-			},
-			include: { group: true },
-			orderBy: { createdAt: 'desc' }
-		});
+		return this.prisma.profile.findMany({ where: { group: { agencyId: agency.id } }, include: { group: true }, orderBy: { createdAt: 'desc' } });
 	}
 
 	async createProfile(data: { displayName: string; credentialLogin: string; credentialPassword?: string; provider: string; groupId: string }, agencyCode: string) {
