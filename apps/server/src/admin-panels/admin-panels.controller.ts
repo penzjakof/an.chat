@@ -14,13 +14,16 @@ export class AdminPanelsController {
   @Roles(Role.OWNER)
   async list(@Req() req: Request) {
     try {
-      const agency = await this.prisma.agency.findUnique({ where: { code: req.auth!.agencyCode } });
+      const agencyCode = (req as any)?.auth?.agencyCode;
+      if (!agencyCode) return [];
+      const agency = await this.prisma.agency.findUnique({ where: { code: agencyCode } });
       if (!agency) return [];
-      return this.prisma.adminPanelConnection.findMany({
+      const rows = await this.prisma.adminPanelConnection.findMany({
         where: { agencyId: agency.id },
         orderBy: { updatedAt: 'desc' },
         select: { id: true, platform: true, email: true, status: true, lastUpdatedAt: true, count: true },
       });
+      return rows;
     } catch (e) {
       // Якщо таблиці немає або інша БД-помилка — не блокуємо UI
       return [];
