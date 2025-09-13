@@ -80,20 +80,33 @@ export class DatameImportService {
       }
 
       if (!existing) {
-        const created = await this.prisma.profile.create({
-          data: {
-            provider: 'TALKYTIMES' as any,
-            externalId: String(it.id),
-            displayName: it.name || null,
-            credentialLogin: it.email || null,
-            credentialPassword: it.email ? this.enc.encrypt(it.email) : null,
-            profileId: String(it.id),
-            status: 'ACTIVE' as any,
-            ...(group ? { groupId: group.id } : {}),
-          },
-          select: { id: true },
-        });
-        results.push({ id: it.id, status: 'created', profileId: created.id });
+        try {
+          const created = await this.prisma.profile.create({
+            data: {
+              provider: 'TALKYTIMES' as any,
+              externalId: String(it.id),
+              displayName: it.name || null,
+              credentialLogin: it.email || null,
+              credentialPassword: it.email ? this.enc.encrypt(it.email) : null,
+              profileId: String(it.id),
+              status: 'ACTIVE' as any,
+              ...(group ? { groupId: group.id } : {}),
+            },
+            select: { id: true },
+          });
+          results.push({ id: it.id, status: 'created', profileId: created.id });
+        } catch (e: any) {
+          // Якщо впали на унікальному індексі (provider, externalId) — вважаємо дублікатом і пропускаємо
+          if (e?.code === 'P2002') {
+            const dupByKey = await this.prisma.profile.findFirst({
+              where: { provider: 'TALKYTIMES' as any, externalId: String(it.id) },
+              select: { id: true },
+            });
+            results.push({ id: it.id, status: 'skipped', profileId: dupByKey?.id });
+          } else {
+            throw e;
+          }
+        }
       } else {
         // existing but replace_all not selected -> new_only
         results.push({ id: it.id, status: 'skipped', profileId: existing });
