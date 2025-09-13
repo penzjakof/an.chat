@@ -63,7 +63,30 @@ export default function OwnerSettingsPage() {
     (async () => {
       try {
         const data = await apiGet<Group[]>('/groups');
-        setGroups(data);
+        setGroups(Array.isArray(data) ? data : []);
+      } catch (e) {
+        // Не блокуємо рендер при 4xx/5xx
+        setGroups([]);
+      }
+    })();
+  }, []);
+
+  // Підтягнути збережені підключення з бекенду (не блокує UI)
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await apiGet<Array<{ id: string; platform: 'DATAME' | 'TALKYTIMES'; email: string; status: 'connecting'|'connected'|'error'; lastUpdatedAt?: string | number; count?: number }>>('/admin-panels');
+        const mapped: Connection[] = (Array.isArray(list) ? list : []).map((x) => ({
+          id: x.id,
+          platform: 'DATAME',
+          email: x.email,
+          status: x.status,
+          lastUpdatedAt: x.lastUpdatedAt ? Number(new Date(x.lastUpdatedAt)) : undefined,
+          count: typeof x.count === 'number' ? x.count : 0,
+          items: [],
+          loading: false,
+        }));
+        setConnections(mapped);
       } catch {}
     })();
   }, []);
