@@ -76,8 +76,13 @@ export class ProfilesController {
 
 	@Put(':id')
 	@Roles(Role.OWNER)
-	update(@Param('id') id: string, @Body() body: { displayName?: string; credentialLogin?: string; credentialPassword?: string; provider?: string; groupId?: string }, @Req() req: Request) {
-		return this.profiles.updateProfile(id, body, req.auth!.agencyCode);
+	async update(@Param('id') id: string, @Body() body: { displayName?: string; credentialLogin?: string; credentialPassword?: string; provider?: string; groupId?: string }, @Req() req: Request) {
+		try {
+			return await this.profiles.updateProfile(id, body, req.auth!.agencyCode);
+		} catch (e: any) {
+			// Повертати зрозуміле 4xx замість 500, щоб UI міг показати причину
+			throw new (require('@nestjs/common').BadRequestException)(e?.message || 'Помилка оновлення профілю');
+		}
 	}
 
 	@Delete(':id')
