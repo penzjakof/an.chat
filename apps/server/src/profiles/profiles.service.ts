@@ -239,7 +239,8 @@ export class ProfilesService {
 		for (const id of ids) {
 			try {
 				const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
-				if (!profile || profile.group.agency.code !== agencyCode) {
+				const allowed = !!profile && (profile.group?.agency?.code === agencyCode || profile.groupId == null);
+				if (!allowed) {
 					result[id] = { authenticated: false, message: 'Профіль не знайдено' };
 					continue;
 				}
