@@ -143,7 +143,7 @@ export class ProfilesService {
 	async updateProfile(id: string, data: { displayName?: string; credentialLogin?: string; credentialPassword?: string; provider?: string; groupId?: string }, agencyCode: string) {
 		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
-		if (profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
+		if (!profile.group?.agency || profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
 		let targetGroupId = profile.groupId;
 		if (data.groupId && data.groupId !== profile.groupId) {
 			const newGroup = await this.prisma.group.findUnique({ where: { id: data.groupId }, include: { agency: true } });
@@ -167,7 +167,7 @@ export class ProfilesService {
 	async deleteProfile(id: string, agencyCode: string) {
 		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
-		if (profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
+		if (!profile.group?.agency || profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
 		await this.prisma.profile.delete({ where: { id } });
 		return { success: true };
 	}
@@ -175,7 +175,7 @@ export class ProfilesService {
 	async getProfileDataById(id: string, agencyCode: string) {
 		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
-		if (profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
+		if (!profile.group?.agency || profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
 		try {
 			const pid = parseInt(profile.profileId || '');
 			if (!Number.isFinite(pid)) {
@@ -198,7 +198,7 @@ export class ProfilesService {
 	async getClientPublicProfile(id: string, clientId: number, agencyCode: string) {
 		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
-		if (profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
+		if (!profile.group?.agency || profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
 		const pid = parseInt(profile.profileId || '');
 		if (!Number.isFinite(pid)) return { success: false, error: 'Немає profileId' } as any;
 		const provider: any = this.talkyTimesProvider as any;
@@ -217,7 +217,7 @@ export class ProfilesService {
 	async getClientPhotos(id: string, clientId: number, agencyCode: string) {
 		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
-		if (profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
+		if (!profile.group?.agency || profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
 		const pid = parseInt(profile.profileId || '');
 		if (!Number.isFinite(pid)) return { success: false, error: 'Немає profileId' } as any;
 		const provider: any = this.talkyTimesProvider as any;
@@ -263,7 +263,7 @@ export class ProfilesService {
 		}
 		const profile = await this.prisma.profile.findUnique({ where: { id }, include: { group: { include: { agency: true } } } });
 		if (!profile) throw new NotFoundException('Профіль не знайдено');
-		if (profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
+		if (!profile.group?.agency || profile.group.agency.code !== agencyCode) throw new ForbiddenException('Доступ заборонено');
 		const pid = parseInt(profile.profileId || '');
 		if (!Number.isFinite(pid)) {
 			return { success: false, error: 'Немає profileId для TalkyTimes' } as any;
