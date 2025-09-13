@@ -330,18 +330,9 @@ export default function OwnerSettingsPage() {
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="border p-2 rounded w-full" placeholder="password" />
             </div>
           </div>
-          <div className="mt-3 flex gap-2">
-            <button disabled={busy || collecting} onClick={connect} className={`px-4 py-2 rounded text-white ${(busy || collecting) ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>Підключити</button>
-            <button
-              disabled={collecting || collected.length === 0}
-              onClick={() => setShowModal(true)}
-              className={`px-4 py-2 rounded border ${collecting || collected.length === 0 ? 'text-gray-400 border-gray-300 cursor-not-allowed' : 'hover:bg-gray-50'}`}
-            >
-              {collecting ? 'Збираємо…' : `${collected.length} профілів`}
-            </button>
-          </div>
-          {loginInfo && <div className="mt-3 text-sm text-gray-700">{loginInfo}</div>}
-          <div className="mt-3 text-sm text-gray-600">Зібрано: <span className="font-semibold text-gray-900">{progress.loaded}</span>{progress.loading ? ' (завантаження...)' : ''}</div>
+          {/* Закриваємо грід-блок старого макету */}
+          
+          {/* Старі кнопки/лічильники приховані у новому UI */}
         </div>
 
         {showModal && selectedConnIdx !== null && (
