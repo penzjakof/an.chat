@@ -1,4 +1,4 @@
-import 'dotenv/config';
+// dotenv не потрібен: ConfigModule.forRoot читає .env самостійно
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
