@@ -11,7 +11,12 @@ export class GroupsService {
 	}
 
 	listByAgencyCode(agencyCode: string) {
-		return this.prisma.group.findMany({ where: { agency: { code: agencyCode } }, include: { profiles: true, operators: true } });
+		// Легша відповідь для списку груп: без важких include, лише id+name
+		return this.prisma.group.findMany({
+			where: { agency: { code: agencyCode } },
+			select: { id: true, name: true },
+			orderBy: { createdAt: 'desc' }
+		});
 	}
 
 	assignOperator(groupId: string, operatorId: string) {
