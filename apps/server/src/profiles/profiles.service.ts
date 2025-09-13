@@ -211,9 +211,9 @@ export class ProfilesService {
 		const encrypted = data.credentialPassword ? this.encryption.encrypt(data.credentialPassword) : undefined;
 		try {
 			// Приводимо provider до Prisma enum, якщо передано строку
-			const normalizedProvider = data.provider
-				? ((Prisma as any).ProviderSite[data.provider as any] ?? (profile as any).provider)
-				: (profile as any).provider;
+			// Не покладаємося на Prisma enums у runtime (можуть бути відсутні у клієнті);
+			// передаємо рядок як є або залишаємо попереднє значення
+			const normalizedProvider = (data.provider ?? (profile as any).provider) as any;
 
 			// Формуємо лише змінені поля, щоб уникати зайвих записів
 			const updateData: any = {};
