@@ -280,8 +280,6 @@ export default function OwnerSettingsPage() {
     // послідовно підключаємо рядки (використовуючи їх обрані групи)
     for (const c of base) {
       if (rowStatus[c.id] === 'connected') continue;
-      // якщо група не обрана — ставимо дефолтну
-      if (!rowGroup[c.id] && groups[0]?.id) setRowGroup(prev => ({ ...prev, [c.id]: groups[0].id }));
       await connectRow(c.id);
       await new Promise(r => setTimeout(r, 50));
     }
