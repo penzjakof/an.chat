@@ -170,11 +170,16 @@ export class ProfilesService {
 		// Дозволяємо OWNER оновлювати профілі своєї агенції або профілі без групи
 		const allowed = !!profile && (profile.group?.agency?.code === agencyCode || profile.groupId == null);
 		if (!allowed) throw new ForbiddenException('Доступ заборонено');
-		let targetGroupId = profile.groupId;
-		if (data.groupId && data.groupId !== profile.groupId) {
-			const newGroup = await this.prisma.group.findUnique({ where: { id: data.groupId }, include: { agency: true } });
-			if (!newGroup || newGroup.agency.code !== agencyCode) throw new ForbiddenException('Група не належить вашій агенції');
-			targetGroupId = newGroup.id;
+		let targetGroupId: string | null = profile.groupId;
+		if (data.groupId !== undefined) {
+			// Порожній рядок від фронту означає прибрати групу
+			if (data.groupId === '') {
+				targetGroupId = null;
+			} else if (data.groupId !== profile.groupId) {
+				const newGroup = await this.prisma.group.findUnique({ where: { id: data.groupId }, include: { agency: true } });
+				if (!newGroup || newGroup.agency.code !== agencyCode) throw new ForbiddenException('Група не належить вашій агенції');
+				targetGroupId = newGroup.id;
+			}
 		}
 		const encrypted = data.credentialPassword ? this.encryption.encrypt(data.credentialPassword) : undefined;
 		try {
