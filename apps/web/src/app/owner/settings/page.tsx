@@ -241,23 +241,16 @@ export default function OwnerSettingsPage() {
   };
 
   const doImport = async () => {
-    if (!targetGroupId) return alert('Оберіть групу');
     const base = selectedConnIdx !== null ? (connections[selectedConnIdx!]?.items || []) : collected;
     if (base.length === 0) return;
-    const items: Array<{ id: number; email: string; name?: string }> = [];
-    for (const c of base.slice(0, 500)) {
-      try {
-        const fd = await apiPost<any>('/datame/form-data', { id: c.id });
-        const email = fd?.data?.profile?.email || '';
-        if (email) items.push({ id: c.id, email, name: c.name });
-      } catch {}
-      await new Promise(r => setTimeout(r, 25));
+    // послідовно підключаємо рядки (використовуючи їх обрані групи)
+    for (const c of base) {
+      if (rowStatus[c.id] === 'connected') continue;
+      // якщо група не обрана — ставимо дефолтну
+      if (!rowGroup[c.id] && groups[0]?.id) setRowGroup(prev => ({ ...prev, [c.id]: groups[0].id }));
+      await connectRow(c.id);
+      await new Promise(r => setTimeout(r, 50));
     }
-    const res = await apiPost<{ results: Array<{ id: number; status: string }> }>(
-      '/datame-import/import',
-      { groupId: targetGroupId, items, mode: importMode }
-    );
-    alert(`Імпорт завершено: ${res.results.filter(r => r.status==='created').length} створено, ${res.results.filter(r => r.status==='replaced').length} замінено, ${res.results.filter(r => r.status==='skipped').length} пропущено`);
   };
 
   // Підключення одного рядка (створення профілю)
@@ -266,19 +259,23 @@ export default function OwnerSettingsPage() {
     const conn = connections[selectedConnIdx];
     const item = (conn?.items || []).find(i => i.id === itemId);
     if (!item) return;
-    const emailVal = item.email || '';
+    let emailVal = item.email || '';
+    if (!emailVal) {
+      try {
+        const fd = await apiPost<any>('/datame/form-data', { id: item.id });
+        emailVal = fd?.data?.profile?.email || '';
+      } catch {}
+    }
     const pwd = rowPwd[itemId] || emailVal || '';
     const gid = rowGroup[itemId] || groups[0]?.id || '';
     if (!emailVal || !gid) return alert('Заповніть email та групу');
     setRowStatus(prev => ({ ...prev, [itemId]: 'saving' }));
     try {
-      await apiPost('/profiles', {
-        displayName: item.name || '',
-        credentialLogin: emailVal,
-        credentialPassword: pwd,
-        provider: 'TALKYTIMES',
-        groupId: gid
-      } as any);
+      await apiPost('/datame-import/import', {
+        groupId: gid,
+        items: [{ id: item.id, email: emailVal, name: item.name || '' }],
+        mode: 'new_only'
+      });
       setRowStatus(prev => ({ ...prev, [itemId]: 'connected' }));
     } catch {
       setRowStatus(prev => ({ ...prev, [itemId]: 'error' }));
