@@ -339,6 +339,7 @@ export default function OwnerSettingsPage() {
                   {c.status==='connected' ? 'Підключено' : c.status==='connecting' ? 'Підключення…' : 'Помилка'}
                 </span>
                 <button onClick={() => collectForConnection(idx)} className="px-2 py-1 border rounded hover:bg-gray-50" title="Оновити">⟳</button>
+                <button onClick={async () => { try { await apiPost('/admin-panels/relogin', { email: c.email }); await collectForConnection(idx); } catch {} }} className="px-2 py-1 border rounded hover:bg-gray-50" title="Перелогінитись">↻</button>
                 <div className="text-xs text-gray-500">Ост. оновл. {formatRelative(c.lastUpdatedAt)}</div>
               </div>
               <div className="flex items-center gap-2">
