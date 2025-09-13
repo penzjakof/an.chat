@@ -45,8 +45,12 @@ export class DatameImportService {
     let group: { id: string } | null = null;
     if (groupId) {
       const g = await this.prisma.group.findUnique({ where: { id: groupId } });
-      if (!g || g.agencyId !== agency.id) throw new Error('Group not found for agency');
-      group = { id: g.id };
+      if (g && g.agencyId === agency.id) {
+        group = { id: g.id };
+      } else {
+        // Некоректна/чужа група — імпортуємо без групи замість помилки
+        group = null;
+      }
     }
 
     const dup = await this.findDuplicates(agencyCode, items);
