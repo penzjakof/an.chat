@@ -177,8 +177,12 @@ export class ProfilesService {
 				targetGroupId = null;
 			} else if (data.groupId !== profile.groupId) {
 				const newGroup = await this.prisma.group.findUnique({ where: { id: data.groupId }, include: { agency: true } });
-				if (!newGroup || newGroup.agency.code !== agencyCode) throw new ForbiddenException('Група не належить вашій агенції');
-				targetGroupId = newGroup.id;
+				// Якщо групи немає або вона чужа — мʼяко ігноруємо зміну групи (залишаємо попередню)
+				if (newGroup && newGroup.agency.code === agencyCode) {
+					targetGroupId = newGroup.id;
+				} else {
+					// no-op: targetGroupId залишається як було (може бути null)
+				}
 			}
 		}
 		const encrypted = data.credentialPassword ? this.encryption.encrypt(data.credentialPassword) : undefined;
