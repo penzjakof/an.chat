@@ -47,6 +47,11 @@ export default function OwnerSettingsPage() {
   const [connectError, setConnectError] = useState('');
   const [connectLoading, setConnectLoading] = useState(false);
   const [selectedConnIdx, setSelectedConnIdx] = useState<number | null>(null);
+  // Modal UI state
+  const [search, setSearch] = useState('');
+  const [rowPwd, setRowPwd] = useState<Record<number, string>>({});
+  const [rowGroup, setRowGroup] = useState<Record<number, string>>({});
+  const [rowStatus, setRowStatus] = useState<Record<number, 'idle' | 'saving' | 'connected' | 'error'>>({});
 
   useEffect(() => {
     if (role !== 'OWNER') {
@@ -156,6 +161,7 @@ export default function OwnerSettingsPage() {
     setShowModal(true);
     // підтягуємо email-и у фоні
     await enrichEmailsForConnection(idx, 500);
+    await checkDuplicates();
   };
 
   const enrichEmailsForConnection = async (idx: number, max: number = Infinity) => {
@@ -222,6 +228,16 @@ export default function OwnerSettingsPage() {
       { items: base.map(c => ({ id: c.id })) }
     );
     setDupInfo(resp);
+    const ids = new Set(Object.keys(resp?.byProfileId || {}));
+    if (ids.size > 0) {
+      setRowStatus(prev => {
+        const next = { ...prev } as Record<number, 'idle' | 'saving' | 'connected' | 'error'>;
+        for (const it of base) {
+          if (ids.has(String(it.id))) next[it.id] = 'connected';
+        }
+        return next;
+      });
+    }
   };
 
   const doImport = async () => {
@@ -242,6 +258,31 @@ export default function OwnerSettingsPage() {
       { groupId: targetGroupId, items, mode: importMode }
     );
     alert(`Імпорт завершено: ${res.results.filter(r => r.status==='created').length} створено, ${res.results.filter(r => r.status==='replaced').length} замінено, ${res.results.filter(r => r.status==='skipped').length} пропущено`);
+  };
+
+  // Підключення одного рядка (створення профілю)
+  const connectRow = async (itemId: number) => {
+    if (selectedConnIdx === null) return;
+    const conn = connections[selectedConnIdx];
+    const item = (conn?.items || []).find(i => i.id === itemId);
+    if (!item) return;
+    const emailVal = item.email || '';
+    const pwd = rowPwd[itemId] || emailVal || '';
+    const gid = rowGroup[itemId] || groups[0]?.id || '';
+    if (!emailVal || !gid) return alert('Заповніть email та групу');
+    setRowStatus(prev => ({ ...prev, [itemId]: 'saving' }));
+    try {
+      await apiPost('/profiles', {
+        displayName: item.name || '',
+        credentialLogin: emailVal,
+        credentialPassword: pwd,
+        provider: 'TALKYTIMES',
+        groupId: gid
+      } as any);
+      setRowStatus(prev => ({ ...prev, [itemId]: 'connected' }));
+    } catch {
+      setRowStatus(prev => ({ ...prev, [itemId]: 'error' }));
+    }
   };
 
   return (
@@ -338,49 +379,56 @@ export default function OwnerSettingsPage() {
         {showModal && selectedConnIdx !== null && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded shadow-lg w-full max-w-5xl max-h-[85vh] overflow-y-auto">
-              <div className="p-4 border-b flex items-center justify-between">
-                <div className="font-semibold">Знайдені профілі — {selectedConnIdx !== null ? (connections[selectedConnIdx]?.count || 0) : 0}</div>
-                <div className="flex gap-2 items-center">
-                  <button onClick={checkDuplicates} className="px-3 py-2 border rounded hover:bg-gray-50">Перевірити дублікати</button>
-                  <select value={targetGroupId} onChange={e => setTargetGroupId(e.target.value)} className="border p-2 rounded">
-                    <option value="">Оберіть групу</option>
-                    {groups.map(g => (<option key={g.id} value={g.id}>{g.name}</option>))}
-                  </select>
-                  <select value={importMode} onChange={e => setImportMode(e.target.value as any)} className="border p-2 rounded">
-                    <option value="new_only">Перенести тільки нові</option>
-                    <option value="replace_all">Перенести всі та замінити</option>
-                    <option value="skip">Не переносити дублікати</option>
-                  </select>
-                  <button onClick={doImport} className="px-3 py-2 border rounded hover:bg-gray-50">Додати всі профілі</button>
+              <div className="p-4 border-b flex items-center justify-between gap-3">
+                <div className="font-semibold">{selectedConnIdx !== null ? (connections[selectedConnIdx]?.items?.length || 0) : 0} нових профілів</div>
+                <div className="flex items-center gap-2">
+                  <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Пошук" className="border rounded px-3 py-2" />
+                  <button onClick={doImport} className="px-4 py-2 rounded border hover:bg-gray-50">Підключити всі</button>
                   <button onClick={() => setShowModal(false)} className="px-3 py-2 bg-gray-700 text-white rounded hover:bg-gray-800">Закрити</button>
                 </div>
               </div>
-              <div className="p-4">
-                {dupInfo && (
-                  <div className="mb-3 text-sm text-gray-600">Дублів за email: {Object.keys(dupInfo.byEmail).length}, за profileId: {Object.keys(dupInfo.byProfileId).length}</div>
-                )}
-                <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead>
-                      <tr>
-                        <th className="px-3 py-2 text-left">Аватар</th>
-                        <th className="px-3 py-2 text-left">Імʼя, вік</th>
-                        <th className="px-3 py-2 text-left">Email</th>
-                        <th className="px-3 py-2 text-left">ID</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(selectedConnIdx !== null && connections[selectedConnIdx]?.items ? (connections[selectedConnIdx]?.items || []) : []).map(i => (
-                        <tr key={i.id} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 border-t text-sm">{i.avatar ? <img src={i.avatar} alt="avatar" className="w-8 h-8 rounded" /> : <div className="w-8 h-8 rounded bg-gray-200" />}</td>
-                          <td className="px-3 py-2 border-t text-sm">{i.name}{typeof i.age === 'number' ? `, ${i.age}` : ''}</td>
-                          <td className="px-3 py-2 border-t text-sm">{i.email || ''}</td>
-                          <td className="px-3 py-2 border-t text-sm">{i.id}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="p-4 space-y-3">
+                {(selectedConnIdx !== null ? (connections[selectedConnIdx]?.items || []) : [])
+                  .filter(i => {
+                    const q = search.toLowerCase();
+                    if (!q) return true;
+                    return String(i.id).includes(q) || (i.name||'').toLowerCase().includes(q) || (i.email||'').toLowerCase().includes(q);
+                  })
+                  .map(i => (
+                  <div key={i.id} className="flex items-center gap-3 py-2 border-b last:border-b-0">
+                    <div className="w-20 text-sm text-gray-600">{i.id}</div>
+                    <div>{i.avatar ? <img src={i.avatar} alt="avatar" className="w-10 h-10 rounded-full" /> : <div className="w-10 h-10 rounded-full bg-gray-200" />}</div>
+                    <div className="w-40">{i.name}{typeof i.age === 'number' ? `, ${i.age}` : ''}</div>
+                    <div className="flex-1 truncate text-sm">{i.email || ''}</div>
+                    {rowStatus[i.id] === 'connected' ? (
+                      <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs">Підключено</span>
+                    ) : (
+                      <>
+                        <input
+                          placeholder="Введіть пароль"
+                          value={rowPwd[i.id] || ''}
+                          onChange={e=>setRowPwd(prev=>({ ...prev, [i.id]: e.target.value }))}
+                          className="border rounded px-3 py-2 w-44"
+                        />
+                        <select
+                          value={rowGroup[i.id] || ''}
+                          onChange={e=>setRowGroup(prev=>({ ...prev, [i.id]: e.target.value }))}
+                          className="border rounded px-3 py-2"
+                        >
+                          <option value="">Оберіть групу</option>
+                          {groups.map(g => (<option key={g.id} value={g.id}>{g.name}</option>))}
+                        </select>
+                        <button
+                          disabled={rowStatus[i.id] === 'saving'}
+                          onClick={()=>connectRow(i.id)}
+                          className={`px-3 py-2 rounded border ${rowStatus[i.id] === 'saving' ? 'text-gray-400 border-gray-300 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                        >
+                          {rowStatus[i.id] === 'saving' ? '...' : 'Підключити'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
