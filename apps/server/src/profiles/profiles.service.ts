@@ -107,18 +107,23 @@ export class ProfilesService {
 		});
 	}
 	async listByAgencyCode(agencyCode: string) {
-		const agency = await this.prisma.agency.findUnique({ where: { code: agencyCode } });
-		if (!agency) return [] as any[];
-		return this.prisma.profile.findMany({
-			where: {
-				OR: [
-					{ group: { agencyId: agency.id } },
-					{ groupId: null }
-				]
-			},
-			include: { group: true },
-			orderBy: { createdAt: 'desc' }
-		});
+		try {
+			const agency = await this.prisma.agency.findUnique({ where: { code: agencyCode } });
+			if (!agency) return [] as any[];
+			return await this.prisma.profile.findMany({
+				where: {
+					OR: [
+						{ group: { agencyId: agency.id } },
+						{ groupId: null }
+					]
+				},
+				include: { group: true },
+				orderBy: { createdAt: 'desc' }
+			});
+		} catch (e) {
+			console.error('profiles.listByAgencyCode failed:', (e as any)?.message);
+			return [] as any[];
+		}
 	}
 
 	async createProfile(data: { displayName: string; credentialLogin: string; credentialPassword?: string; provider: string; groupId: string }, agencyCode: string) {
