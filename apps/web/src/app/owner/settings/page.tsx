@@ -22,7 +22,7 @@ type Connection = {
 
 export default function OwnerSettingsPage() {
   const router = useRouter();
-  const role = getRole();
+  const [role, setRole] = useState<ReturnType<typeof getRole>>(null);
   const [active, setActive] = useState(false);
 
   // Адмін панелі (Datame)
@@ -53,8 +53,13 @@ export default function OwnerSettingsPage() {
   const [rowGroup, setRowGroup] = useState<Record<number, string>>({});
   const [rowStatus, setRowStatus] = useState<Record<number, 'idle' | 'saving' | 'connected' | 'error'>>({});
 
+  // Ініціалізація ролі лише на клієнті, щоб уникнути SSR-гідраційної помилки (#418)
   useEffect(() => {
-    if (role !== 'OWNER') {
+    setRole(getRole());
+  }, []);
+
+  useEffect(() => {
+    if (role && role !== 'OWNER') {
       router.replace('/login');
     }
   }, [role, router]);
