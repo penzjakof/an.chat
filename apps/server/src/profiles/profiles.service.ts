@@ -211,6 +211,11 @@ export class ProfilesService {
 				updateData.credentialPassword = encrypted;
 			}
 
+			// Якщо немає жодних змін — повертаємо поточний профіль без оновлення
+			if (Object.keys(updateData).length === 0) {
+				return profile;
+			}
+
 			return await this.prisma.profile.update({
 				where: { id },
 				data: updateData,
