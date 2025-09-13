@@ -117,7 +117,21 @@ export class ProfilesService {
 						{ groupId: null }
 					]
 				},
-				include: { group: true },
+				select: {
+					id: true,
+					displayName: true,
+					credentialLogin: true,
+					profileId: true,
+					provider: true,
+					status: true,
+					createdAt: true,
+					group: {
+						select: {
+							id: true,
+							name: true
+						}
+					}
+				},
 				orderBy: { createdAt: 'desc' }
 			});
 		} catch (e) {

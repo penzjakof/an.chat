@@ -19,7 +19,7 @@ interface Profile {
   profileId?: string | null;
   status: string;
   createdAt: string;
-  group: Group;
+  group: Group | null;
 }
 
 interface FormData {
@@ -346,7 +346,7 @@ export default function ProfilesPage() {
       displayName: profile.displayName || '',
       credentialLogin: profile.credentialLogin || '',
       provider: profile.provider,
-      groupId: profile.group.id,
+      groupId: profile.group?.id || '',
       credentialPassword: '', // Password should not be pre-filled for security
     });
   };
@@ -777,7 +777,7 @@ export default function ProfilesPage() {
                         {profile.status}
                       </span>
                     </td>
-                    <td className="py-2 px-4 border-b"><span className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-800">{profile.group.name}</span></td>
+                    <td className="py-2 px-4 border-b"><span className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-800">{profile.group?.name || 'Без групи'}</span></td>
                     <td className="py-2 px-4 border-b">{profile.provider}</td>
                     <td className="py-2 px-4 border-b">{new Date(profile.createdAt).toLocaleDateString()}</td>
                     <td className="py-2 px-4 border-b">

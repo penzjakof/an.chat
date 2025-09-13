@@ -24,9 +24,16 @@ export class EncryptionValidatorService {
     this.logger.log('🔍 Перевіряю шифрування профілів...');
     
     const profiles = await this.prisma.profile.findMany({
-      where: { 
+      where: {
         provider: 'TALKYTIMES',
         credentialPassword: { not: null }
+      },
+      // Вибираємо лише необхідні колонки, щоб не чіпати відсутні в БД
+      select: {
+        id: true,
+        displayName: true,
+        credentialLogin: true,
+        credentialPassword: true,
       }
     });
 
