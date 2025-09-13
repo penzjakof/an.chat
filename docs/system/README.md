@@ -18,4 +18,5 @@
 - [GALLERY_DOCUMENTATION.md](./GALLERY_DOCUMENTATION.md)
 - [STICKERS_DOCUMENTATION.md](./STICKERS_DOCUMENTATION.md)
 - [VIRTUAL_GIFTS_DOCUMENTATION.md](./VIRTUAL_GIFTS_DOCUMENTATION.md)
+- [ADMIN_PANELS_DOCUMENTATION.md](./ADMIN_PANELS_DOCUMENTATION.md)
 - [Аналіз запитів та відповідей для ексклюзивних постів](./Аналіз%20запитів%20та%20відповідей%20для%20ексклюзивних%20постів)
