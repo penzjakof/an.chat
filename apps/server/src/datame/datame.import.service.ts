@@ -42,8 +42,8 @@ export class DatameImportService {
   async importItems(agencyCode: string, groupId: string, items: Array<{ id: number; email: string; name?: string }>, mode: 'new_only' | 'replace_all' | 'skip') {
     const agency = await this.prisma.agency.findUnique({ where: { code: agencyCode } });
     if (!agency) throw new Error('Agency not found');
-    const group = await this.prisma.group.findUnique({ where: { id: groupId, agencyId: agency.id } as any });
-    if (!group) throw new Error('Group not found for agency');
+    const group = await this.prisma.group.findUnique({ where: { id: groupId } });
+    if (!group || group.agencyId !== agency.id) throw new Error('Group not found for agency');
 
     const dup = await this.findDuplicates(agencyCode, items);
     const results: Array<{ id: number; status: 'created' | 'skipped' | 'replaced'; profileId?: string }> = [];
