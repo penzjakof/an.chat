@@ -104,8 +104,8 @@ export default function OwnerSettingsPage() {
       let total = 0;
       let loaded = 0;
       while (true) {
-        const page = await apiPost<any>('/datame/collection', { status: 'approved', limit: 25, id_last });
-        const items = page?.data || [];
+        const page: any = await apiPost<any>('/datame/collection', { status: 'approved', limit: 25, id_last });
+        const items: any[] = page?.data || [];
         if (!Array.isArray(items) || items.length === 0) break;
         total += items.length;
         loaded = total;
@@ -136,8 +136,8 @@ export default function OwnerSettingsPage() {
       let total = 0;
       const items: Collected[] = [];
       while (true) {
-        const page = await apiPost<any>('/datame/collection', { status: 'approved', limit: 25, id_last });
-        const batch = page?.data || [];
+        const page: any = await apiPost<any>('/datame/collection', { status: 'approved', limit: 25, id_last });
+        const batch: any[] = page?.data || [];
         if (!Array.isArray(batch) || batch.length === 0) break;
         total += batch.length;
         items.push(...batch.map((x: any) => ({ id: x.id, name: x.name, age: x.age, avatar: x.avatar_xxs || x.avatar_small || x.avatar || '' })));
@@ -386,7 +386,6 @@ export default function OwnerSettingsPage() {
           </div>
         )}
       </div>
-    </div>
   );
 }
 
