@@ -23,16 +23,18 @@ export class DatameImportService {
         OR: [
           { credentialLogin: { in: emails.length ? emails : ['__none__'] } },
           { profileId: { in: ids } },
+          { externalId: { in: ids } }, // fallback для старих записів
         ],
       },
-      select: { id: true, credentialLogin: true, profileId: true },
+      select: { id: true, credentialLogin: true, profileId: true, externalId: true },
     });
 
     const byEmail: Record<string, string> = {};
     const byProfileId: Record<string, string> = {};
-    for (const p of profiles) {
+    for (const p of profiles as Array<{ id: string; credentialLogin?: string | null; profileId?: string | null; externalId?: string | null }>) {
       if (p.credentialLogin) byEmail[p.credentialLogin] = p.id;
       if (p.profileId) byProfileId[p.profileId] = p.id;
+      if (p.externalId && ids.includes(p.externalId)) byProfileId[p.externalId] = p.id;
     }
     return { byEmail, byProfileId };
   }
