@@ -348,7 +348,7 @@ export default function OwnerSettingsPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded shadow-lg w-full max-w-5xl max-h-[85vh] overflow-y-auto">
               <div className="p-4 border-b flex items-center justify-between">
-                <div className="font-semibold">Знайдені профілі — {connections[selectedConnIdx!]?.count || 0}</div>
+                <div className="font-semibold">Знайдені профілі — {selectedConnIdx !== null ? (connections[selectedConnIdx]?.count || 0) : 0}</div>
                 <div className="flex gap-2 items-center">
                   <button onClick={checkDuplicates} className="px-3 py-2 border rounded hover:bg-gray-50">Перевірити дублікати</button>
                   <select value={targetGroupId} onChange={e => setTargetGroupId(e.target.value)} className="border p-2 rounded">
@@ -379,7 +379,7 @@ export default function OwnerSettingsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(connections[selectedConnIdx!]?.items || []).map(i => (
+                      {(selectedConnIdx !== null && connections[selectedConnIdx]?.items ? connections[selectedConnIdx]!.items : []).map(i => (
                         <tr key={i.id} className="hover:bg-gray-50">
                           <td className="px-3 py-2 border-t text-sm">{i.avatar ? <img src={i.avatar} alt="avatar" className="w-8 h-8 rounded" /> : <div className="w-8 h-8 rounded bg-gray-200" />}</td>
                           <td className="px-3 py-2 border-t text-sm">{i.name}{typeof i.age === 'number' ? `, ${i.age}` : ''}</td>
