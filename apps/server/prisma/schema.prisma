@@ -106,12 +106,15 @@ model Profile {
   status       ProfileStatus @default(ACTIVE)
   lastActiveAt       DateTime?
   groupId            String?
+  agencyId           String?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   group              Group?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  agency             Agency?       @relation(fields: [agencyId], references: [id], onDelete: SetNull)
 
   @@unique([provider, externalId])
   @@index([groupId])
+  @@index([agencyId])
   @@index([status])
   @@index([provider, profileId])
 }

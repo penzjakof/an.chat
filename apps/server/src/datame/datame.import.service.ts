@@ -91,6 +91,7 @@ export class DatameImportService {
               profileId: String(it.id),
               status: 'ACTIVE' as any,
               ...(group ? { groupId: group.id } : {}),
+              agencyId: agency.id,
             },
             select: { id: true },
           });
