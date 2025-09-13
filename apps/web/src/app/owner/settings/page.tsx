@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getRole } from '@/lib/session';
 import { Header } from '@/components/Header';
-import { apiPost } from '@/lib/api';
+import { apiPost, apiGet } from '@/lib/api';
+
+type Group = { id: string; name: string };
 
 export default function OwnerSettingsPage() {
   const router = useRouter();
@@ -23,6 +25,8 @@ export default function OwnerSettingsPage() {
   const [importMode, setImportMode] = useState<'new_only' | 'replace_all' | 'skip'>('new_only');
   const [targetGroupId, setTargetGroupId] = useState('');
   const [dupInfo, setDupInfo] = useState<{ byEmail: Record<string,string>; byProfileId: Record<string,string> } | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [groups, setGroups] = useState<Group[]>([]);
 
   useEffect(() => {
     if (role !== 'OWNER') {
@@ -30,19 +34,25 @@ export default function OwnerSettingsPage() {
     }
   }, [role, router]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await apiGet<Group[]>('/groups');
+        setGroups(data);
+      } catch {}
+    })();
+  }, []);
+
   if (role !== 'OWNER') return null;
 
-  const doLogin = async () => {
+  const connect = async () => {
     setBusy(true);
     setLoginInfo('');
     try {
-      const res = await apiPost<{ success: boolean }>(
-        '/datame/login',
-        { email, password }
-      );
-      setLoginInfo('Успішний логін. Можна запускати збір профілів.');
+      await apiPost<{ success: boolean }>('/datame/login', { email, password });
+      await collectAll();
     } catch (e: any) {
-      setLoginInfo(e?.message || 'Помилка логіну');
+      setLoginInfo(e?.message || 'Помилка підключення');
     } finally {
       setBusy(false);
     }
@@ -152,59 +162,66 @@ export default function OwnerSettingsPage() {
             </div>
           </div>
           <div className="mt-3 flex gap-2">
-            <button disabled={busy} onClick={doLogin} className={`px-4 py-2 rounded text-white ${busy ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>Увійти</button>
-            <button disabled={collecting} onClick={collectAll} className={`px-4 py-2 rounded text-white ${collecting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>Зібрати профілі</button>
-            <button onClick={checkDuplicates} className="px-4 py-2 rounded text-white bg-amber-600 hover:bg-amber-700">Перевірити дублікати</button>
+            <button disabled={busy || collecting} onClick={connect} className={`px-4 py-2 rounded text-white ${(busy || collecting) ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>Підключити</button>
+            <button
+              disabled={collecting || collected.length === 0}
+              onClick={() => setShowModal(true)}
+              className={`px-4 py-2 rounded border ${collecting || collected.length === 0 ? 'text-gray-400 border-gray-300 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+            >
+              {collecting ? 'Збираємо…' : `${collected.length} профілів`}
+            </button>
           </div>
           {loginInfo && <div className="mt-3 text-sm text-gray-700">{loginInfo}</div>}
           <div className="mt-3 text-sm text-gray-600">Зібрано: <span className="font-semibold text-gray-900">{progress.loaded}</span>{progress.loading ? ' (завантаження...)' : ''}</div>
         </div>
 
-        {collected.length > 0 && (
-          <div className="bg-white border rounded p-4 max-w-4xl">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-gray-700">У списку: {collected.length}</div>
-              <div className="flex gap-2">
-                <select value={targetGroupId} onChange={e => setTargetGroupId(e.target.value)} className="border p-2 rounded">
-                  <option value="">Оберіть групу</option>
-                </select>
-                <select value={importMode} onChange={e => setImportMode(e.target.value as any)} className="border p-2 rounded">
-                  <option value="new_only">Перенести тільки нові</option>
-                  <option value="replace_all">Перенести всі та замінити</option>
-                  <option value="skip">Не переносити дублікати</option>
-                </select>
-                <button onClick={doImport} className="px-3 py-2 border rounded hover:bg-gray-50">Додати всі профілі</button>
+        {showModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded shadow-lg w-full max-w-5xl max-h-[85vh] overflow-y-auto">
+              <div className="p-4 border-b flex items-center justify-between">
+                <div className="font-semibold">Знайдені профілі — {collected.length}</div>
+                <div className="flex gap-2 items-center">
+                  <button onClick={checkDuplicates} className="px-3 py-2 border rounded hover:bg-gray-50">Перевірити дублікати</button>
+                  <select value={targetGroupId} onChange={e => setTargetGroupId(e.target.value)} className="border p-2 rounded">
+                    <option value="">Оберіть групу</option>
+                    {groups.map(g => (<option key={g.id} value={g.id}>{g.name}</option>))}
+                  </select>
+                  <select value={importMode} onChange={e => setImportMode(e.target.value as any)} className="border p-2 rounded">
+                    <option value="new_only">Перенести тільки нові</option>
+                    <option value="replace_all">Перенести всі та замінити</option>
+                    <option value="skip">Не переносити дублікати</option>
+                  </select>
+                  <button onClick={doImport} className="px-3 py-2 border rounded hover:bg-gray-50">Додати всі профілі</button>
+                  <button onClick={() => setShowModal(false)} className="px-3 py-2 bg-gray-700 text-white rounded hover:bg-gray-800">Закрити</button>
+                </div>
               </div>
-            </div>
-            {dupInfo && (
-              <div className="mb-3 text-sm text-gray-600">Дублів за email: {Object.keys(dupInfo.byEmail).length}, за profileId: {Object.keys(dupInfo.byProfileId).length}</div>
-            )}
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr>
-                    <th className="px-3 py-2 text-left">Аватар</th>
-                    <th className="px-3 py-2 text-left">Імʼя, вік</th>
-                    <th className="px-3 py-2 text-left">Email</th>
-                    <th className="px-3 py-2 text-left">ID</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {collected.slice(0, 50).map(i => (
-                    <tr key={i.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 border-t text-sm">
-                        {i.avatar ? <img src={i.avatar} alt="avatar" className="w-8 h-8 rounded" /> : <div className="w-8 h-8 rounded bg-gray-200" />}
-                      </td>
-                      <td className="px-3 py-2 border-t text-sm">{i.name}{typeof i.age === 'number' ? `, ${i.age}` : ''}</td>
-                      <td className="px-3 py-2 border-t text-sm">{i.email || ''}</td>
-                      <td className="px-3 py-2 border-t text-sm">{i.id}</td>
-                    </tr>
-                  ))}
-                  {collected.length > 50 && (
-                    <tr><td colSpan={4} className="px-3 py-2 text-sm text-gray-500">Показано перші 50...</td></tr>
-                  )}
-                </tbody>
-              </table>
+              <div className="p-4">
+                {dupInfo && (
+                  <div className="mb-3 text-sm text-gray-600">Дублів за email: {Object.keys(dupInfo.byEmail).length}, за profileId: {Object.keys(dupInfo.byProfileId).length}</div>
+                )}
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead>
+                      <tr>
+                        <th className="px-3 py-2 text-left">Аватар</th>
+                        <th className="px-3 py-2 text-left">Імʼя, вік</th>
+                        <th className="px-3 py-2 text-left">Email</th>
+                        <th className="px-3 py-2 text-left">ID</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {collected.map(i => (
+                        <tr key={i.id} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 border-t text-sm">{i.avatar ? <img src={i.avatar} alt="avatar" className="w-8 h-8 rounded" /> : <div className="w-8 h-8 rounded bg-gray-200" />}</td>
+                          <td className="px-3 py-2 border-t text-sm">{i.name}{typeof i.age === 'number' ? `, ${i.age}` : ''}</td>
+                          <td className="px-3 py-2 border-t text-sm">{i.email || ''}</td>
+                          <td className="px-3 py-2 border-t text-sm">{i.id}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         )}
