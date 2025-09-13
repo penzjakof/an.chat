@@ -177,17 +177,26 @@ export class ProfilesService {
 			targetGroupId = newGroup.id;
 		}
 		const encrypted = data.credentialPassword ? this.encryption.encrypt(data.credentialPassword) : undefined;
-		return this.prisma.profile.update({
-			where: { id },
-			data: {
-				displayName: data.displayName ?? profile.displayName,
-				credentialLogin: data.credentialLogin ?? profile.credentialLogin,
-				credentialPassword: encrypted !== undefined ? encrypted : profile.credentialPassword,
-				provider: (data.provider as any) || (profile as any).provider,
-				groupId: targetGroupId,
-			},
-			include: { group: true }
-		});
+		try {
+			// Приводимо provider до Prisma enum, якщо передано строку
+			const normalizedProvider = data.provider
+				? ((Prisma as any).ProviderSite[data.provider as any] ?? (profile as any).provider)
+				: (profile as any).provider;
+			return await this.prisma.profile.update({
+				where: { id },
+				data: {
+					displayName: data.displayName ?? profile.displayName,
+					credentialLogin: data.credentialLogin ?? profile.credentialLogin,
+					credentialPassword: encrypted !== undefined ? encrypted : profile.credentialPassword,
+					provider: normalizedProvider,
+					groupId: targetGroupId,
+				},
+				include: { group: true }
+			});
+		} catch (e: any) {
+			// Якщо проблема із енумом/констрейнтом — повертаємо контрольовану помилку, а не 500
+			throw new BadRequestException(e?.message || 'Не вдалося оновити профіль');
+		}
 	}
 
 	async deleteProfile(id: string, agencyCode: string) {
