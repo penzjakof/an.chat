@@ -2,8 +2,10 @@
 
 Дата: 2025-09-08 (повністю оновлено для автономності асистента)
 
+
+
 ### TL;DR
-- DNS/домен: відсутній (працюємо по IP).
+- Домен: anchat.me (через Nginx).
 - IP: 91.98.138.1 (Hetzner, Nuremberg).
 - Порти у фаєрволі Hetzner: 22, 80, 443 дозволені (Inbound). 3000/4000 закриті зовні — доступ лише з localhost через Nginx.
 - Nginx: налаштований reverse proxy на 80 порт:
@@ -12,7 +14,8 @@
 - PM2:
   - `anchat-web` — ONLINE (порт 3000 слухає)
   - `anchat-api` — ONLINE (порт 4000 слухає через PM2).
-- БД: SQLite `file:/opt/anchat/db/anchat.db`, міграції застосовані, сид запущено (є користувачі `owner/owner123`, `operator/operator123`).
+- БД: PostgreSQL (localhost:5432, БД `anchat`), Prisma міграції застосовані, сид запущено (є користувачі `owner/owner123`, `operator/operator123`).
+- Автодеплой: GitHub Actions (`.github/workflows/deploy-production.yml`) на push у `production` → git pull → build → prisma generate → pm2 reload.
 
 ---
 
@@ -67,7 +70,7 @@ server {
 
 ### PM2 процеси
 - `anchat-web` — ONLINE (Next.js `next start -p 3000 -H 0.0.0.0`).
-- `anchat-api` — ONLINE (NestJS API `node dist/src/main.js`).
+- `anchat-api` — ONLINE (NestJS API `node dist/main.js`).
 
 Команди управління:
 ```bash
@@ -80,7 +83,7 @@ pm2 logs anchat-api --lines 200
 
 # Запуск/рестарт
 pm2 start npm --name anchat-web --cwd /opt/anchat/app/apps/web -- run start
-pm2 start "node dist/src/main.js" --name anchat-api --cwd /opt/anchat/app/apps/server
+pm2 start "node dist/main.js" --name anchat-api --cwd /opt/anchat/app/apps/server
 pm2 restart anchat-web
 pm2 restart anchat-api
 pm2 save
@@ -101,9 +104,9 @@ pm2 save
     - `JWT_SECRET=<згенеруйте hex>`
     - `ENCRYPTION_KEY=<мінімум 32 символи>`
     - `TT_BASE_URL=https://talkytimes.com`
-    - `DATABASE_URL=file:/opt/anchat/db/anchat.db`
+    - `DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:5432/anchat?schema=public`
   - Білд: `cd /opt/anchat/app && npm run build --workspace server`
-  - Запуск: `pm2 start "node dist/src/main.js" --name anchat-api --cwd /opt/anchat/app/apps/server`
+  - Запуск: `pm2 start "node dist/main.js" --name anchat-api --cwd /opt/anchat/app/apps/server`
 
 ### База даних
 - SQLite файл: `/opt/anchat/db/anchat.db`.
@@ -328,6 +331,18 @@ ssh root@91.98.138.1 "cd /opt/anchat/app && pm2 logs anchat-api --lines 5"
    - `git log --oneline` має показувати commits
 
 ---
+
+### Операційні інструкції (для майбутніх сесій)
+
+- Гілка деплою: `production`. Будь-який push тригерить автодеплой (`.github/workflows/deploy-production.yml`).
+- GitHub Secrets: `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`.
+- Сервер: код у `/opt/anchat/app`; PM2 процеси `anchat-web` (Next.js) і `anchat-api` (NestJS, `dist/main.js`).
+- Ручний деплой: `cd /opt/anchat/app && bash scripts/deploy.sh`.
+- Діагностика швидко: `pm2 ls`, `pm2 logs anchat-web|anchat-api --lines 100`, `curl -I 127.0.0.1:3000/`, `curl -I 127.0.0.1:4000/`.
+- Prisma: генерується у деплої; при зміні схеми — `npx prisma migrate deploy` за потреби.
+- Next.js: `.next` чиститься перед білдом, залишається після — для стабільного `next start`.
+- Енви: прод-секрети тільки на сервері (`apps/server/.env`). У репо — лише `.env.example`.
+- Джерело істини — репозиторій. Не редагувати файли напряму на сервері; всі зміни йдуть через коміти.
 
 ### Автоочистка «осиротілих» bash-сесій (guard)
 

@@ -60,15 +60,15 @@ apps/server/src/gallery/
 ## API Endpoints
 
 ### GET `/api/gallery/:profileId/photos`
-Отримання списку медіа контенту з пагінацією та фільтрацією
+Отримання списку фото з пагінацією та фільтрацією
 
 **Параметри:**
-- `profileId` (string) - ID профілю
-- `cursor` (string, optional) - Курсор для пагінації
-- `limit` (string, optional) - Кількість елементів (default: 50)
-- `statuses` (string, optional) - Статуси (approved,approved_by_ai)
-- `mediaType` (string, optional) - Тип медіа (photo/video/audio, default: photo)
-- `photoType` (string, optional) - Тип фото (regular/special/temporary, default: regular)
+- `profileId` (string) — ID профілю
+- `cursor` (string, optional) — курсор для пагінації
+- `limit` (string, optional) — кількість елементів (default: 50)
+- `statuses` (string, optional) — список статусів (comma-separated), default: `approved,approved_by_ai`
+- `tags` (string, optional) — список тегів (comma-separated), напр.: `special,special_plus`
+- `isTemporary` (boolean, optional) — фільтр тимчасових фото (default: false)
 
 **Відповідь:**
 ```json
@@ -303,9 +303,9 @@ interface PhotoConnectionStatus {
 ## TalkyTimes інтеграція
 
 ### Основні Endpoints:
-- `POST /platform/gallery/photo/list` - Отримання списку фото з фільтрацією
-- `POST /platform/chat/send/gallery-photos` - Відправка фото в чат
-- `POST /platform/gallery/photo/statuses` - Отримання статусів фото (accessed/sent)
+- `POST /platform/gallery/photo/list` — отримання списку фото з фільтрацією
+- `POST /platform/chat/send/gallery-photos` — відправка фото в чат
+- `POST /platform/gallery/photo/connection/list` — статуси фото (accessed/sent)
 
 ### Нові параметри API:
 - `mediaType`: фільтр по типу медіа (photo/video/audio)
